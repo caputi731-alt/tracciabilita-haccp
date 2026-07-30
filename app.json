@@ -16,6 +16,14 @@
     },
     "plugins": [
       [
+        "expo-build-properties",
+        {
+          "android": {
+            "kotlinVersion": "1.9.25"
+          }
+        }
+      ],
+      [
         "expo-camera",
         {
           "cameraPermission": "L'app usa la fotocamera per leggere i codici a barre e fotografare DDT ed etichette."
