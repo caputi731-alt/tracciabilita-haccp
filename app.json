@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "Tracciabilità HACCP",
+    "slug": "tracciabilita-haccp",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": ["**/*"],
+    "android": {
+      "package": "com.ristorante.tracciabilita",
+      "versionCode": 1,
+      "permissions": ["CAMERA", "READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE"],
+      "adaptiveIcon": {
+        "backgroundColor": "#1F6F5C"
+      }
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "L'app usa la fotocamera per leggere i codici a barre e fotografare DDT ed etichette."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "L'app usa la fotocamera per archiviare le foto dei documenti di trasporto."
+        }
+      ]
+    ]
+  }
+}
