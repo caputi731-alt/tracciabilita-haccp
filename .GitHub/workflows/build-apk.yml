@@ -1,0 +1,47 @@
+name: Compila APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Scarica il codice
+        uses: actions/checkout@v4
+
+      - name: Prepara Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Prepara Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Prepara Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Installa le dipendenze
+        run: npm install
+
+      - name: Genera il progetto Android nativo
+        run: npx expo prebuild --platform android --clean
+
+      - name: Compila l'APK
+        working-directory: android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleRelease
+
+      - name: Pubblica l'APK scaricabile
+        uses: actions/upload-artifact@v4
+        with:
+          name: tracciabilita-haccp-apk
+          path: android/app/build/outputs/apk/release/*.apk
+          retention-days: 30
