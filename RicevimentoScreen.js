@@ -30,11 +30,48 @@ export default function RicevimentoScreen({ navigation }) {
 
   const set = (k) => (v) => setF((s) => ({ ...s, [k]: v }));
 
-  const foto = async (campo) => {
-    const perm = await ImagePicker.requestCameraPermissionsAsync();
-    if (!perm.granted) return Alert.alert('Permesso negato', 'Serve la fotocamera.');
-    const r = await ImagePicker.launchCameraAsync({ quality: 0.5 });
-    if (!r.canceled) set(campo)(r.assets[0].uri);
+  const scattaFoto = async (campo) => {
+    try {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) {
+        return Alert.alert(
+          'Permesso fotocamera',
+          perm.canAskAgain
+            ? 'Serve il permesso della fotocamera per scattare la foto.'
+            : 'Il permesso è disattivato. Abilitalo da Impostazioni > App > Tracciabilità HACCP > Autorizzazioni > Fotocamera.'
+        );
+      }
+      const r = await ImagePicker.launchCameraAsync({ quality: 0.5 });
+      if (!r.canceled && r.assets && r.assets[0]) set(campo)(r.assets[0].uri);
+    } catch (e) {
+      Alert.alert('Errore fotocamera', String(e?.message || e));
+    }
+  };
+
+  const scegliDaGalleria = async (campo) => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        return Alert.alert(
+          'Permesso galleria',
+          perm.canAskAgain
+            ? 'Serve il permesso per accedere alle foto.'
+            : 'Abilita il permesso da Impostazioni > App > Tracciabilità HACCP > Autorizzazioni.'
+        );
+      }
+      const r = await ImagePicker.launchImageLibraryAsync({ quality: 0.5 });
+      if (!r.canceled && r.assets && r.assets[0]) set(campo)(r.assets[0].uri);
+    } catch (e) {
+      Alert.alert('Errore galleria', String(e?.message || e));
+    }
+  };
+
+  const foto = (campo) => {
+    Alert.alert('Aggiungi immagine', 'Come vuoi aggiungere la foto?', [
+      { text: 'Scatta foto', onPress: () => scattaFoto(campo) },
+      { text: 'Scegli dalla galleria', onPress: () => scegliDaGalleria(campo) },
+      { text: 'Annulla', style: 'cancel' },
+    ]);
   };
 
   const daBarcode = async (code) => {
@@ -150,4 +187,5 @@ export default function RicevimentoScreen({ navigation }) {
       <Scanner visibile={scanner} onChiudi={() => setScanner(false)} onLetto={daBarcode} />
     </ScrollView>
   );
-}
+                                                                               }
+                                                                               
