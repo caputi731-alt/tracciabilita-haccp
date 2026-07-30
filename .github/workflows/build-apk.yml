@@ -8,7 +8,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Scarica il codice
         uses: actions/checkout@v4
@@ -18,30 +17,36 @@ jobs:
         with:
           node-version: 20
 
-      - name: Prepara Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
-
-      - name: Prepara Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Installa EAS
+        run: npm install -g eas-cli
 
       - name: Installa le dipendenze
         run: npm install
 
-      - name: Genera il progetto Android nativo
-        run: npx expo prebuild --platform android --clean
+      - name: Collega il progetto a Expo
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: eas init --non-interactive --force
 
-      - name: Compila l'APK
-        working-directory: android
+      - name: Compila l'APK sui server Expo
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: eas build --platform android --profile preview --non-interactive --wait --json > build.json
+
+      - name: Recupera l'APK
         run: |
-          chmod +x ./gradlew
-          ./gradlew assembleRelease
+          URL=$(node -e "try{const b=require('./build.json');const a=Array.isArray(b)?b[0]:b;process.stdout.write((a.artifacts&&a.artifacts.buildUrl)||'')}catch(e){process.stdout.write('')}")
+          if [ -n "$URL" ]; then
+            echo "Scarico l'APK da: $URL"
+            curl -L "$URL" -o tracciabilita-haccp.apk
+          else
+            echo "APK non scaricato in automatico. Lo trovi comunque su https://expo.dev nella sezione Builds del progetto."
+          fi
 
       - name: Pubblica l'APK scaricabile
+        if: ${{ hashFiles('tracciabilita-haccp.apk') != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: tracciabilita-haccp-apk
-          path: android/app/build/outputs/apk/release/*.apk
+          path: tracciabilita-haccp.apk
           retention-days: 30
