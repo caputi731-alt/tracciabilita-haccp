@@ -17,6 +17,8 @@ import EtichetteScreen from './EtichetteScreen';
 import BackupScreen from './BackupScreen';
 import RintracciabilitaScreen from './RintracciabilitaScreen';
 import ReportScreen from './ReportScreen';
+import SanificazioneScreen from './SanificazioneScreen';
+import NonConformitaScreen from './NonConformitaScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -69,6 +71,8 @@ export default function App() {
         <Stack.Screen name="Backup" component={BackupScreen} options={{ title: 'Backup e dati' }} />
         <Stack.Screen name="Rintracciabilita" component={RintracciabilitaScreen} options={{ title: 'Rintracciabilità' }} />
         <Stack.Screen name="Report" component={ReportScreen} options={{ title: 'Report ASL' }} />
+        <Stack.Screen name="Sanificazione" component={SanificazioneScreen} options={{ title: 'Sanificazione' }} />
+        <Stack.Screen name="NonConformita" component={NonConformitaScreen} options={{ title: 'Non conformità' }} />
       </Stack.Navigator>
     </NavigationContainer>
   );
