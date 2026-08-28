@@ -107,6 +107,14 @@ export async function initDatabase() {
       data_chiusura TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS impostazioni (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      nome_attivita TEXT,
+      indirizzo TEXT,
+      responsabile TEXT,
+      partita_iva TEXT
+    );
+
     CREATE INDEX IF NOT EXISTS idx_lotti_scadenza ON lotti(data_scadenza);
     CREATE INDEX IF NOT EXISTS idx_lotti_stato ON lotti(stato);
     CREATE INDEX IF NOT EXISTS idx_lotti_numero ON lotti(numero_lotto);
@@ -372,4 +380,63 @@ export async function csvRegistroCarichi() {
      ORDER BY l.data_ricevimento DESC`
   );
   return toCsv(righe);
+}
+
+/* ---------- rintracciabilità e report (Blocco B) ---------- */
+
+export const cercaLotti = (filtro = '') =>
+  query(
+    `SELECT l.*, p.denominazione AS prodotto, p.allergeni,
+            f.ragione_sociale AS fornitore, f.partita_iva AS fornitore_piva,
+            f.numero_riconoscimento_ce
+     FROM lotti l
+     JOIN prodotti p ON p.id = l.prodotto_id
+     JOIN fornitori f ON f.id = l.fornitore_id
+     WHERE (? = '' OR p.denominazione LIKE ? OR l.numero_lotto LIKE ? OR f.ragione_sociale LIKE ?)
+     ORDER BY l.data_ricevimento DESC`,
+    [filtro, `%${filtro}%`, `%${filtro}%`, `%${filtro}%`]
+  );
+
+export const movimentiDiLotto = (id) =>
+  query('SELECT * FROM movimenti WHERE lotto_id = ? ORDER BY data_ora', [id]);
+
+export const temperatureTra = (da, a) =>
+  query(
+    `SELECT r.*, pc.nome, pc.temp_min, pc.temp_max
+     FROM registro_temperature r
+     JOIN punti_controllo pc ON pc.id = r.punto_controllo_id
+     WHERE substr(r.data_ora, 1, 10) BETWEEN ? AND ?
+     ORDER BY r.data_ora`,
+    [da, a]
+  );
+
+export const carichiTra = (da, a) =>
+  query(
+    `SELECT l.*, p.denominazione AS prodotto, f.ragione_sociale AS fornitore
+     FROM lotti l
+     JOIN prodotti p ON p.id = l.prodotto_id
+     JOIN fornitori f ON f.id = l.fornitore_id
+     WHERE substr(l.data_ricevimento, 1, 10) BETWEEN ? AND ?
+     ORDER BY l.data_ricevimento`,
+    [da, a]
+  );
+
+export const tutteNonConformita = () =>
+  query('SELECT * FROM non_conformita ORDER BY data_ora DESC');
+
+export async function getImpostazioni() {
+  return (await queryOne('SELECT * FROM impostazioni WHERE id = 1')) || {};
+}
+
+export async function salvaImpostazioni(i) {
+  await exec(
+    `INSERT INTO impostazioni (id, nome_attivita, indirizzo, responsabile, partita_iva)
+     VALUES (1, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       nome_attivita = excluded.nome_attivita,
+       indirizzo = excluded.indirizzo,
+       responsabile = excluded.responsabile,
+       partita_iva = excluded.partita_iva`,
+    [i.nome_attivita, i.indirizzo, i.responsabile, i.partita_iva]
+  );
 }
