@@ -115,6 +115,25 @@ export async function initDatabase() {
       partita_iva TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS aree_pulizia (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nome TEXT NOT NULL,
+      frequenza TEXT DEFAULT 'giornaliera',
+      prodotto_previsto TEXT,
+      procedura TEXT,
+      attivo INTEGER DEFAULT 1
+    );
+
+    CREATE TABLE IF NOT EXISTS registro_sanificazione (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      area_id INTEGER REFERENCES aree_pulizia(id),
+      data_ora TEXT NOT NULL,
+      prodotto_utilizzato TEXT,
+      esito TEXT DEFAULT 'conforme',
+      operatore TEXT,
+      note TEXT
+    );
+
     CREATE INDEX IF NOT EXISTS idx_lotti_scadenza ON lotti(data_scadenza);
     CREATE INDEX IF NOT EXISTS idx_lotti_stato ON lotti(stato);
     CREATE INDEX IF NOT EXISTS idx_lotti_numero ON lotti(numero_lotto);
@@ -438,5 +457,60 @@ export async function salvaImpostazioni(i) {
        responsabile = excluded.responsabile,
        partita_iva = excluded.partita_iva`,
     [i.nome_attivita, i.indirizzo, i.responsabile, i.partita_iva]
+  );
+}
+
+/* ---------- sanificazione (Blocco C) ---------- */
+
+export const listaAree = () =>
+  query('SELECT * FROM aree_pulizia WHERE attivo = 1 ORDER BY nome');
+
+export const salvaArea = (a) =>
+  a.id
+    ? exec('UPDATE aree_pulizia SET nome=?, frequenza=?, prodotto_previsto=?, procedura=? WHERE id=?',
+        [a.nome, a.frequenza, a.prodotto_previsto, a.procedura, a.id])
+    : exec('INSERT INTO aree_pulizia (nome, frequenza, prodotto_previsto, procedura) VALUES (?,?,?,?)',
+        [a.nome, a.frequenza, a.prodotto_previsto, a.procedura]);
+
+export const eliminaArea = (id) =>
+  exec('UPDATE aree_pulizia SET attivo = 0 WHERE id = ?', [id]);
+
+export async function registraSanificazione(s) {
+  await exec(
+    `INSERT INTO registro_sanificazione (area_id, data_ora, prodotto_utilizzato, esito, operatore, note)
+     VALUES (?,?,?,?,?,?)`,
+    [s.area_id, new Date().toISOString(), s.prodotto_utilizzato, s.esito || 'conforme', s.operatore, s.note]
+  );
+}
+
+export const sanificazioniOggi = () => {
+  const oggi = new Date().toISOString().slice(0, 10);
+  return query(
+    `SELECT r.*, a.nome FROM registro_sanificazione r
+     LEFT JOIN aree_pulizia a ON a.id = r.area_id
+     WHERE substr(r.data_ora, 1, 10) = ? ORDER BY r.data_ora DESC`, [oggi]);
+};
+
+export const sanificazioniRecenti = (limite = 40) =>
+  query(
+    `SELECT r.*, a.nome FROM registro_sanificazione r
+     LEFT JOIN aree_pulizia a ON a.id = r.area_id
+     ORDER BY r.data_ora DESC LIMIT ?`, [limite]);
+
+export const sanificazioniTra = (da, a) =>
+  query(
+    `SELECT r.*, ar.nome FROM registro_sanificazione r
+     LEFT JOIN aree_pulizia ar ON ar.id = r.area_id
+     WHERE substr(r.data_ora, 1, 10) BETWEEN ? AND ?
+     ORDER BY r.data_ora`, [da, a]);
+
+/* ---------- non conformità: apertura manuale ---------- */
+
+export async function aggiungiNonConformita(nc) {
+  await exec(
+    `INSERT INTO non_conformita (data_ora, origine, descrizione, azione_correttiva, stato)
+     VALUES (?,?,?,?,?)`,
+    [new Date().toISOString(), nc.origine || 'altro', nc.descrizione,
+     nc.azione_correttiva || null, nc.azione_correttiva ? 'chiusa' : 'aperta']
   );
 }
