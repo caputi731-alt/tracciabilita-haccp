@@ -134,11 +134,95 @@ export async function initDatabase() {
       note TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS ricette (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nome TEXT NOT NULL,
+      categoria TEXT,
+      porzioni_standard REAL DEFAULT 1,
+      procedura TEXT,
+      allergeni_calcolati TEXT DEFAULT '[]',
+      attiva INTEGER DEFAULT 1
+    );
+
+    CREATE TABLE IF NOT EXISTS ricetta_ingredienti (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ricetta_id INTEGER NOT NULL REFERENCES ricette(id),
+      prodotto_id INTEGER NOT NULL REFERENCES prodotti(id),
+      quantita REAL,
+      unita_misura TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS produzioni (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ricetta_id INTEGER REFERENCES ricette(id),
+      nome_ricetta TEXT,
+      data_ora TEXT NOT NULL,
+      quantita_prodotta REAL,
+      lotto_produzione TEXT,
+      data_scadenza TEXT,
+      operatore TEXT,
+      allergeni TEXT DEFAULT '[]',
+      note TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS produzione_lotti (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      produzione_id INTEGER NOT NULL REFERENCES produzioni(id),
+      lotto_id INTEGER REFERENCES lotti(id),
+      prodotto_id INTEGER REFERENCES prodotti(id),
+      quantita_usata REAL
+    );
+
+    CREATE TABLE IF NOT EXISTS ricette (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nome TEXT NOT NULL,
+      categoria TEXT,
+      porzioni INTEGER,
+      procedura TEXT,
+      attiva INTEGER DEFAULT 1
+    );
+
+    CREATE TABLE IF NOT EXISTS ricetta_ingredienti (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ricetta_id INTEGER REFERENCES ricette(id),
+      prodotto_id INTEGER REFERENCES prodotti(id),
+      quantita REAL,
+      unita_misura TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS produzioni (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ricetta_id INTEGER REFERENCES ricette(id),
+      nome TEXT,
+      data_ora TEXT NOT NULL,
+      quantita_prodotta REAL,
+      lotto_produzione TEXT,
+      data_scadenza TEXT,
+      operatore TEXT,
+      note TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS produzione_lotti (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      produzione_id INTEGER REFERENCES produzioni(id),
+      lotto_id INTEGER REFERENCES lotti(id),
+      quantita_usata REAL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_lotti_scadenza ON lotti(data_scadenza);
     CREATE INDEX IF NOT EXISTS idx_lotti_stato ON lotti(stato);
     CREATE INDEX IF NOT EXISTS idx_lotti_numero ON lotti(numero_lotto);
     CREATE INDEX IF NOT EXISTS idx_temp_data ON registro_temperature(data_ora);
   `);
+
+  // migrazione leggera: colonna produzione_id nei movimenti (installazioni esistenti)
+  try {
+    const cols = await d.getAllAsync('PRAGMA table_info(movimenti)');
+    if (!cols.some((c) => c.name === 'produzione_id')) {
+      await d.execAsync('ALTER TABLE movimenti ADD COLUMN produzione_id INTEGER');
+    }
+  } catch (e) {}
+
   return d;
 }
 
@@ -514,3 +598,254 @@ export async function aggiungiNonConformita(nc) {
      nc.azione_correttiva || null, nc.azione_correttiva ? 'chiusa' : 'aperta']
   );
 }
+
+/* ---------- ricette e produzioni (Blocco D) ---------- */
+
+export const listaRicette = () =>
+  query('SELECT * FROM ricette WHERE attiva = 1 ORDER BY nome');
+
+export const ingredientiRicetta = (ricettaId) =>
+  query(
+    `SELECT ri.*, p.denominazione AS prodotto, p.allergeni, p.unita_misura AS um_prodotto
+     FROM ricetta_ingredienti ri
+     JOIN prodotti p ON p.id = ri.prodotto_id
+     WHERE ri.ricetta_id = ?`, [ricettaId]);
+
+async function allergeniDaProdotti(prodottiIds) {
+  if (prodottiIds.length === 0) return [];
+  const set = new Set();
+  for (const id of prodottiIds) {
+    const p = await queryOne('SELECT allergeni FROM prodotti WHERE id = ?', [id]);
+    if (p && p.allergeni) {
+      try { JSON.parse(p.allergeni).forEach((a) => set.add(a)); } catch (e) {}
+    }
+  }
+  return [...set];
+}
+
+export async function salvaRicetta(r, ingredienti) {
+  const d = await getDb();
+  const allergeni = await allergeniDaProdotti(ingredienti.map((i) => i.prodotto_id));
+  let ricettaId = r.id;
+  await d.withTransactionAsync(async () => {
+    if (ricettaId) {
+      await d.runAsync(
+        'UPDATE ricette SET nome=?, categoria=?, porzioni_standard=?, procedura=?, allergeni_calcolati=? WHERE id=?',
+        [r.nome, r.categoria, r.porzioni_standard || 1, r.procedura, JSON.stringify(allergeni), ricettaId]
+      );
+      await d.runAsync('DELETE FROM ricetta_ingredienti WHERE ricetta_id = ?', [ricettaId]);
+    } else {
+      const res = await d.runAsync(
+        'INSERT INTO ricette (nome, categoria, porzioni_standard, procedura, allergeni_calcolati) VALUES (?,?,?,?,?)',
+        [r.nome, r.categoria, r.porzioni_standard || 1, r.procedura, JSON.stringify(allergeni)]
+      );
+      ricettaId = res.lastInsertRowId;
+    }
+    for (const ing of ingredienti) {
+      await d.runAsync(
+        'INSERT INTO ricetta_ingredienti (ricetta_id, prodotto_id, quantita, unita_misura) VALUES (?,?,?,?)',
+        [ricettaId, ing.prodotto_id, ing.quantita, ing.unita_misura]
+      );
+    }
+  });
+  return ricettaId;
+}
+
+export const eliminaRicetta = (id) =>
+  exec('UPDATE ricette SET attiva = 0 WHERE id = ?', [id]);
+
+/* lotti disponibili per un prodotto, in ordine FIFO (scadenza più vicina) */
+export const lottiPerProdotto = (prodottoId) =>
+  query(
+    `SELECT l.*, f.ragione_sociale AS fornitore FROM lotti l
+     JOIN fornitori f ON f.id = l.fornitore_id
+     WHERE l.prodotto_id = ? AND l.stato = 'disponibile' AND l.quantita_residua > 0
+     ORDER BY l.data_scadenza IS NULL, l.data_scadenza ASC`, [prodottoId]);
+
+const lottoProdAuto = () => {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return `PR${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
+};
+
+/**
+ * Registra una produzione.
+ * prod: { ricetta_id, nome_ricetta, quantita_prodotta, data_scadenza, operatore, note, allergeni }
+ * righe: [ { lotto_id, prodotto_id, quantita_usata } ]
+ */
+export async function registraProduzione(prod, righe) {
+  const d = await getDb();
+  const lotto = prod.lotto_produzione || lottoProdAuto();
+  let produzioneId;
+  await d.withTransactionAsync(async () => {
+    const res = await d.runAsync(
+      `INSERT INTO produzioni (ricetta_id, nome_ricetta, data_ora, quantita_prodotta,
+        lotto_produzione, data_scadenza, operatore, allergeni, note)
+       VALUES (?,?,?,?,?,?,?,?,?)`,
+      [prod.ricetta_id || null, prod.nome_ricetta, new Date().toISOString(),
+       prod.quantita_prodotta || null, lotto, prod.data_scadenza || null,
+       prod.operatore || null, JSON.stringify(prod.allergeni || []), prod.note || null]
+    );
+    produzioneId = res.lastInsertRowId;
+
+    for (const r of righe) {
+      if (!r.lotto_id || !r.quantita_usata) continue;
+      await d.runAsync(
+        'INSERT INTO produzione_lotti (produzione_id, lotto_id, prodotto_id, quantita_usata) VALUES (?,?,?,?)',
+        [produzioneId, r.lotto_id, r.prodotto_id, r.quantita_usata]
+      );
+      // scarico dal magazzino
+      const l = await d.getFirstAsync('SELECT * FROM lotti WHERE id = ?', [r.lotto_id]);
+      if (l) {
+        const residua = Math.max(0, l.quantita_residua - r.quantita_usata);
+        await d.runAsync('UPDATE lotti SET quantita_residua=?, stato=? WHERE id=?',
+          [residua, residua <= 0 ? 'esaurito' : 'disponibile', r.lotto_id]);
+        await d.runAsync(
+          'INSERT INTO movimenti (lotto_id, tipo, quantita, data_ora, causale, produzione_id) VALUES (?,?,?,?,?,?)',
+          [r.lotto_id, 'scarico', r.quantita_usata, new Date().toISOString(),
+           `Produzione ${lotto}`, produzioneId]
+        ).catch(async () => {
+          // se la colonna produzione_id non esiste in vecchie installazioni, inserisci senza
+          await d.runAsync(
+            'INSERT INTO movimenti (lotto_id, tipo, quantita, data_ora, causale) VALUES (?,?,?,?,?)',
+            [r.lotto_id, 'scarico', r.quantita_usata, new Date().toISOString(), `Produzione ${lotto}`]
+          );
+        });
+      }
+    }
+  });
+  return { id: produzioneId, lotto_produzione: lotto };
+}
+
+export const listaProduzioni = () =>
+  query('SELECT * FROM produzioni ORDER BY data_ora DESC');
+
+export const lottiDiProduzione = (produzioneId) =>
+  query(
+    `SELECT pl.*, p.denominazione AS prodotto, l.numero_lotto, f.ragione_sociale AS fornitore
+     FROM produzione_lotti pl
+     LEFT JOIN prodotti p ON p.id = pl.prodotto_id
+     LEFT JOIN lotti l ON l.id = pl.lotto_id
+     LEFT JOIN fornitori f ON f.id = l.fornitore_id
+     WHERE pl.produzione_id = ?`, [produzioneId]);
+
+/* a valle: quali produzioni hanno usato un certo lotto */
+export const produzioniCheUsano = (lottoId) =>
+  query(
+    `SELECT pr.*, pl.quantita_usata FROM produzione_lotti pl
+     JOIN produzioni pr ON pr.id = pl.produzione_id
+     WHERE pl.lotto_id = ? ORDER BY pr.data_ora DESC`, [lottoId]);
+
+/* ---------- ricette e produzioni (Blocco D) ---------- */
+
+export const listaRicette = () =>
+  query('SELECT * FROM ricette WHERE attiva = 1 ORDER BY nome');
+
+export async function getRicetta(id) {
+  const r = await queryOne('SELECT * FROM ricette WHERE id = ?', [id]);
+  if (!r) return null;
+  r.ingredienti = await query(
+    `SELECT ri.*, p.denominazione AS prodotto, p.allergeni, p.unita_misura AS um_prodotto
+     FROM ricetta_ingredienti ri JOIN prodotti p ON p.id = ri.prodotto_id
+     WHERE ri.ricetta_id = ?`, [id]);
+  return r;
+}
+
+export async function salvaRicetta(r) {
+  const d = await getDb();
+  let id = r.id;
+  await d.withTransactionAsync(async () => {
+    if (id) {
+      await d.runAsync('UPDATE ricette SET nome=?, categoria=?, porzioni=?, procedura=? WHERE id=?',
+        [r.nome, r.categoria, r.porzioni, r.procedura, id]);
+      await d.runAsync('DELETE FROM ricetta_ingredienti WHERE ricetta_id=?', [id]);
+    } else {
+      const res = await d.runAsync('INSERT INTO ricette (nome, categoria, porzioni, procedura) VALUES (?,?,?,?)',
+        [r.nome, r.categoria, r.porzioni, r.procedura]);
+      id = res.lastInsertRowId;
+    }
+    for (const ing of (r.ingredienti || [])) {
+      if (!ing.prodotto_id) continue;
+      await d.runAsync(
+        'INSERT INTO ricetta_ingredienti (ricetta_id, prodotto_id, quantita, unita_misura) VALUES (?,?,?,?)',
+        [id, ing.prodotto_id, ing.quantita || 0, ing.unita_misura || '']);
+    }
+  });
+  return id;
+}
+
+export const eliminaRicetta = (id) =>
+  exec('UPDATE ricette SET attiva = 0 WHERE id = ?', [id]);
+
+export async function allergeniRicetta(ricettaId) {
+  const ing = await query(
+    `SELECT p.allergeni FROM ricetta_ingredienti ri
+     JOIN prodotti p ON p.id = ri.prodotto_id WHERE ri.ricetta_id = ?`, [ricettaId]);
+  const set = new Set();
+  ing.forEach((r) => {
+    try { JSON.parse(r.allergeni || '[]').forEach((a) => set.add(a)); } catch (e) {}
+  });
+  return [...set];
+}
+
+export const lottiDisponibiliProdotto = (prodottoId) =>
+  query(
+    `SELECT l.*, p.denominazione AS prodotto FROM lotti l
+     JOIN prodotti p ON p.id = l.prodotto_id
+     WHERE l.prodotto_id = ? AND l.stato = 'disponibile' AND l.quantita_residua > 0
+     ORDER BY l.data_scadenza IS NULL, l.data_scadenza ASC`, [prodottoId]);
+
+export async function registraProduzione(p, usi) {
+  const d = await getDb();
+  let prodId;
+  await d.withTransactionAsync(async () => {
+    const res = await d.runAsync(
+      `INSERT INTO produzioni (ricetta_id, nome, data_ora, quantita_prodotta, lotto_produzione, data_scadenza, operatore, note)
+       VALUES (?,?,?,?,?,?,?,?)`,
+      [p.ricetta_id, p.nome, new Date().toISOString(), p.quantita_prodotta,
+       p.lotto_produzione, p.data_scadenza, p.operatore, p.note]);
+    prodId = res.lastInsertRowId;
+    for (const u of (usi || [])) {
+      if (!u.lotto_id || !u.quantita) continue;
+      await d.runAsync(
+        'INSERT INTO produzione_lotti (produzione_id, lotto_id, quantita_usata) VALUES (?,?,?)',
+        [prodId, u.lotto_id, u.quantita]);
+      const lotto = await d.getFirstAsync('SELECT quantita_residua FROM lotti WHERE id=?', [u.lotto_id]);
+      const residua = Math.max(0, (lotto?.quantita_residua || 0) - u.quantita);
+      await d.runAsync('UPDATE lotti SET quantita_residua=?, stato=? WHERE id=?',
+        [residua, residua <= 0 ? 'esaurito' : 'disponibile', u.lotto_id]);
+      await d.runAsync(
+        'INSERT INTO movimenti (lotto_id, tipo, quantita, data_ora, causale) VALUES (?,?,?,?,?)',
+        [u.lotto_id, 'scarico', u.quantita, new Date().toISOString(), `Produzione: ${p.nome || ''}`]);
+    }
+  });
+  return prodId;
+}
+
+export const listaProduzioni = () =>
+  query(
+    `SELECT pr.*, r.nome AS ricetta FROM produzioni pr
+     LEFT JOIN ricette r ON r.id = pr.ricetta_id
+     ORDER BY pr.data_ora DESC`);
+
+export async function getProduzione(id) {
+  const pr = await queryOne(
+    `SELECT pr.*, r.nome AS ricetta FROM produzioni pr
+     LEFT JOIN ricette r ON r.id = pr.ricetta_id WHERE pr.id = ?`, [id]);
+  if (!pr) return null;
+  pr.lotti = await query(
+    `SELECT pl.quantita_usata, l.numero_lotto, l.id AS lotto_id,
+            p.denominazione AS prodotto, f.ragione_sociale AS fornitore
+     FROM produzione_lotti pl
+     JOIN lotti l ON l.id = pl.lotto_id
+     JOIN prodotti p ON p.id = l.prodotto_id
+     JOIN fornitori f ON f.id = l.fornitore_id
+     WHERE pl.produzione_id = ?`, [id]);
+  return pr;
+}
+
+export const produzioniDaLotto = (lottoId) =>
+  query(
+    `SELECT pr.*, pl.quantita_usata FROM produzione_lotti pl
+     JOIN produzioni pr ON pr.id = pl.produzione_id
+     WHERE pl.lotto_id = ? ORDER BY pr.data_ora DESC`, [lottoId]);
