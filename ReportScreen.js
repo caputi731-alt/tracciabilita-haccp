@@ -4,7 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, fmtData, fmtDataOra } from './theme';
 import { Campo, Bottone } from './UI';
 import {
-  temperatureTra, carichiTra, tutteNonConformita,
+  temperatureTra, carichiTra, tutteNonConformita, sanificazioniTra,
   getImpostazioni, salvaImpostazioni,
 } from './database';
 import { wrapDoc, stampa, esc } from './report';
@@ -69,6 +69,20 @@ export default function ReportScreen() {
     catch (e) { Alert.alert('Stampa non riuscita', String(e?.message || e)); }
   };
 
+  const reportSanificazione = async () => {
+    const righe = await sanificazioniTra(da, a);
+    if (righe.length === 0) return Alert.alert('Vuoto', 'Nessuna sanificazione nel periodo.');
+    const corpo = `<table><thead><tr>
+      <th>Data e ora</th><th>Area</th><th>Prodotto</th><th>Operatore</th><th>Esito</th></tr></thead><tbody>
+      ${righe.map((r) => `<tr>
+        <td>${fmtDataOra(r.data_ora)}</td><td>${esc(r.nome) || '—'}</td>
+        <td>${esc(r.prodotto_utilizzato) || '—'}</td><td>${esc(r.operatore) || '—'}</td>
+        <td class="${r.esito === 'conforme' ? 'ok' : 'nc'}">${esc(r.esito)}</td></tr>`).join('')}
+      </tbody></table>`;
+    try { await stampa(wrapDoc('Registro sanificazione', corpo, imp, periodoTxt)); }
+    catch (e) { Alert.alert('Stampa non riuscita', String(e?.message || e)); }
+  };
+
   const reportNC = async () => {
     const righe = await tutteNonConformita();
     if (righe.length === 0) return Alert.alert('Vuoto', 'Nessuna non conformità registrata.');
@@ -109,6 +123,7 @@ export default function ReportScreen() {
       <View style={S.card}>
         <Bottone testo="Registro temperature (PDF)" onPress={reportTemperature} />
         <Bottone testo="Registro carichi merce (PDF)" onPress={reportCarichi} />
+        <Bottone testo="Registro sanificazione (PDF)" onPress={reportSanificazione} />
         <Bottone testo="Registro non conformità (PDF)" onPress={reportNC} />
       </View>
 
