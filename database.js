@@ -307,3 +307,69 @@ export const nonConformitaAperte = () =>
 export const chiudiNonConformita = (id, azione) =>
   exec("UPDATE non_conformita SET stato='chiusa', azione_correttiva=?, data_chiusura=? WHERE id=?",
     [azione, new Date().toISOString(), id]);
+
+/* ---------- backup / export ---------- */
+
+async function elencoTabelle() {
+  const r = await query(
+    "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'android_%'"
+  );
+  return r.map((x) => x.name);
+}
+
+export async function esportaTutto() {
+  const tabelle = await elencoTabelle();
+  const dati = {};
+  for (const t of tabelle) dati[t] = await query(`SELECT * FROM ${t}`);
+  return { versione: 1, generato: new Date().toISOString(), tabelle: dati };
+}
+
+export async function importaTutto(dump) {
+  if (!dump || !dump.tabelle) throw new Error('File di backup non valido.');
+  const d = await getDb();
+  await d.withTransactionAsync(async () => {
+    for (const t of Object.keys(dump.tabelle)) {
+      const righe = dump.tabelle[t];
+      if (!Array.isArray(righe)) continue;
+      await d.execAsync(`DELETE FROM ${t}`);
+      for (const row of righe) {
+        const cols = Object.keys(row);
+        if (cols.length === 0) continue;
+        const ph = cols.map(() => '?').join(',');
+        await d.runAsync(
+          `INSERT INTO ${t} (${cols.join(',')}) VALUES (${ph})`,
+          cols.map((c) => row[c])
+        );
+      }
+    }
+  });
+}
+
+export function toCsv(righe) {
+  if (!righe || righe.length === 0) return '';
+  const cols = Object.keys(righe[0]);
+  const esc = (v) => {
+    if (v === null || v === undefined) return '';
+    const s = String(v).replace(/"/g, '""');
+    return /[",\n;]/.test(s) ? `"${s}"` : s;
+  };
+  return [cols.join(';'), ...righe.map((r) => cols.map((c) => esc(r[c])).join(';'))].join('\n');
+}
+
+export async function csvTabella(nome) {
+  const righe = await query(`SELECT * FROM ${nome}`);
+  return toCsv(righe);
+}
+
+export async function csvRegistroCarichi() {
+  const righe = await query(
+    `SELECT l.data_ricevimento, p.denominazione AS prodotto, f.ragione_sociale AS fornitore,
+            l.numero_lotto, l.ddt_numero, l.quantita_iniziale, l.quantita_residua,
+            l.unita_misura, l.data_scadenza, l.esito_controllo, l.prezzo_unitario
+     FROM lotti l
+     JOIN prodotti p ON p.id = l.prodotto_id
+     JOIN fornitori f ON f.id = l.fornitore_id
+     ORDER BY l.data_ricevimento DESC`
+  );
+  return toCsv(righe);
+}
