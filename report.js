@@ -10,6 +10,7 @@ const esc = (v) => {
 };
 
 const CSS = `
+  @page { size: A4; margin: 14mm; }
   * { box-sizing: border-box; }
   body { font-family: Arial, Helvetica, sans-serif; color: #111; margin: 0; padding: 0; }
   .head { border-bottom: 3px solid #1F6F5C; padding-bottom: 8px; margin-bottom: 14px; }
