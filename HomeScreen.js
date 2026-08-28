@@ -9,6 +9,8 @@ import {
 const VOCI = [
   { titolo: 'Ricevi merce', rotta: 'Ricevimento', desc: 'Nuovo carico da DDT o fattura' },
   { titolo: 'Temperature', rotta: 'Temperature', desc: 'Registro giornaliero' },
+  { titolo: 'Sanificazione', rotta: 'Sanificazione', desc: 'Pulizie per area e registro' },
+  { titolo: 'Non conformità', rotta: 'NonConformita', desc: 'Apri, gestisci e chiudi' },
   { titolo: 'Magazzino', rotta: 'Magazzino', desc: 'Lotti disponibili e scarichi' },
   { titolo: 'Rintracciabilità', rotta: 'Rintracciabilita', desc: 'Cerca un lotto e la sua storia' },
   { titolo: 'Report ASL', rotta: 'Report', desc: 'Registri PDF: temperature, carichi, non conformità' },
