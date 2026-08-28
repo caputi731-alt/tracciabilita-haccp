@@ -4,7 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, fmtData, fmtDataOra } from './theme';
 import { Bottone } from './UI';
 import {
-  cercaLotti, movimentiDiLotto, getImpostazioni,
+  cercaLotti, movimentiDiLotto, getImpostazioni, produzioniDaLotto,
 } from './database';
 import { wrapDoc, stampa, esc } from './report';
 
@@ -13,6 +13,7 @@ export default function RintracciabilitaScreen() {
   const [lotti, setLotti] = useState([]);
   const [sel, setSel] = useState(null);
   const [movimenti, setMovimenti] = useState([]);
+  const [produzioni, setProduzioni] = useState([]);
 
   const ricarica = useCallback(() => { cercaLotti(cerca).then(setLotti); }, [cerca]);
   useFocusEffect(ricarica);
@@ -21,6 +22,7 @@ export default function RintracciabilitaScreen() {
   const apri = async (l) => {
     setSel(l);
     setMovimenti(await movimentiDiLotto(l.id));
+    setProduzioni(await produzioniDaLotto(l.id));
   };
 
   const schedaPdf = async () => {
@@ -30,6 +32,10 @@ export default function RintracciabilitaScreen() {
     const movRighe = movimenti.map((m) => `
       <tr><td>${fmtDataOra(m.data_ora)}</td><td>${esc(m.tipo)}</td>
       <td>${esc(m.quantita)} ${esc(l.unita_misura)}</td><td>${esc(m.causale)}</td></tr>`).join('');
+
+    const prodRighe = produzioni.map((pr) => `
+      <tr><td>${fmtDataOra(pr.data_ora)}</td><td>${esc(pr.nome)}</td>
+      <td>${esc(pr.lotto_produzione) || '—'}</td><td>${esc(pr.quantita_usata)}</td></tr>`).join('');
 
     const corpo = `
       <div class="kv"><b>Prodotto:</b> ${esc(l.prodotto)}</div>
@@ -47,7 +53,10 @@ export default function RintracciabilitaScreen() {
       <div class="kv"><b>Allergeni:</b> ${allerg.length ? esc(allerg.join(', ')) : 'nessuno dichiarato'}</div>
       <h1 style="margin-top:16px">Movimenti del lotto</h1>
       <table><thead><tr><th>Data</th><th>Tipo</th><th>Quantità</th><th>Causale</th></tr></thead>
-      <tbody>${movRighe || '<tr><td colspan="4">Nessun movimento</td></tr>'}</tbody></table>`;
+      <tbody>${movRighe || '<tr><td colspan="4">Nessun movimento</td></tr>'}</tbody></table>
+      <h1 style="margin-top:16px">Impiego nei piatti (tracciabilità a valle)</h1>
+      <table><thead><tr><th>Data</th><th>Piatto</th><th>Lotto produzione</th><th>Q.tà usata</th></tr></thead>
+      <tbody>${prodRighe || '<tr><td colspan="4">Nessun impiego registrato</td></tr>'}</tbody></table>`;
 
     try {
       await stampa(wrapDoc(`Scheda di rintracciabilità — lotto ${l.numero_lotto || l.id}`, corpo, imp));
@@ -110,6 +119,21 @@ export default function RintracciabilitaScreen() {
                     <Text style={S.muted}>{fmtDataOra(m.data_ora)}{m.causale ? ` · ${m.causale}` : ''}</Text>
                   </View>
                   <Text style={S.muted}>{m.quantita} {sel.unita_misura}</Text>
+                </View>
+              ))}
+            </View>
+
+            <Text style={S.h2}>Usato nei piatti</Text>
+            <View style={S.card}>
+              {produzioni.length === 0 ? (
+                <Text style={S.muted}>Questo lotto non risulta ancora impiegato in produzioni.</Text>
+              ) : produzioni.map((pr, i) => (
+                <View key={pr.id} style={[S.row, { paddingVertical: 8, borderTopWidth: i ? 1 : 0, borderTopColor: COLORS.border }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontWeight: '600', color: COLORS.text }}>{pr.nome}</Text>
+                    <Text style={S.muted}>{fmtDataOra(pr.data_ora)} · lotto {pr.lotto_produzione || '—'}</Text>
+                  </View>
+                  <Text style={S.muted}>{pr.quantita_usata}</Text>
                 </View>
               ))}
             </View>
