@@ -13,6 +13,8 @@ import RicevimentoScreen from './RicevimentoScreen';
 import MagazzinoScreen from './MagazzinoScreen';
 import PuntiControlloScreen from './PuntiControlloScreen';
 import TemperatureScreen from './TemperatureScreen';
+import EtichetteScreen from './EtichetteScreen';
+import BackupScreen from './BackupScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -61,6 +63,8 @@ export default function App() {
         <Stack.Screen name="PuntiControlloScreen" component={PuntiControlloScreen} options={{ title: 'Frigoriferi' }} />
         <Stack.Screen name="PuntiControllo" component={PuntiControlloScreen} options={{ title: 'Frigoriferi' }} />
         <Stack.Screen name="Temperature" component={TemperatureScreen} options={{ title: 'Temperature' }} />
+        <Stack.Screen name="Etichette" component={EtichetteScreen} options={{ title: 'Etichette' }} />
+        <Stack.Screen name="Backup" component={BackupScreen} options={{ title: 'Backup e dati' }} />
       </Stack.Navigator>
     </NavigationContainer>
   );
