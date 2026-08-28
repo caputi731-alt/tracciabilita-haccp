@@ -13,6 +13,8 @@ const VOCI = [
   { titolo: 'Prodotti', rotta: 'Prodotti', desc: 'Catalogo e allergeni' },
   { titolo: 'Fornitori', rotta: 'Fornitori', desc: 'Anagrafica fornitori' },
   { titolo: 'Frigoriferi', rotta: 'PuntiControllo', desc: 'Punti di controllo e limiti' },
+  { titolo: 'Etichette', rotta: 'Etichette', desc: 'Apertura, congelamento, produzione, allergeni' },
+  { titolo: 'Backup e dati', rotta: 'Backup', desc: 'Salvataggio, ripristino, export CSV' },
 ];
 
 export default function HomeScreen({ navigation }) {
