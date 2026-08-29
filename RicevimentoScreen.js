@@ -2,8 +2,9 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, Alert, Switch, Image, TouchableOpacity } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
+import TextRecognition from '@react-native-ml-kit/text-recognition';
 import { S, COLORS, UNITA } from './theme';
-import { Campo, Chips, Selettore, Scanner, Bottone } from './UI';
+import { Campo, Chips, Selettore, Scanner, Bottone, CameraCapture } from './UI';
 import {
   listaFornitori, listaProdotti, prodottoDaBarcode, registraCarico,
 } from './database';
@@ -22,6 +23,9 @@ export default function RicevimentoScreen({ navigation }) {
   const [prodotti, setProdotti] = useState([]);
   const [f, setF] = useState({ ...VUOTO });
   const [scanner, setScanner] = useState(false);
+  const [fotocamera, setFotocamera] = useState(null);
+  const [ocrCorso, setOcrCorso] = useState(false);
+  const [testoOcr, setTestoOcr] = useState(null);
 
   useFocusEffect(useCallback(() => {
     listaFornitori().then(setFornitori);
@@ -30,23 +34,7 @@ export default function RicevimentoScreen({ navigation }) {
 
   const set = (k) => (v) => setF((s) => ({ ...s, [k]: v }));
 
-  const scattaFoto = async (campo) => {
-    try {
-      const perm = await ImagePicker.requestCameraPermissionsAsync();
-      if (!perm.granted) {
-        return Alert.alert(
-          'Permesso fotocamera',
-          perm.canAskAgain
-            ? 'Serve il permesso della fotocamera per scattare la foto.'
-            : 'Il permesso è disattivato. Abilitalo da Impostazioni > App > Tracciabilità HACCP > Autorizzazioni > Fotocamera.'
-        );
-      }
-      const r = await ImagePicker.launchCameraAsync({ quality: 0.5 });
-      if (!r.canceled && r.assets && r.assets[0]) set(campo)(r.assets[0].uri);
-    } catch (e) {
-      Alert.alert('Errore fotocamera', String(e?.message || e));
-    }
-  };
+  const scattaFoto = (campo) => setFotocamera(campo);
 
   const scegliDaGalleria = async (campo) => {
     try {
@@ -72,6 +60,56 @@ export default function RicevimentoScreen({ navigation }) {
       { text: 'Scegli dalla galleria', onPress: () => scegliDaGalleria(campo) },
       { text: 'Annulla', style: 'cancel' },
     ]);
+  };
+
+  // Estrae una data in formato ISO da un testo libero (gg/mm/aaaa, gg-mm-aa, ecc.)
+  const estraiData = (testo) => {
+    const m = testo.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
+    if (!m) return null;
+    let [, g, me, a] = m;
+    if (a.length === 2) a = '20' + a;
+    const gg = g.padStart(2, '0');
+    const mm = me.padStart(2, '0');
+    return `${a}-${mm}-${gg}`;
+  };
+
+  // Cerca un numero di documento vicino a parole chiave come DDT / n.
+  const estraiNumeroDoc = (testo) => {
+    const righe = testo.split('\n');
+    for (const r of righe) {
+      if (/d\.?d\.?t\.?|documento|bolla|fattura|n[°.\s]/i.test(r)) {
+        const num = r.match(/(\d{1,8}(?:[\/\-]\d{1,6})?)/);
+        if (num) return num[1];
+      }
+    }
+    return null;
+  };
+
+  const leggiDDT = async () => {
+    if (!f.foto_ddt) {
+      return Alert.alert('Nessuna foto', 'Prima fotografa o scegli l\'immagine del DDT.');
+    }
+    try {
+      setOcrCorso(true);
+      const res = await TextRecognition.recognize(f.foto_ddt);
+      const testo = res?.text || '';
+      if (!testo.trim()) {
+        setOcrCorso(false);
+        return Alert.alert('Nessun testo', 'Non sono riuscito a leggere testo dalla foto. Riprova con un\'immagine più nitida e ben illuminata.');
+      }
+      const data = estraiData(testo);
+      const numero = estraiNumeroDoc(testo);
+      setF((s) => ({
+        ...s,
+        ddt_data: data || s.ddt_data,
+        ddt_numero: numero || s.ddt_numero,
+      }));
+      setTestoOcr(testo);
+    } catch (e) {
+      Alert.alert('OCR non riuscito', String(e?.message || e));
+    } finally {
+      setOcrCorso(false);
+    }
   };
 
   const daBarcode = async (code) => {
@@ -128,6 +166,10 @@ export default function RicevimentoScreen({ navigation }) {
           <Image source={{ uri: f.foto_ddt }}
             style={{ height: 140, marginTop: 10, borderRadius: 8 }} resizeMode="cover" />
         )}
+        {f.foto_ddt && (
+          <Bottone testo={ocrCorso ? 'Lettura in corso…' : 'Leggi numero e data dal DDT (OCR)'}
+            ghost onPress={leggiDDT} />
+        )}
       </View>
 
       <Text style={S.h2}>2. Prodotto e lotto</Text>
@@ -180,12 +222,34 @@ export default function RicevimentoScreen({ navigation }) {
       </View>
 
       <Bottone testo="Registra carico" onPress={salva} />
+
+      {testoOcr && (
+        <View style={[S.card, { marginTop: 8 }]}>
+          <View style={S.row}>
+            <Text style={S.h2}>Testo letto dal DDT</Text>
+            <TouchableOpacity onPress={() => setTestoOcr(null)}>
+              <Text style={{ color: COLORS.primary, fontWeight: '700' }}>Nascondi</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={[S.muted, { marginBottom: 8 }]}>
+            Ho precompilato numero e data quando li ho riconosciuti. Correggili se serve.
+            Da qui puoi leggere il resto (fornitore, prodotti) e trascriverlo.
+          </Text>
+          <Text style={{ color: COLORS.text, fontSize: 13, lineHeight: 19 }}>{testoOcr}</Text>
+        </View>
+      )}
+
       <TouchableOpacity onPress={() => setF({ ...VUOTO })} style={{ padding: 16 }}>
         <Text style={[S.muted, { textAlign: 'center' }]}>Svuota il modulo</Text>
       </TouchableOpacity>
 
       <Scanner visibile={scanner} onChiudi={() => setScanner(false)} onLetto={daBarcode} />
+
+      <CameraCapture
+        visibile={!!fotocamera}
+        onChiudi={() => setFotocamera(null)}
+        onScattata={(uri) => { set(fotocamera)(uri); setFotocamera(null); }}
+      />
     </ScrollView>
   );
-                                                                               }
-                                                                               
+}
