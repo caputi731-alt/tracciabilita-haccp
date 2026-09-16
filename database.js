@@ -412,6 +412,42 @@ export const temperatureDiOggi = () => {
      WHERE substr(r.data_ora, 1, 10) = ? ORDER BY r.data_ora DESC`, [oggi]);
 };
 
+/** Corregge una rilevazione già salvata, lasciando traccia del valore originale. */
+export async function modificaTemperatura(id, nuovaTemperatura) {
+  const r = await queryOne(
+    `SELECT r.*, pc.nome, pc.temp_min, pc.temp_max FROM registro_temperature r
+     JOIN punti_controllo pc ON pc.id = r.punto_controllo_id WHERE r.id = ?`, [id]);
+  if (!r) return null;
+  const conforme = nuovaTemperatura >= r.temp_min && nuovaTemperatura <= r.temp_max;
+  const esito = conforme ? 'conforme' : 'non conforme';
+  const adesso = new Date().toISOString();
+  const traccia = `Corretto il ${adesso.slice(0, 10)}: era ${r.temperatura}°C`;
+  const note = r.note ? `${r.note} | ${traccia}` : traccia;
+  await exec('UPDATE registro_temperature SET temperatura = ?, esito = ?, note = ? WHERE id = ?',
+    [nuovaTemperatura, esito, note, id]);
+
+  const descrVecchia = `${r.nome}: rilevati ${r.temperatura}°C (limiti ${r.temp_min}/${r.temp_max}°C)`;
+  if (r.esito !== 'conforme' && conforme) {
+    // Era un errore di digitazione: chiude la non conformità aperta automaticamente
+    await exec(
+      `UPDATE non_conformita SET stato = 'chiusa', data_chiusura = ?,
+       azione_correttiva = 'Valore digitato per errore, corretto nel registro'
+       WHERE origine = 'temperatura' AND stato = 'aperta' AND descrizione = ?`,
+      [adesso, descrVecchia]);
+  } else if (!conforme) {
+    const descrNuova = `${r.nome}: rilevati ${nuovaTemperatura}°C (limiti ${r.temp_min}/${r.temp_max}°C)`;
+    if (r.esito !== 'conforme') {
+      await exec(
+        `UPDATE non_conformita SET descrizione = ? WHERE origine = 'temperatura'
+         AND stato = 'aperta' AND descrizione = ?`, [descrNuova, descrVecchia]);
+    } else {
+      await exec('INSERT INTO non_conformita (data_ora, origine, descrizione) VALUES (?,?,?)',
+        [adesso, 'temperatura', descrNuova]);
+    }
+  }
+  return { conforme, nome: r.nome, temp_min: r.temp_min, temp_max: r.temp_max };
+}
+
 export const nonConformitaAperte = () =>
   query("SELECT * FROM non_conformita WHERE stato = 'aperta' ORDER BY data_ora DESC");
 

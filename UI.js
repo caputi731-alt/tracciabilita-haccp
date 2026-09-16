@@ -150,3 +150,59 @@ export const conferma = (titolo, messaggio, azione) =>
     { text: 'Annulla', style: 'cancel' },
     { text: 'Conferma', style: 'destructive', onPress: azione },
   ]);
+
+/** Fotocamera per scattare foto (DDT, etichette) con CameraView */
+export function CameraCapture({ visibile, onScattata, onChiudi }) {
+  const [permesso, chiediPermesso] = useCameraPermissions();
+  const camRef = React.useRef(null);
+  const [inCorso, setInCorso] = useState(false);
+
+  React.useEffect(() => {
+    if (visibile && permesso && !permesso.granted) chiediPermesso();
+  }, [visibile, permesso]);
+
+  if (!visibile) return null;
+
+  const scatta = async () => {
+    if (!camRef.current || inCorso) return;
+    try {
+      setInCorso(true);
+      const foto = await camRef.current.takePictureAsync({ quality: 0.5 });
+      if (foto?.uri) onScattata(foto.uri);
+    } catch (e) {
+      Alert.alert('Foto non riuscita', String(e?.message || e));
+    } finally {
+      setInCorso(false);
+    }
+  };
+
+  return (
+    <Modal visible animationType="slide" onRequestClose={onChiudi}>
+      <View style={{ flex: 1, backgroundColor: '#000' }}>
+        {permesso?.granted ? (
+          <CameraView ref={camRef} style={{ flex: 1 }} facing="back" />
+        ) : (
+          <View style={{ flex: 1, justifyContent: 'center', padding: 24 }}>
+            <Text style={{ color: '#fff', textAlign: 'center', fontSize: 16 }}>
+              Serve il permesso di usare la fotocamera per scattare la foto.
+            </Text>
+          </View>
+        )}
+        <View style={{ flexDirection: 'row', backgroundColor: '#111' }}>
+          <TouchableOpacity style={{ flex: 1, padding: 20 }} onPress={onChiudi}>
+            <Text style={{ color: '#fff', textAlign: 'center', fontSize: 16, fontWeight: '700' }}>
+              Annulla
+            </Text>
+          </TouchableOpacity>
+          {permesso?.granted && (
+            <TouchableOpacity style={{ flex: 1, padding: 20, backgroundColor: COLORS.primary }} onPress={scatta}>
+              <Text style={{ color: '#fff', textAlign: 'center', fontSize: 16, fontWeight: '700' }}>
+                {inCorso ? 'Scatto…' : 'Scatta'}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    </Modal>
+  );
+}
