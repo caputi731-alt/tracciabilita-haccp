@@ -26,8 +26,10 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Prepara Android SDK
-        uses: android-actions/setup-android@v4
+      - name: Verifica Android SDK (preinstallato sui runner Ubuntu)
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          ls "$ANDROID_HOME"
 
       - name: Installa le dipendenze
         run: npm install
