@@ -10,6 +10,7 @@ import HomeScreen from './HomeScreen';
 import FornitoriScreen from './FornitoriScreen';
 import ProdottiScreen from './ProdottiScreen';
 import RicevimentoScreen from './RicevimentoScreen';
+import ImportaFatturaScreen from './ImportaFatturaScreen';
 import MagazzinoScreen from './MagazzinoScreen';
 import PuntiControlloScreen from './PuntiControlloScreen';
 import TemperatureScreen from './TemperatureScreen';
@@ -63,6 +64,7 @@ export default function App() {
       >
         <Stack.Screen name="Home" component={HomeScreen} options={{ title: 'Tracciabilità HACCP' }} />
         <Stack.Screen name="Ricevimento" component={RicevimentoScreen} options={{ title: 'Ricevimento merce' }} />
+        <Stack.Screen name="ImportaFattura" component={ImportaFatturaScreen} options={{ title: 'Importa fattura PDF' }} />
         <Stack.Screen name="Magazzino" component={MagazzinoScreen} options={{ title: 'Magazzino' }} />
         <Stack.Screen name="Prodotti" component={ProdottiScreen} options={{ title: 'Prodotti' }} />
         <Stack.Screen name="Fornitori" component={FornitoriScreen} options={{ title: 'Fornitori' }} />

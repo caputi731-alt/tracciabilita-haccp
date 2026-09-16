@@ -26,3 +26,9 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
 - Sintassi JS valida su tutti i file modificati.
 - Nessun import verso file inesistenti o con maiuscole/minuscole diverse.
 - Nessuna funzione duplicata in `database.js`.
+
+## Importazione fatture PDF
+- `letturaPdf.js`: estrazione testo da PDF in puro JS (solo `pako`, nessun modulo nativo). Non aggiungere librerie PDF native.
+- `fattura.js`: riconoscimento righe. Layout supportato: Altasfera/Maiora (ARTICOLO DESCRIZIONE CONF UM COLLI QTÀ PREZZO IMPORTO IVA).
+  Per un nuovo fornitore aggiungere un pattern e testarlo in Node sul PDF reale prima del commit.
+- `ImportaFatturaScreen.js`: verifica righe, abbinamenti articolo→prodotto (tabella `abbinamenti_articoli`), carico in transazione.

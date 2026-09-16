@@ -209,6 +209,25 @@ export async function initDatabase() {
       quantita_usata REAL
     );
 
+    CREATE TABLE IF NOT EXISTS abbinamenti_articoli (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      fornitore_id INTEGER NOT NULL REFERENCES fornitori(id),
+      chiave TEXT NOT NULL,
+      descrizione TEXT,
+      prodotto_id INTEGER NOT NULL REFERENCES prodotti(id),
+      UNIQUE (fornitore_id, chiave)
+    );
+
+    CREATE TABLE IF NOT EXISTS fatture_importate (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      fornitore_id INTEGER REFERENCES fornitori(id),
+      numero TEXT,
+      data TEXT,
+      data_import TEXT NOT NULL,
+      totale REAL,
+      righe INTEGER
+    );
+
     CREATE INDEX IF NOT EXISTS idx_lotti_scadenza ON lotti(data_scadenza);
     CREATE INDEX IF NOT EXISTS idx_lotti_stato ON lotti(stato);
     CREATE INDEX IF NOT EXISTS idx_lotti_numero ON lotti(numero_lotto);
@@ -337,7 +356,7 @@ export async function registraCarico(l) {
     'INSERT INTO movimenti (lotto_id, tipo, quantita, data_ora, causale) VALUES (?,?,?,?,?)',
     [lottoId, 'carico', l.quantita, new Date().toISOString(), 'Ricevimento merce']
   );
-  if (l.esito_controllo === 'non conforme') {
+  if (l.esito_controllo === 'non conforme' && !l.senza_nc) {
     await exec(
       `INSERT INTO non_conformita (data_ora, origine, descrizione, lotto_id)
        VALUES (?,?,?,?)`,
@@ -748,3 +767,85 @@ export const produzioniDaLotto = (lottoId) =>
     `SELECT pr.*, pl.quantita_usata FROM produzione_lotti pl
      JOIN produzioni pr ON pr.id = pl.produzione_id
      WHERE pl.lotto_id = ? ORDER BY pr.data_ora DESC`, [lottoId]);
+
+/* ---------- importazione fatture PDF ---------- */
+
+/** Cerca tra le P.IVA lette in fattura un fornitore già in anagrafica. */
+export async function fornitoreDaPartiteIva(partiteIva = []) {
+  for (const piva of partiteIva) {
+    const f = await queryOne(
+      `SELECT * FROM fornitori WHERE attivo = 1
+       AND REPLACE(REPLACE(UPPER(partita_iva), 'IT', ''), ' ', '') = ?`, [piva]);
+    if (f) return f;
+  }
+  return null;
+}
+
+/** Abbinamenti articolo fornitore → prodotto interno, come oggetto { chiave: prodotto_id }. */
+export async function abbinamentiFornitore(fornitoreId) {
+  const r = await query(
+    `SELECT a.chiave, a.prodotto_id FROM abbinamenti_articoli a
+     JOIN prodotti p ON p.id = a.prodotto_id AND p.attivo = 1
+     WHERE a.fornitore_id = ?`, [fornitoreId]);
+  const out = {};
+  r.forEach((x) => { out[x.chiave] = x.prodotto_id; });
+  return out;
+}
+
+export const fatturaGiaImportata = (fornitoreId, numero, data) =>
+  queryOne('SELECT * FROM fatture_importate WHERE fornitore_id = ? AND numero = ? AND data = ?',
+    [fornitoreId, numero, data]);
+
+/**
+ * Carica in magazzino le righe di una fattura, tutto in un'unica transazione.
+ * Crea se serve fornitore e prodotti, e ricorda gli abbinamenti per le prossime fatture.
+ */
+export async function importaFattura(imp) {
+  const d = await getDb();
+  let caricati = 0;
+  await d.withTransactionAsync(async () => {
+    let fornitoreId = imp.fornitore_id;
+    if (!fornitoreId) {
+      const r = await exec('INSERT INTO fornitori (ragione_sociale, partita_iva) VALUES (?,?)',
+        [imp.nuovo_fornitore.ragione_sociale, imp.nuovo_fornitore.partita_iva]);
+      fornitoreId = r.lastInsertRowId;
+    }
+    const adesso = new Date().toISOString();
+    for (const riga of imp.righe) {
+      let prodottoId = riga.prodotto_id;
+      if (!prodottoId) {
+        const r = await exec(
+          `INSERT INTO prodotti (denominazione, fornitore_abituale_id, unita_misura, origine, allergeni)
+           VALUES (?,?,?,?,?)`,
+          [riga.nuovo_prodotto, fornitoreId, riga.unita_misura, riga.origine || null, '[]']);
+        prodottoId = r.lastInsertRowId;
+      }
+      await exec(
+        `INSERT INTO abbinamenti_articoli (fornitore_id, chiave, descrizione, prodotto_id)
+         VALUES (?,?,?,?)
+         ON CONFLICT(fornitore_id, chiave) DO UPDATE SET prodotto_id = excluded.prodotto_id,
+           descrizione = excluded.descrizione`,
+        [fornitoreId, riga.chiave, riga.descrizione, prodottoId]);
+      await registraCarico({
+        prodotto_id: prodottoId, fornitore_id: fornitoreId,
+        numero_lotto: riga.numero_lotto, ddt_numero: imp.numero, ddt_data: imp.data,
+        data_ricevimento: adesso, quantita: riga.quantita, unita_misura: riga.unita_misura,
+        data_scadenza: riga.data_scadenza || null, temperatura_rilevata: imp.temperatura,
+        esito_controllo: imp.non_conforme ? 'non conforme' : 'conforme',
+        integrita_imballo: imp.integrita_imballo, conformita_etichettatura: imp.conformita_etichettatura,
+        prezzo_unitario: riga.prezzo_unitario, foto_ddt: null, foto_etichetta: null,
+        note: riga.note, senza_nc: true,
+      });
+      caricati++;
+    }
+    if (imp.non_conforme) {
+      await exec('INSERT INTO non_conformita (data_ora, origine, descrizione) VALUES (?,?,?)',
+        [adesso, 'ricevimento',
+         `Merce non conforme al ricevimento (fattura n. ${imp.numero || '—'}): ${imp.nota_nc || 'vedi lotti caricati'}`]);
+    }
+    await exec(
+      'INSERT INTO fatture_importate (fornitore_id, numero, data, data_import, totale, righe) VALUES (?,?,?,?,?,?)',
+      [fornitoreId, imp.numero, imp.data, adesso, imp.totale, caricati]);
+  });
+  return caricati;
+}

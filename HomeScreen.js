@@ -10,7 +10,8 @@ const SEZIONI = [
   {
     titolo: 'Operativo',
     voci: [
-      { titolo: 'Ricevi merce', rotta: 'Ricevimento', desc: 'Nuovo carico da DDT o fattura', c: COLORS.primary },
+      { titolo: 'Importa fattura PDF', rotta: 'ImportaFattura', desc: 'Carica in magazzino tutte le righe di una fattura', c: COLORS.primary },
+      { titolo: 'Ricevi merce', rotta: 'Ricevimento', desc: 'Carico manuale di un singolo prodotto', c: COLORS.primary },
       { titolo: 'Magazzino', rotta: 'Magazzino', desc: 'Lotti disponibili e scarichi', c: COLORS.primary },
       { titolo: 'Produzioni', rotta: 'Produzioni', desc: 'Prepara un piatto e collega i lotti', c: COLORS.primary },
     ],
