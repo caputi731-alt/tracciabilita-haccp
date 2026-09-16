@@ -21,13 +21,13 @@ jobs:
           node-version: 20
 
       - name: Prepara Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 17
 
       - name: Prepara Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
 
       - name: Installa le dipendenze
         run: npm install
