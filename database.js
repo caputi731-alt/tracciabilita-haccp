@@ -218,6 +218,16 @@ export async function initDatabase() {
       UNIQUE (fornitore_id, chiave)
     );
 
+    CREATE TABLE IF NOT EXISTS registro_modifiche (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tabella TEXT NOT NULL,
+      record_id INTEGER NOT NULL,
+      data_ora TEXT NOT NULL,
+      campo TEXT NOT NULL,
+      valore_precedente TEXT,
+      valore_nuovo TEXT
+    );
+
     CREATE TABLE IF NOT EXISTS fatture_importate (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       fornitore_id INTEGER REFERENCES fornitori(id),
@@ -857,3 +867,135 @@ export async function importaFattura(imp) {
   });
   return caricati;
 }
+
+/* ---------- correzione dei record già salvati ---------- */
+
+/** Campi correggibili per ogni registro, con l'etichetta usata nella traccia. */
+const CAMPI_CORREGGIBILI = {
+  registro_sanificazione: { prodotto_utilizzato: 'prodotto', operatore: 'operatore', note: null },
+  non_conformita: { descrizione: 'descrizione', azione_correttiva: 'azione correttiva' },
+  produzioni: {
+    quantita_prodotta: 'quantità', lotto_produzione: 'lotto', data_scadenza: 'scadenza',
+    operatore: 'operatore', note: null,
+  },
+  lotti: {
+    numero_lotto: 'lotto', data_scadenza: 'scadenza', quantita_iniziale: 'quantità ricevuta',
+    colli: 'colli', ddt_numero: 'n. documento', ddt_data: 'data documento',
+    temperatura_rilevata: 'temperatura', prezzo_unitario: 'prezzo', note: null,
+  },
+};
+
+const pari = (a, b) => (a === null || a === undefined || a === '' ? null : String(a))
+  === (b === null || b === undefined || b === '' ? null : String(b));
+const oggiIt = () => new Date().toLocaleDateString('it-IT');
+const perTraccia = (v) => (v === null || v === undefined || v === '' ? 'vuoto' : String(v));
+
+/**
+ * Corregge un record lasciando traccia: ogni campo cambiato va in registro_modifiche
+ * e, dove il registro ha le note, compare anche lì ("Corretto il … : lotto era X").
+ * Restituisce il numero di campi modificati.
+ */
+export async function correggiRecord(tabella, id, cambi) {
+  const ammessi = CAMPI_CORREGGIBILI[tabella];
+  if (!ammessi) throw new Error(`Registro non correggibile: ${tabella}`);
+  const d = await getDb();
+  let modificati = 0;
+  await d.withTransactionAsync(async () => {
+    const vecchio = await queryOne(`SELECT * FROM ${tabella} WHERE id = ?`, [id]);
+    if (!vecchio) throw new Error('Registrazione non trovata');
+    const set = [];
+    const valori = [];
+    const tracce = [];
+    const adesso = new Date().toISOString();
+    for (const campo of Object.keys(cambi)) {
+      if (!(campo in ammessi) || pari(vecchio[campo], cambi[campo])) continue;
+      modificati++;
+      if (campo !== 'note') {
+        set.push(`${campo} = ?`);
+        valori.push(cambi[campo]);
+      }
+      await exec(
+        `INSERT INTO registro_modifiche (tabella, record_id, data_ora, campo, valore_precedente, valore_nuovo)
+         VALUES (?,?,?,?,?,?)`,
+        [tabella, id, adesso, campo, vecchio[campo] === null ? null : String(vecchio[campo]),
+         cambi[campo] === null ? null : String(cambi[campo])]);
+      if (ammessi[campo]) tracce.push(`${ammessi[campo]} era ${perTraccia(vecchio[campo])}`);
+    }
+    if (modificati === 0) return;
+
+    if (tabella === 'lotti' && 'quantita_iniziale' in cambi && !pari(vecchio.quantita_iniziale, cambi.quantita_iniziale)) {
+      const nuova = Number(cambi.quantita_iniziale);
+      if (!(nuova > 0)) throw new Error('La quantità ricevuta deve essere maggiore di zero.');
+      const uscite = vecchio.quantita_iniziale - vecchio.quantita_residua;
+      if (nuova < uscite) {
+        throw new Error(`Da questo lotto sono già usciti ${uscite} ${vecchio.unita_misura || ''}: la quantità ricevuta non può essere inferiore.`);
+      }
+      const residua = Math.round((nuova - uscite) * 1000) / 1000;
+      set.push('quantita_residua = ?', 'stato = ?');
+      valori.push(residua, residua <= 0 ? 'esaurito' : 'disponibile');
+      await exec("UPDATE movimenti SET quantita = ? WHERE lotto_id = ? AND tipo = 'carico'", [nuova, id]);
+    }
+
+    if ('note' in ammessi) {
+      let note = 'note' in cambi ? cambi.note : vecchio.note;
+      if (tracce.length) {
+        const traccia = `Corretto il ${oggiIt()}: ${tracce.join(', ')}`;
+        note = note ? `${note} | ${traccia}` : traccia;
+      }
+      if (!pari(note, vecchio.note)) { set.push('note = ?'); valori.push(note); }
+    }
+    if (set.length === 0) return;
+    await exec(`UPDATE ${tabella} SET ${set.join(', ')} WHERE id = ?`, [...valori, id]);
+  });
+  return modificati;
+}
+
+/** Storico delle correzioni di un record. */
+export const correzioniRecord = (tabella, id) =>
+  query('SELECT * FROM registro_modifiche WHERE tabella = ? AND record_id = ? ORDER BY data_ora DESC',
+    [tabella, id]);
+
+/** Corregge la quantità di un'uscita (scarico/scarto/reso) ricalcolando la giacenza del lotto. */
+export async function correggiUscita(movimentoId, nuovaQuantita) {
+  const d = await getDb();
+  await d.withTransactionAsync(async () => {
+    const m = await queryOne('SELECT * FROM movimenti WHERE id = ?', [movimentoId]);
+    if (!m || m.tipo === 'carico') throw new Error('Movimento non correggibile');
+    if (!(nuovaQuantita > 0)) throw new Error('La quantità deve essere maggiore di zero.');
+    const lotto = await queryOne('SELECT * FROM lotti WHERE id = ?', [m.lotto_id]);
+    const residua = Math.round((lotto.quantita_residua + m.quantita - nuovaQuantita) * 1000) / 1000;
+    if (residua < 0) {
+      throw new Error(`Nel lotto restano ${lotto.quantita_residua + m.quantita} ${lotto.unita_misura || ''}: non puoi scaricarne di più.`);
+    }
+    const traccia = `Corretto il ${oggiIt()}: era ${m.quantita}`;
+    await exec('UPDATE movimenti SET quantita = ?, note = ? WHERE id = ?',
+      [nuovaQuantita, m.note ? `${m.note} | ${traccia}` : traccia, movimentoId]);
+    await exec('UPDATE lotti SET quantita_residua = ?, stato = ? WHERE id = ?',
+      [residua, residua <= 0 ? 'esaurito' : 'disponibile', lotto.id]);
+    await exec(
+      `INSERT INTO registro_modifiche (tabella, record_id, data_ora, campo, valore_precedente, valore_nuovo)
+       VALUES ('movimenti', ?, ?, 'quantita', ?, ?)`,
+      [movimentoId, new Date().toISOString(), String(m.quantita), String(nuovaQuantita)]);
+  });
+}
+
+/** Annulla un carico registrato per errore, solo se dal lotto non è ancora uscito nulla. */
+export async function annullaCarico(lottoId, motivo) {
+  const d = await getDb();
+  await d.withTransactionAsync(async () => {
+    const usi = await queryOne(
+      `SELECT COUNT(*) AS n FROM movimenti WHERE lotto_id = ? AND tipo <> 'carico'`, [lottoId]);
+    const prod = await queryOne('SELECT COUNT(*) AS n FROM produzione_lotti WHERE lotto_id = ?', [lottoId]);
+    if ((usi && usi.n) || (prod && prod.n)) {
+      throw new Error('Da questo lotto sono già uscite quantità: correggi le uscite invece di annullare il carico.');
+    }
+    const l = await queryOne('SELECT * FROM lotti WHERE id = ?', [lottoId]);
+    const traccia = `Carico annullato il ${oggiIt()}${motivo ? `: ${motivo}` : ''}`;
+    await exec("UPDATE lotti SET stato = 'annullato', quantita_residua = 0, note = ? WHERE id = ?",
+      [l.note ? `${l.note} | ${traccia}` : traccia, lottoId]);
+    await exec(
+      `INSERT INTO registro_modifiche (tabella, record_id, data_ora, campo, valore_precedente, valore_nuovo)
+       VALUES ('lotti', ?, ?, 'stato', ?, 'annullato')`, [lottoId, new Date().toISOString(), l.stato]);
+  });
+}
+

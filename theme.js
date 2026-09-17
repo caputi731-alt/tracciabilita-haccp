@@ -44,6 +44,22 @@ export const fmtDataOra = (iso) => {
   });
 };
 
+/** Data ISO (AAAA-MM-GG) → testo per i campi (gg/mm/aaaa). */
+export const dataPerCampo = (iso) => (iso ? String(iso).slice(0, 10).split('-').reverse().join('/') : '');
+
+/** Testo di un campo data → ISO. Vuoto: null. Non valida: undefined. Accetta gg/mm/aaaa, gg/mm/aa e AAAA-MM-GG. */
+export const isoDaCampo = (testo) => {
+  const s = String(testo || '').trim();
+  if (!s) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const m = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2}|\d{4})$/);
+  if (!m) return undefined;
+  const g = Number(m[1]); const me = Number(m[2]);
+  if (g < 1 || g > 31 || me < 1 || me > 12) return undefined;
+  const a = m[3].length === 2 ? `20${m[3]}` : m[3];
+  return `${a}-${String(me).padStart(2, '0')}-${String(g).padStart(2, '0')}`;
+};
+
 export const giorniAllaScadenza = (iso) => {
   if (!iso) return null;
   const scad = new Date(iso + 'T00:00:00');

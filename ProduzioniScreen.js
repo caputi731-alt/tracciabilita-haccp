@@ -2,11 +2,19 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Modal, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, fmtData, fmtDataOra } from './theme';
-import { Campo, Selettore, Bottone } from './UI';
+import { Campo, Selettore, Bottone, ModaleModifica, useAvviso } from './UI';
 import {
   listaRicette, getRicetta, listaProduzioni, getProduzione,
-  lottiDisponibiliProdotto, registraProduzione,
+  lottiDisponibiliProdotto, registraProduzione, correggiRecord,
 } from './database';
+
+const CAMPI_PRODUZIONE = [
+  { chiave: 'quantita_prodotta', label: 'Quantità prodotta', tipo: 'numero' },
+  { chiave: 'lotto_produzione', label: 'Lotto di produzione', tipo: 'testo' },
+  { chiave: 'data_scadenza', label: 'Scadenza', tipo: 'data' },
+  { chiave: 'operatore', label: 'Operatore', tipo: 'testo' },
+  { chiave: 'note', label: 'Note', tipo: 'multiline' },
+];
 
 const oggiISO = () => new Date().toISOString().slice(0, 10);
 const lottoAuto = () => {
@@ -20,6 +28,8 @@ export default function ProduzioniScreen() {
   const [produzioni, setProduzioni] = useState([]);
   const [nuova, setNuova] = useState(false);
   const [dettaglio, setDettaglio] = useState(null);
+  const [modifica, setModifica] = useState(false);
+  const { avviso, mostra } = useAvviso();
 
   // form nuova produzione
   const [ricettaId, setRicettaId] = useState(null);
@@ -78,14 +88,25 @@ export default function ProduzioniScreen() {
       }, usi);
       setNuova(false);
       ricarica();
-      Alert.alert('Produzione registrata',
-        'I lotti usati sono stati scaricati dal magazzino e collegati a questo piatto.');
+      mostra('Salvato ✓ Lotti scaricati e collegati al piatto');
     } catch (e) {
       Alert.alert('Errore', String(e?.message || e));
     }
   };
 
   const apriDettaglio = async (pr) => setDettaglio(await getProduzione(pr.id));
+
+  const salvaCorrezione = async (cambi) => {
+    try {
+      const n = await correggiRecord('produzioni', dettaglio.id, cambi);
+      setModifica(false);
+      setDettaglio(await getProduzione(dettaglio.id));
+      ricarica();
+      mostra(n ? 'Produzione corretta ✓' : 'Nessuna modifica');
+    } catch (e) {
+      Alert.alert('Correzione non salvata', String(e?.message || e));
+    }
+  };
 
   return (
     <View style={S.screen}>
@@ -166,6 +187,11 @@ export default function ProduzioniScreen() {
               <Text style={S.muted}>Lotto: {dettaglio.lotto_produzione || '—'}</Text>
               <Text style={S.muted}>Scadenza: {fmtData(dettaglio.data_scadenza)}</Text>
               <Text style={S.muted}>Operatore: {dettaglio.operatore || '—'}</Text>
+              {!!dettaglio.note && <Text style={[S.muted, { fontStyle: 'italic', marginTop: 4 }]}>{dettaglio.note}</Text>}
+              <TouchableOpacity onPress={() => setModifica(true)}>
+                <Text style={{ color: COLORS.primary, fontWeight: '800', marginTop: 10, fontSize: 15 }}>✎ Modifica dati</Text>
+              </TouchableOpacity>
+              <Text style={[S.muted, { marginTop: 4 }]}>I lotti impiegati non si modificano da qui: sono già stati scaricati.</Text>
             </View>
 
             <Text style={S.h2}>Lotti impiegati</Text>
@@ -184,9 +210,14 @@ export default function ProduzioniScreen() {
             </View>
 
             <Bottone testo="Chiudi" ghost onPress={() => setDettaglio(null)} />
+            <ModaleModifica visibile={modifica} titolo="Modifica produzione" sottotitolo={dettaglio.nome}
+              campi={CAMPI_PRODUZIONE} record={dettaglio} onSalva={salvaCorrezione}
+              onChiudi={() => setModifica(false)} />
           </ScrollView>
         )}
+        {avviso}
       </Modal>
+      {avviso}
     </View>
   );
 }

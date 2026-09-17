@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, Alert, Switch, Image, TouchableOpacity } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
-import { S, COLORS, UNITA } from './theme';
+import { S, COLORS, UNITA, isoDaCampo } from './theme';
 import { Campo, Chips, Selettore, Scanner, Bottone, CameraCapture } from './UI';
 import {
   listaFornitori, listaProdotti, prodottoDaBarcode, registraCarico,
@@ -74,6 +74,9 @@ export default function RicevimentoScreen({ navigation }) {
     if (!f.fornitore_id) return Alert.alert('Dato mancante', 'Seleziona il fornitore.');
     if (!f.prodotto_id) return Alert.alert('Dato mancante', 'Seleziona il prodotto.');
     if (!f.quantita) return Alert.alert('Dato mancante', 'Indica la quantità ricevuta.');
+    if (isoDaCampo(f.data_scadenza) === undefined) {
+      return Alert.alert('Data non valida', 'Scrivi la scadenza come gg/mm/aaaa.');
+    }
 
     const nonConforme = !f.integrita_imballo || !f.conformita_etichettatura;
 
@@ -83,7 +86,7 @@ export default function RicevimentoScreen({ navigation }) {
       colli: f.colli ? parseInt(f.colli, 10) || null : null,
       temperatura_rilevata: f.temperatura_rilevata === '' ? null : Number(f.temperatura_rilevata),
       prezzo_unitario: f.prezzo_unitario === '' ? null : Number(f.prezzo_unitario),
-      data_scadenza: f.data_scadenza || null,
+      data_scadenza: isoDaCampo(f.data_scadenza),
       data_ricevimento: new Date().toISOString(),
       esito_controllo: nonConforme ? 'non conforme' : 'conforme',
     });
@@ -135,7 +138,7 @@ export default function RicevimentoScreen({ navigation }) {
         <Campo label="Colli (facoltativo)" value={f.colli} onChange={set('colli')}
           keyboardType="number-pad" placeholder="numero di confezioni/casse ricevute" />
         <Campo label="Data di scadenza / TMC" value={f.data_scadenza}
-          onChange={set('data_scadenza')} placeholder="AAAA-MM-GG" />
+          onChange={set('data_scadenza')} placeholder="gg/mm/aaaa" />
         <Campo label="Prezzo unitario (€)" value={f.prezzo_unitario}
           onChange={set('prezzo_unitario')} keyboardType="numeric" />
 

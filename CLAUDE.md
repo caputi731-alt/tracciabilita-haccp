@@ -32,3 +32,9 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
 - `fattura.js`: riconoscimento righe. Layout supportato: Altasfera/Maiora (ARTICOLO DESCRIZIONE CONF UM COLLI QTÀ PREZZO IMPORTO IVA).
   Per un nuovo fornitore aggiungere un pattern e testarlo in Node sul PDF reale prima del commit.
 - `ImportaFatturaScreen.js`: verifica righe, abbinamenti articolo→prodotto (tabella `abbinamenti_articoli`), carico in transazione.
+
+## Correzioni e conferme
+- Mai UPDATE diretti sui registri dalle schermate: usare `correggiRecord(tabella, id, cambi)` (traccia in
+  `registro_modifiche` e nelle note), `correggiUscita`, `annullaCarico`. Nuovi campi correggibili vanno in `CAMPI_CORREGGIBILI`.
+- Form di correzione: componente `ModaleModifica` (UI.js). Conferme brevi: `useAvviso()` → "Salvato ✓".
+- Date nei campi di testo: `dataPerCampo` / `isoDaCampo` (theme.js), formato gg/mm/aaaa.

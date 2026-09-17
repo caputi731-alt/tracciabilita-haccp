@@ -2,8 +2,15 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Modal, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, fmtDataOra } from './theme';
-import { Campo, Chips, Bottone } from './UI';
-import { tutteNonConformita, chiudiNonConformita, aggiungiNonConformita } from './database';
+import { Campo, Chips, Bottone, ModaleModifica, useAvviso } from './UI';
+import {
+  tutteNonConformita, chiudiNonConformita, aggiungiNonConformita, correggiRecord,
+} from './database';
+
+const CAMPI_NC = [
+  { chiave: 'descrizione', label: 'Descrizione', tipo: 'multiline', obbligatorio: true },
+  { chiave: 'azione_correttiva', label: 'Azione correttiva', tipo: 'multiline' },
+];
 
 const ORIGINI = ['temperatura', 'ricevimento', 'sanificazione', 'infestanti', 'altro'];
 
@@ -12,6 +19,8 @@ export default function NonConformitaScreen() {
   const [sel, setSel] = useState(null);       // NC da chiudere
   const [azione, setAzione] = useState('');
   const [nuova, setNuova] = useState(null);    // form nuova NC
+  const [inModifica, setInModifica] = useState(null);
+  const { avviso, mostra } = useAvviso();
 
   const ricarica = useCallback(() => { tutteNonConformita().then(setLista); }, []);
   useFocusEffect(ricarica);
@@ -24,6 +33,21 @@ export default function NonConformitaScreen() {
     await chiudiNonConformita(sel.id, azione);
     setSel(null); setAzione('');
     ricarica();
+    mostra('Non conformità chiusa ✓');
+  };
+
+  const salvaCorrezione = async (cambi) => {
+    if (inModifica.stato !== 'aperta' && !cambi.azione_correttiva) {
+      return Alert.alert('Dato mancante', 'Una non conformità chiusa deve avere l\'azione correttiva.');
+    }
+    try {
+      const n = await correggiRecord('non_conformita', inModifica.id, cambi);
+      setInModifica(null);
+      ricarica();
+      mostra(n ? 'Non conformità corretta ✓' : 'Nessuna modifica');
+    } catch (e) {
+      Alert.alert('Correzione non salvata', String(e?.message || e));
+    }
   };
 
   const setN = (k) => (v) => setNuova((f) => ({ ...f, [k]: v }));
@@ -32,12 +56,13 @@ export default function NonConformitaScreen() {
     await aggiungiNonConformita(nuova);
     setNuova(null);
     ricarica();
+    mostra('Salvato ✓');
   };
 
   const Card = ({ n }) => (
     <TouchableOpacity
       style={[S.card, { borderLeftWidth: 4, borderLeftColor: n.stato === 'aperta' ? COLORS.danger : COLORS.ok }]}
-      onPress={() => n.stato === 'aperta' && setSel(n)}
+      onPress={() => (n.stato === 'aperta' ? setSel(n) : setInModifica(n))}
     >
       <View style={S.row}>
         <Text style={{ fontSize: 13, fontWeight: '700', color: n.stato === 'aperta' ? COLORS.danger : COLORS.ok }}>
@@ -50,11 +75,9 @@ export default function NonConformitaScreen() {
       {!!n.azione_correttiva && (
         <Text style={[S.muted, { marginTop: 4 }]}>Azione: {n.azione_correttiva}</Text>
       )}
-      {n.stato === 'aperta' && (
-        <Text style={{ color: COLORS.primary, fontWeight: '600', marginTop: 6 }}>
-          Tocca per chiudere con azione correttiva
-        </Text>
-      )}
+      <Text style={{ color: COLORS.primary, fontWeight: '600', marginTop: 6 }}>
+        {n.stato === 'aperta' ? 'Tocca per chiudere con azione correttiva' : '✎ Tocca per correggere'}
+      </Text>
     </TouchableOpacity>
   );
 
@@ -94,10 +117,18 @@ export default function NonConformitaScreen() {
             <Campo label="Azione correttiva adottata *" value={azione} onChange={setAzione} multiline
               placeholder="Cosa hai fatto per risolvere e prevenire" />
             <Bottone testo="Chiudi la non conformità" onPress={chiudi} />
+            <Bottone testo="✎ Correggi la descrizione" ghost
+              onPress={() => { const n = sel; setSel(null); setAzione(''); setInModifica(n); }} />
             <Bottone testo="Annulla" ghost onPress={() => { setSel(null); setAzione(''); }} />
           </ScrollView>
         )}
       </Modal>
+
+      <ModaleModifica visibile={!!inModifica} titolo="Correggi non conformità"
+        sottotitolo={inModifica ? `${inModifica.origine || ''} · aperta il ${fmtDataOra(inModifica.data_ora)}` : ''}
+        campi={CAMPI_NC} record={inModifica} onSalva={salvaCorrezione}
+        onChiudi={() => setInModifica(null)} />
+      {avviso}
 
       {/* Nuova */}
       <Modal visible={!!nuova} animationType="slide" onRequestClose={() => setNuova(null)}>

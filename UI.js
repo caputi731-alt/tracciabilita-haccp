@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, Modal, ScrollView, Alert,
+  View, Text, TextInput, TouchableOpacity, Modal, ScrollView, Alert, Animated,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { S, COLORS } from './theme';
+import { S, COLORS, dataPerCampo, isoDaCampo } from './theme';
 
 export function Campo({ label, value, onChange, ...props }) {
   return (
@@ -206,3 +206,102 @@ export function CameraCapture({ visibile, onScattata, onChiudi }) {
     </Modal>
   );
 }
+
+/**
+ * Conferma breve a scomparsa ("Salvato ✓") che non richiede tocchi.
+ * Uso: const { avviso, mostra } = useAvviso();  …  mostra('Salvato ✓');  …  {avviso}
+ */
+export function useAvviso() {
+  const [testo, setTesto] = useState('');
+  const opacita = useRef(new Animated.Value(0)).current;
+  const timer = useRef(null);
+  const mostra = useCallback((t) => {
+    setTesto(t);
+    if (timer.current) clearTimeout(timer.current);
+    Animated.timing(opacita, { toValue: 1, duration: 150, useNativeDriver: true }).start();
+    timer.current = setTimeout(() => {
+      Animated.timing(opacita, { toValue: 0, duration: 300, useNativeDriver: true }).start();
+    }, 2200);
+  }, [opacita]);
+  const avviso = (
+    <Animated.View pointerEvents="none" style={{
+      position: 'absolute', left: 24, right: 24, bottom: 90, opacity: opacita,
+      backgroundColor: COLORS.primaryDark, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 18,
+      elevation: 6,
+    }}>
+      <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700', textAlign: 'center' }}>{testo}</Text>
+    </Animated.View>
+  );
+  return { avviso, mostra };
+}
+
+/**
+ * Modale generica per correggere un record già salvato.
+ * campi: [{ chiave, label, tipo: 'testo' | 'numero' | 'intero' | 'data' | 'multiline' }]
+ * onSalva(cambi) riceve solo i valori convertiti (numeri e date ISO).
+ */
+export function ModaleModifica({ visibile, titolo, sottotitolo, campi, record, onSalva, onChiudi, azioni }) {
+  const [valori, setValori] = useState({});
+  React.useEffect(() => {
+    if (!visibile || !record) return;
+    const v = {};
+    campi.forEach((c) => {
+      const x = record[c.chiave];
+      if (c.tipo === 'data') v[c.chiave] = dataPerCampo(x);
+      else if (c.tipo === 'numero' || c.tipo === 'intero') v[c.chiave] = x === null || x === undefined ? '' : String(x).replace('.', ',');
+      else v[c.chiave] = x || '';
+    });
+    setValori(v);
+  }, [visibile, record]);
+
+  const salva = () => {
+    const out = {};
+    for (const c of campi) {
+      const t = String(valori[c.chiave] ?? '').trim();
+      if (c.tipo === 'data') {
+        const iso = isoDaCampo(t);
+        if (iso === undefined) return Alert.alert('Data non valida', `${c.label}: scrivi la data come gg/mm/aaaa.`);
+        out[c.chiave] = iso;
+      } else if (c.tipo === 'numero' || c.tipo === 'intero') {
+        if (t === '') { out[c.chiave] = null; continue; }
+        const n = Number(t.replace(',', '.'));
+        if (!Number.isFinite(n) || (c.tipo === 'intero' && !Number.isInteger(n))) {
+          return Alert.alert('Valore non valido', `${c.label}: inserisci un numero.`);
+        }
+        out[c.chiave] = n;
+      } else {
+        out[c.chiave] = t === '' ? null : t;
+      }
+      if (c.obbligatorio && (out[c.chiave] === null || out[c.chiave] === '')) {
+        return Alert.alert('Dato mancante', `${c.label} è obbligatorio.`);
+      }
+    }
+    onSalva(out);
+  };
+
+  return (
+    <Modal visible={!!visibile} animationType="slide" onRequestClose={onChiudi}>
+      <ScrollView style={S.screen} contentContainerStyle={[S.content, { paddingTop: 50 }]}
+        keyboardShouldPersistTaps="handled">
+        <Text style={S.h1}>{titolo}</Text>
+        {!!sottotitolo && <Text style={[S.muted, { marginBottom: 8 }]}>{sottotitolo}</Text>}
+        <View style={S.card}>
+          {campi.map((c) => (
+            <Campo key={c.chiave} label={c.label} value={valori[c.chiave]}
+              onChange={(v) => setValori((s) => ({ ...s, [c.chiave]: v }))}
+              multiline={c.tipo === 'multiline'}
+              placeholder={c.tipo === 'data' ? 'gg/mm/aaaa' : c.placeholder}
+              keyboardType={c.tipo === 'numero' ? 'decimal-pad' : c.tipo === 'intero' ? 'number-pad' : 'default'} />
+          ))}
+          <Text style={[S.muted, { marginTop: 12 }]}>
+            La correzione resta annotata nel registro con il valore precedente.
+          </Text>
+          <Bottone testo="Salva correzione" onPress={salva} />
+          {azioni}
+          <Bottone testo="Annulla" ghost onPress={onChiudi} />
+        </View>
+      </ScrollView>
+    </Modal>
+  );
+}
+

@@ -2,11 +2,17 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Modal, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, fmtDataOra } from './theme';
-import { Campo, Chips, Bottone, conferma } from './UI';
+import { Campo, Chips, Bottone, conferma, ModaleModifica, useAvviso } from './UI';
 import {
   listaAree, salvaArea, eliminaArea,
-  registraSanificazione, sanificazioniOggi, sanificazioniRecenti,
+  registraSanificazione, sanificazioniOggi, sanificazioniRecenti, correggiRecord,
 } from './database';
+
+const CAMPI_PULIZIA = [
+  { chiave: 'prodotto_utilizzato', label: 'Prodotto utilizzato', tipo: 'testo' },
+  { chiave: 'operatore', label: 'Operatore', tipo: 'testo' },
+  { chiave: 'note', label: 'Note', tipo: 'multiline' },
+];
 
 const FREQUENZE = ['giornaliera', 'settimanale', 'mensile', 'a fine servizio'];
 const AREA_VUOTA = { nome: '', frequenza: 'giornaliera', prodotto_previsto: '', procedura: '' };
@@ -17,6 +23,8 @@ export default function SanificazioneScreen() {
   const [recenti, setRecenti] = useState([]);
   const [formArea, setFormArea] = useState(null);
   const [reg, setReg] = useState(null); // area su cui registrare la pulizia
+  const [inModifica, setInModifica] = useState(null);
+  const { avviso, mostra } = useAvviso();
 
   const ricarica = useCallback(() => {
     listaAree().then(setAree);
@@ -53,6 +61,18 @@ export default function SanificazioneScreen() {
     });
     setReg(null);
     ricarica();
+    mostra(`Salvato ✓ Pulizia: ${reg.nome}`);
+  };
+
+  const salvaCorrezione = async (cambi) => {
+    try {
+      const n = await correggiRecord('registro_sanificazione', inModifica.id, cambi);
+      setInModifica(null);
+      ricarica();
+      mostra(n ? 'Registrazione corretta ✓' : 'Nessuna modifica');
+    } catch (e) {
+      Alert.alert('Correzione non salvata', String(e?.message || e));
+    }
   };
 
   const fattaOggi = (areaId) => oggi.find((o) => o.area_id === areaId);
@@ -92,7 +112,7 @@ export default function SanificazioneScreen() {
 
         {aree.length > 0 && (
           <Text style={[S.muted, { textAlign: 'center', marginTop: 4 }]}>
-            Tocca per registrare · tieni premuto per modificare l'area
+            Tocca per registrare · tieni premuto per modificare l'area · tocca un'ultima registrazione per correggerla
           </Text>
         )}
 
@@ -101,15 +121,19 @@ export default function SanificazioneScreen() {
             <Text style={[S.h2, { marginTop: 20 }]}>Ultime registrazioni</Text>
             <View style={S.card}>
               {recenti.map((r) => (
-                <View key={r.id} style={[S.row, { paddingVertical: 6 }]}>
+                <TouchableOpacity key={r.id} onPress={() => setInModifica(r)}
+                  style={[S.row, { paddingVertical: 8 }]}>
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontSize: 14, fontWeight: '600' }}>{r.nome || 'Area eliminata'}</Text>
                     <Text style={S.muted}>
                       {fmtDataOra(r.data_ora)}{r.operatore ? ` · ${r.operatore}` : ''}
                     </Text>
+                    {!!r.note && <Text style={[S.muted, { fontStyle: 'italic' }]}>{r.note}</Text>}
                   </View>
-                  <Text style={S.muted}>{r.prodotto_utilizzato || ''}</Text>
-                </View>
+                  <Text style={S.muted}>
+                    {r.prodotto_utilizzato || ''}  <Text style={{ color: COLORS.primary, fontWeight: '700' }}>✎</Text>
+                  </Text>
+                </TouchableOpacity>
               ))}
             </View>
           </>
@@ -141,6 +165,12 @@ export default function SanificazioneScreen() {
           </ScrollView>
         )}
       </Modal>
+
+      <ModaleModifica visibile={!!inModifica} titolo="Correggi pulizia"
+        sottotitolo={inModifica ? `${inModifica.nome || 'Area eliminata'} · ${fmtDataOra(inModifica.data_ora)}` : ''}
+        campi={CAMPI_PULIZIA} record={inModifica} onSalva={salvaCorrezione}
+        onChiudi={() => setInModifica(null)} />
+      {avviso}
 
       {/* Modale registrazione pulizia */}
       <Modal visible={!!reg} animationType="slide" onRequestClose={() => setReg(null)}>
