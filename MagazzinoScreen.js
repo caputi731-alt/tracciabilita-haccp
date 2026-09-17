@@ -2,9 +2,11 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, TextInput, TouchableOpacity, Modal, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, fmtData, fmtDataOra, giorniAllaScadenza } from './theme';
-import { Campo, Bottone, Chips, ModaleModifica, useAvviso, conferma } from './UI';
 import {
-  listaLotti, registraScarico, query, correggiRecord, correggiUscita, annullaCarico,
+  Campo, Bottone, Chips, ModaleModifica, useAvviso, conferma, useFoto, AnteprimaFoto,
+} from './UI';
+import {
+  listaLotti, registraScarico, query, correggiRecord, correggiUscita, annullaCarico, impostaFotoLotto,
 } from './database';
 
 const fmtQ = (n) => (n === null || n === undefined ? '—'
@@ -62,6 +64,7 @@ export default function MagazzinoScreen() {
   const [modUscita, setModUscita] = useState(null);
   const [qtaUscita, setQtaUscita] = useState('');
   const { avviso, mostra } = useAvviso();
+  const { chiediFoto, fotocamera } = useFoto();
 
   const ricarica = useCallback(() => { listaLotti(cerca).then(setLotti); }, [cerca]);
   useFocusEffect(ricarica);
@@ -205,6 +208,16 @@ export default function MagazzinoScreen() {
       </Modal>
   );
 
+  const cambiaFoto = (campo) => chiediFoto(campo === 'foto_ddt' ? 'documento' : 'etichetta', async (uri) => {
+    try {
+      await impostaFotoLotto(sel.id, campo, uri);
+      await ricaricaLotto(sel.id);
+      mostra('Foto salvata ✓');
+    } catch (e) {
+      Alert.alert('Foto non salvata', String(e?.message || e));
+    }
+  });
+
   const Riquadro = ({ titolo, children }) => (
     <View style={S.card}>
       {!!titolo && <Text style={S.h2}>{titolo}</Text>}
@@ -299,6 +312,19 @@ export default function MagazzinoScreen() {
                 </TouchableOpacity>
               </Riquadro>
 
+              <Riquadro titolo="Foto">
+                {sel.foto_etichetta ? (
+                  <AnteprimaFoto uri={sel.foto_etichetta} titolo="Etichetta" altezza={220} />
+                ) : (
+                  <Text style={S.muted}>Nessuna foto dell'etichetta.</Text>
+                )}
+                <Bottone testo={sel.foto_etichetta ? '📷 Sostituisci foto etichetta' : "📷 Fotografa l'etichetta"}
+                  ghost onPress={() => cambiaFoto('foto_etichetta')} />
+                {sel.foto_ddt ? <AnteprimaFoto uri={sel.foto_ddt} titolo="Documento di trasporto" /> : null}
+                <Bottone testo={sel.foto_ddt ? '📷 Sostituisci foto documento' : '📷 Fotografa DDT / fattura'}
+                  ghost onPress={() => cambiaFoto('foto_ddt')} />
+              </Riquadro>
+
               <Bottone testo="Scarica da questo lotto"
                 onPress={() => setUscita({ lotto: sel, qta: '', causale: 'consumo' })} />
 
@@ -344,6 +370,7 @@ export default function MagazzinoScreen() {
               </View>
             </Modal>
             {modaleUscita}
+            {fotocamera}
             {avviso}
           </View>
         )}

@@ -1,8 +1,10 @@
 import React, { useState, useRef, useCallback } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, Modal, ScrollView, Alert, Animated,
+  View, Text, TextInput, TouchableOpacity, Modal, ScrollView, Alert, Animated, Image,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
+import { rendiPermanente } from './foto';
 import { S, COLORS, dataPerCampo, isoDaCampo } from './theme';
 
 export function Campo({ label, value, onChange, ...props }) {
@@ -302,6 +304,93 @@ export function ModaleModifica({ visibile, titolo, sottotitolo, campi, record, o
         </View>
       </ScrollView>
     </Modal>
+  );
+}
+
+/**
+ * Acquisizione foto (fotocamera o galleria) già copiata nella memoria permanente.
+ * Uso: const { chiediFoto, fotocamera } = useFoto();
+ *      chiediFoto('etichetta', (uri) => …);   e nel JSX: {fotocamera}
+ */
+export function useFoto() {
+  const [richiesta, setRichiesta] = useState(null); // { prefisso, onFoto }
+
+  const consegna = async (uriTemporaneo, r) => {
+    try {
+      const uri = await rendiPermanente(uriTemporaneo, r.prefisso);
+      r.onFoto(uri);
+    } catch (e) {
+      Alert.alert('Foto non salvata', String(e?.message || e));
+    }
+  };
+
+  const galleria = async (r) => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        return Alert.alert('Permesso galleria', perm.canAskAgain
+          ? 'Serve il permesso per accedere alle foto.'
+          : 'Abilita il permesso da Impostazioni > App > Tracciabilità HACCP > Autorizzazioni.');
+      }
+      const res = await ImagePicker.launchImageLibraryAsync({ quality: 0.6 });
+      if (!res.canceled && res.assets && res.assets[0]) await consegna(res.assets[0].uri, r);
+    } catch (e) {
+      Alert.alert('Errore galleria', String(e?.message || e));
+    }
+  };
+
+  const chiediFoto = (prefisso, onFoto) => {
+    const r = { prefisso, onFoto };
+    Alert.alert('Aggiungi foto', 'Come vuoi aggiungere la foto?', [
+      { text: 'Scatta foto', onPress: () => setRichiesta(r) },
+      { text: 'Dalla galleria', onPress: () => galleria(r) },
+      { text: 'Annulla', style: 'cancel' },
+    ]);
+  };
+
+  const fotocamera = (
+    <CameraCapture
+      visibile={!!richiesta}
+      onChiudi={() => setRichiesta(null)}
+      onScattata={(uri) => { const r = richiesta; setRichiesta(null); if (r) consegna(uri, r); }}
+    />
+  );
+  return { chiediFoto, fotocamera };
+}
+
+/** Miniatura toccabile che apre la foto a schermo intero. */
+export function AnteprimaFoto({ uri, titolo, altezza = 160 }) {
+  const [grande, setGrande] = useState(false);
+  const [errore, setErrore] = useState(false);
+  if (!uri) return null;
+  return (
+    <View style={{ marginTop: 10 }}>
+      {!!titolo && <Text style={S.label}>{titolo}</Text>}
+      {errore ? (
+        <View style={{ height: 70, borderRadius: 10, backgroundColor: COLORS.warningSoft, justifyContent: 'center', padding: 10 }}>
+          <Text style={{ color: COLORS.warning, fontWeight: '700' }}>
+            Foto non disponibile su questo telefono (può essere recuperata dalla cartella dei backup).
+          </Text>
+        </View>
+      ) : (
+        <TouchableOpacity activeOpacity={0.8} onPress={() => setGrande(true)}>
+          <Image source={{ uri }} onError={() => setErrore(true)}
+            style={{ height: altezza, borderRadius: 10, backgroundColor: COLORS.bg }} resizeMode="cover" />
+          <Text style={[S.muted, { marginTop: 4 }]}>Tocca per ingrandire</Text>
+        </TouchableOpacity>
+      )}
+      <Modal visible={grande} animationType="fade" onRequestClose={() => setGrande(false)}>
+        <View style={{ flex: 1, backgroundColor: '#000' }}>
+          <ScrollView maximumZoomScale={4} minimumZoomScale={1} contentContainerStyle={{ flexGrow: 1 }}
+            centerContent>
+            <Image source={{ uri }} style={{ width: '100%', flex: 1, minHeight: 500 }} resizeMode="contain" />
+          </ScrollView>
+          <TouchableOpacity style={{ padding: 20, backgroundColor: '#111' }} onPress={() => setGrande(false)}>
+            <Text style={{ color: '#fff', textAlign: 'center', fontSize: 16, fontWeight: '700' }}>Chiudi</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
+    </View>
   );
 }
 

@@ -890,7 +890,7 @@ export async function importaFattura(imp) {
         data_scadenza: riga.data_scadenza || null, temperatura_rilevata: imp.temperatura,
         esito_controllo: imp.non_conforme ? 'non conforme' : 'conforme',
         integrita_imballo: imp.integrita_imballo, conformita_etichettatura: imp.conformita_etichettatura,
-        prezzo_unitario: riga.prezzo_unitario, foto_ddt: null, foto_etichetta: null,
+        prezzo_unitario: riga.prezzo_unitario, foto_ddt: null, foto_etichetta: riga.foto_etichetta || null,
         note: riga.note, senza_nc: true,
       });
       caricati++;
@@ -1036,5 +1036,27 @@ export async function annullaCarico(lottoId, motivo) {
       `INSERT INTO registro_modifiche (tabella, record_id, data_ora, campo, valore_precedente, valore_nuovo)
        VALUES ('lotti', ?, ?, 'stato', ?, 'annullato')`, [lottoId, new Date().toISOString(), l.stato]);
   });
+}
+
+/** Aggiunge o sostituisce una foto (etichetta o documento) di un lotto, lasciando traccia. */
+export async function impostaFotoLotto(lottoId, campo, uri) {
+  if (!['foto_etichetta', 'foto_ddt'].includes(campo)) throw new Error('Campo foto non valido');
+  const l = await queryOne(`SELECT ${campo} AS foto FROM lotti WHERE id = ?`, [lottoId]);
+  if (!l) throw new Error('Lotto non trovato');
+  await exec(`UPDATE lotti SET ${campo} = ? WHERE id = ?`, [uri, lottoId]);
+  await exec(
+    `INSERT INTO registro_modifiche (tabella, record_id, data_ora, campo, valore_precedente, valore_nuovo)
+     VALUES ('lotti', ?, ?, ?, ?, ?)`, [lottoId, new Date().toISOString(), campo, l.foto, uri]);
+}
+
+/** Tutte le foto collegate ai lotti (per backup e recupero). */
+export const fotoDeiLotti = () =>
+  query(`SELECT id, 'foto_etichetta' AS campo, foto_etichetta AS uri FROM lotti WHERE foto_etichetta IS NOT NULL
+         UNION ALL
+         SELECT id, 'foto_ddt' AS campo, foto_ddt AS uri FROM lotti WHERE foto_ddt IS NOT NULL`);
+
+export async function aggiornaIndirizzoFoto(vecchio, nuovo) {
+  await exec('UPDATE lotti SET foto_etichetta = ? WHERE foto_etichetta = ?', [nuovo, vecchio]);
+  await exec('UPDATE lotti SET foto_ddt = ? WHERE foto_ddt = ?', [nuovo, vecchio]);
 }
 

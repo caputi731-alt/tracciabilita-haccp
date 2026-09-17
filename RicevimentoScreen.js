@@ -1,9 +1,8 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, Alert, Switch, Image, TouchableOpacity } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import * as ImagePicker from 'expo-image-picker';
 import { S, COLORS, UNITA, isoDaCampo } from './theme';
-import { Campo, Chips, Selettore, Scanner, Bottone, CameraCapture } from './UI';
+import { Campo, Chips, Selettore, Scanner, Bottone, useFoto, AnteprimaFoto } from './UI';
 import {
   listaFornitori, listaProdotti, prodottoDaBarcode, registraCarico,
 } from './database';
@@ -22,7 +21,7 @@ export default function RicevimentoScreen({ navigation }) {
   const [prodotti, setProdotti] = useState([]);
   const [f, setF] = useState({ ...VUOTO });
   const [scanner, setScanner] = useState(false);
-  const [fotocamera, setFotocamera] = useState(null);
+  const { chiediFoto, fotocamera } = useFoto();
 
   useFocusEffect(useCallback(() => {
     listaFornitori().then(setFornitori);
@@ -31,33 +30,7 @@ export default function RicevimentoScreen({ navigation }) {
 
   const set = (k) => (v) => setF((s) => ({ ...s, [k]: v }));
 
-  const scattaFoto = (campo) => setFotocamera(campo);
-
-  const scegliDaGalleria = async (campo) => {
-    try {
-      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!perm.granted) {
-        return Alert.alert(
-          'Permesso galleria',
-          perm.canAskAgain
-            ? 'Serve il permesso per accedere alle foto.'
-            : 'Abilita il permesso da Impostazioni > App > Tracciabilità HACCP > Autorizzazioni.'
-        );
-      }
-      const r = await ImagePicker.launchImageLibraryAsync({ quality: 0.5 });
-      if (!r.canceled && r.assets && r.assets[0]) set(campo)(r.assets[0].uri);
-    } catch (e) {
-      Alert.alert('Errore galleria', String(e?.message || e));
-    }
-  };
-
-  const foto = (campo) => {
-    Alert.alert('Aggiungi immagine', 'Come vuoi aggiungere la foto?', [
-      { text: 'Scatta foto', onPress: () => scattaFoto(campo) },
-      { text: 'Scegli dalla galleria', onPress: () => scegliDaGalleria(campo) },
-      { text: 'Annulla', style: 'cancel' },
-    ]);
-  };
+  const foto = (campo) => chiediFoto(campo === 'foto_ddt' ? 'documento' : 'etichetta', set(campo));
 
   const daBarcode = async (code) => {
     setScanner(false);
@@ -118,10 +91,7 @@ export default function RicevimentoScreen({ navigation }) {
           placeholder="AAAA-MM-GG" />
         <Bottone testo={f.foto_ddt ? 'Rifai foto DDT' : 'Fotografa il DDT'} ghost
           onPress={() => foto('foto_ddt')} />
-        {f.foto_ddt && (
-          <Image source={{ uri: f.foto_ddt }}
-            style={{ height: 140, marginTop: 10, borderRadius: 8 }} resizeMode="cover" />
-        )}
+        <AnteprimaFoto uri={f.foto_ddt} altezza={140} />
       </View>
 
       <Text style={S.h2}>2. Prodotto e lotto</Text>
@@ -144,10 +114,7 @@ export default function RicevimentoScreen({ navigation }) {
 
         <Bottone testo={f.foto_etichetta ? 'Rifai foto etichetta' : "Fotografa l'etichetta"} ghost
           onPress={() => foto('foto_etichetta')} />
-        {f.foto_etichetta && (
-          <Image source={{ uri: f.foto_etichetta }}
-            style={{ height: 140, marginTop: 10, borderRadius: 8 }} resizeMode="cover" />
-        )}
+        <AnteprimaFoto uri={f.foto_etichetta} altezza={140} />
       </View>
 
       <Text style={S.h2}>3. Controllo al ricevimento</Text>
@@ -183,11 +150,7 @@ export default function RicevimentoScreen({ navigation }) {
 
       <Scanner visibile={scanner} onChiudi={() => setScanner(false)} onLetto={daBarcode} />
 
-      <CameraCapture
-        visibile={!!fotocamera}
-        onChiudi={() => setFotocamera(null)}
-        onScattata={(uri) => { set(fotocamera)(uri); setFotocamera(null); }}
-      />
+      {fotocamera}
     </ScrollView>
   );
 }

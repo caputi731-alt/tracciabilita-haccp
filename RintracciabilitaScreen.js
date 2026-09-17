@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, TextInput, TouchableOpacity, Modal, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, fmtData, fmtDataOra } from './theme';
-import { Bottone } from './UI';
+import { Bottone, AnteprimaFoto } from './UI';
 import {
   cercaLotti, movimentiDiLotto, getImpostazioni, produzioniDaLotto,
 } from './database';
@@ -107,6 +107,8 @@ export default function RintracciabilitaScreen() {
               <Text style={S.muted}>Scadenza: {fmtData(sel.data_scadenza)}</Text>
               <Text style={S.muted}>Temp. ricevimento: {sel.temperatura_rilevata ?? '—'} °C</Text>
               <Text style={S.muted}>Esito: {sel.esito_controllo}</Text>
+              <AnteprimaFoto uri={sel.foto_etichetta} titolo="Foto etichetta" altezza={200} />
+              <AnteprimaFoto uri={sel.foto_ddt} titolo="Foto documento" />
             </View>
 
             <Text style={S.h2}>Movimenti</Text>

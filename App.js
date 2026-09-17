@@ -4,7 +4,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { initDatabase } from './database';
-import { backupAutomaticoSeServe } from './backupAutomatico';
+import { backupAutomaticoSeServe, mettiAlSicuroFoto } from './backupAutomatico';
 import { COLORS, S } from './theme';
 
 import HomeScreen from './HomeScreen';
@@ -32,7 +32,7 @@ export default function App() {
 
   useEffect(() => {
     initDatabase()
-      .then(() => { setPronto(true); backupAutomaticoSeServe(); })
+      .then(async () => { setPronto(true); await mettiAlSicuroFoto(); backupAutomaticoSeServe(); })
       .catch((e) => setErrore(e.message));
     const sub = AppState.addEventListener('change', (stato) => {
       if (stato === 'active') backupAutomaticoSeServe();

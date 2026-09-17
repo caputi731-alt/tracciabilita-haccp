@@ -77,3 +77,16 @@ test('backup e ripristino completo, anche con chiavi esterne', async () => {
   await assert.rejects(db.importaTutto({ tabelle: { lotti: [{ id: 999, prodotto_id: 555, fornitore_id: 555, data_ricevimento: 'x', quantita_iniziale: 1, quantita_residua: 1 }] } }), /incoerente/);
   assert.equal((await db.queryOne('SELECT COUNT(*) n FROM lotti')).n, lotti, 'un backup rifiutato non tocca i dati');
 });
+
+test('foto del lotto: aggiunta, sostituzione con traccia ed elenco', async () => {
+  const id = await carico({ foto_etichetta: 'file:///cache/vecchia.jpg' });
+  await db.impostaFotoLotto(id, 'foto_etichetta', 'file:///foto/etichetta-1.jpg');
+  const l = await db.queryOne('SELECT foto_etichetta FROM lotti WHERE id = ?', [id]);
+  assert.equal(l.foto_etichetta, 'file:///foto/etichetta-1.jpg');
+  const tracce = await db.correzioniRecord('lotti', id);
+  assert.equal(tracce[0].valore_precedente, 'file:///cache/vecchia.jpg');
+  await assert.rejects(db.impostaFotoLotto(id, 'note', 'x'), /non valido/);
+  assert.ok((await db.fotoDeiLotti()).some((f) => f.id === id && f.campo === 'foto_etichetta'));
+  await db.aggiornaIndirizzoFoto('file:///foto/etichetta-1.jpg', 'file:///nuova/etichetta-1.jpg');
+  assert.equal((await db.queryOne('SELECT foto_etichetta f FROM lotti WHERE id = ?', [id])).f, 'file:///nuova/etichetta-1.jpg');
+});

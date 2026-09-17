@@ -6,7 +6,9 @@ import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import { S, COLORS } from './theme';
 import { Bottone, conferma, useAvviso } from './UI';
-import { statoBackup, scegliCartellaBackup, eseguiBackup, MAX_COPIE } from './backupAutomatico';
+import {
+  statoBackup, scegliCartellaBackup, eseguiBackup, recuperaFotoMancanti, MAX_COPIE,
+} from './backupAutomatico';
 import { esportaTutto, importaTutto, csvRegistroCarichi, csvTabella } from './database';
 
 const stamp = () => {
@@ -41,8 +43,9 @@ export default function BackupScreen() {
       const ok = await scegliCartellaBackup();
       if (!ok) return;
       setOccupato(true);
+      const rec = await recuperaFotoMancanti();
       await eseguiBackup();
-      mostra('Backup automatico attivo ✓');
+      mostra(rec.recuperate ? `Backup attivo ✓ · ${rec.recuperate} foto recuperate` : 'Backup automatico attivo ✓');
     } catch (e) {
       Alert.alert('Backup non riuscito', String(e?.message || e));
     } finally {
@@ -61,6 +64,20 @@ export default function BackupScreen() {
     } finally {
       setOccupato(false);
       aggiornaStato();
+    }
+  };
+
+  const recuperaFoto = async () => {
+    try {
+      setOccupato(true);
+      const r = await recuperaFotoMancanti();
+      Alert.alert('Recupero foto',
+        r.recuperate === 0 && r.mancanti === 0 ? 'Tutte le foto sono già presenti su questo telefono ✓'
+          : `Recuperate ${r.recuperate} foto.${r.mancanti ? ` ${r.mancanti} non si trovano nella cartella dei backup.` : ''}`);
+    } catch (e) {
+      Alert.alert('Recupero non riuscito', String(e?.message || e));
+    } finally {
+      setOccupato(false);
     }
   };
 
@@ -170,6 +187,7 @@ export default function BackupScreen() {
               <Text style={{ color: COLORS.danger, marginTop: 6 }}>Ultimo tentativo fallito: {stato.errore}</Text>
             )}
             <Bottone testo="Fai un backup adesso" onPress={oraSubito} />
+            <Bottone testo="Recupera foto mancanti dalla cartella" ghost onPress={recuperaFoto} />
             <Bottone testo="Cambia cartella" ghost onPress={attiva} />
           </>
         ) : (
@@ -207,8 +225,8 @@ export default function BackupScreen() {
       {occupato && <Text style={[S.muted, { textAlign: 'center' }]}>Attendi…</Text>}
 
       <Text style={[S.muted, { marginTop: 12 }]}>
-        Nota: per ora il backup contiene tutti i dati inseriti, ma non ancora le foto
-        dei documenti. La copia delle foto arriverà in un aggiornamento successivo.
+        Le foto di etichette e documenti vengono copiate dal backup automatico nella sottocartella
+        "foto" della cartella scelta. Il file "Esporta backup completo" contiene solo i dati, non le foto.
       </Text>
     </ScrollView>
     {avviso}

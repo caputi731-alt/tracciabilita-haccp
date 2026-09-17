@@ -6,7 +6,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import * as FileSystem from 'expo-file-system';
 import * as DocumentPicker from 'expo-document-picker';
 import { S, COLORS, UNITA } from './theme';
-import { Campo, Selettore, Bottone, Chips } from './UI';
+import { Campo, Selettore, Bottone, Chips, useFoto, AnteprimaFoto } from './UI';
 import { base64ToBytes, estraiTestoPdf } from './letturaPdf';
 import { analizzaFattura, chiaveArticolo, nomeProdottoProposto } from './fattura';
 import {
@@ -40,6 +40,7 @@ export default function ImportaFatturaScreen({ navigation }) {
   const [doc, setDoc] = useState(null);      // intestazione fattura
   const [righe, setRighe] = useState([]);    // righe modificabili
   const [aperta, setAperta] = useState(null);
+  const { chiediFoto, fotocamera } = useFoto();
   const [controlli, setControlli] = useState({
     temperatura: '', integrita_imballo: true, conformita_etichettatura: true, nota_nc: '',
   });
@@ -96,7 +97,7 @@ export default function ImportaFatturaScreen({ navigation }) {
           rigaFattura: `${numTesto(a.quantita)} ${a.um_fattura || ''}${a.colli ? ` · colli ${a.colli}` : ''}${a.confezione ? ` · conf. ${a.confezione}` : ''}`, colliTesto: a.colli ? String(a.colli) : '',
           prezzo_unitario: a.prezzo_unitario, importo: a.importo, origine: a.origine,
           numero_lotto: a.lotto || '', scadenzaTesto: testoDaIso(a.scadenza),
-          lottoDaFattura: !!a.lotto, note,
+          lottoDaFattura: !!a.lotto, note, foto_etichetta: null,
         };
       }));
       setAperta(null);
@@ -148,7 +149,7 @@ export default function ImportaFatturaScreen({ navigation }) {
         nuovo_prodotto: r.nuovo_prodotto.trim(), quantita: q, unita_misura: r.unita_misura, colli,
         prezzo_unitario: r.prezzo_unitario, origine: r.origine,
         numero_lotto: r.numero_lotto.trim() || `FT ${doc.numero || ''} ${doc.dataTesto}`.trim(),
-        data_scadenza: sc, note: r.note,
+        data_scadenza: sc, note: r.note, foto_etichetta: r.foto_etichetta,
       });
     }
 
@@ -315,6 +316,7 @@ export default function ImportaFatturaScreen({ navigation }) {
                     {r.quantitaTesto} {r.unita_misura}{r.colliTesto ? ` in ${r.colliTesto} ${r.colliTesto === '1' ? 'collo' : 'colli'}` : ''} · {euro(r.importo)}
                     {r.numero_lotto ? ` · lotto ${r.numero_lotto}` : ''}
                     {r.scadenzaTesto ? ` · scad. ${r.scadenzaTesto}` : ''}
+                    {r.foto_etichetta ? ' · 📷' : ''}
                   </Text>
                   {!r.prodotto_id && r.includi && (
                     <Text style={{ color: COLORS.warning, fontSize: 12, fontWeight: '700' }}>Nuovo prodotto</Text>
@@ -369,6 +371,9 @@ export default function ImportaFatturaScreen({ navigation }) {
                   onChange={aggiorna(r.key, 'unita_misura')} />
                 <Campo label="Scadenza / TMC" value={r.scadenzaTesto} placeholder="gg/mm/aaaa"
                   onChange={aggiorna(r.key, 'scadenzaTesto')} />
+                <AnteprimaFoto uri={r.foto_etichetta} titolo="Foto etichetta" altezza={150} />
+                <Bottone testo={r.foto_etichetta ? '📷 Rifai foto etichetta' : "📷 Fotografa l'etichetta"} ghost
+                  onPress={() => chiediFoto('etichetta', aggiorna(r.key, 'foto_etichetta'))} />
                 <Campo label={r.lottoDaFattura ? 'Lotto (letto dalla fattura)' : 'Lotto'}
                   value={r.numero_lotto} onChange={aggiorna(r.key, 'numero_lotto')}
                   placeholder={`Se vuoto: FT ${doc.numero} ${doc.dataTesto}`} />
@@ -388,6 +393,7 @@ export default function ImportaFatturaScreen({ navigation }) {
           </>
         )}
       </View>
+      {fotocamera}
     </ScrollView>
   );
 }
