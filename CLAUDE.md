@@ -45,3 +45,6 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
 - Nel repository (pubblico) mai dati reali: la fattura di test `test/fattura-esempio.pdf` ha dati inventati.
 - Backup automatico: `backupAutomatico.js` (cartella scelta via Storage Access Framework, 1 al giorno, ultime 14 copie). La tabella `preferenze` è locale e non va nel backup.
 - Firma APK: se esistono i Secrets ANDROID_KEYSTORE_BASE64, ANDROID_STORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD la build firma con quella chiave, altrimenti con la chiave di debug.
+- Chiave di firma attiva dal 17/09/2026 (alias `haccp`). Impronta SHA-256 del certificato:
+  60:70:FD:FC:4C:AC:D6:8B:89:4F:CB:64:D6:8B:D5:F1:0D:0B:00:72:48:F2:31:E5:A8:9B:6A:44:F3:8B:ED:1B
+  Ogni build deve mostrare questa impronta nel passo "Mostra con quale chiave è firmato l'APK". Non cambiare mai la chiave.
