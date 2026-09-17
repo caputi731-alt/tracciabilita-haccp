@@ -2,7 +2,9 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Modal, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, fmtDataOra } from './theme';
-import { Campo, Chips, Bottone, conferma, ModaleModifica, useAvviso } from './UI';
+import {
+  Campo, Chips, Bottone, conferma, ModaleModifica, useAvviso, VistaModale,
+} from './UI';
 import {
   listaAree, salvaArea, eliminaArea,
   registraSanificazione, sanificazioniOggi, sanificazioniRecenti, correggiRecord,
@@ -147,7 +149,7 @@ export default function SanificazioneScreen() {
       {/* Modale gestione area */}
       <Modal visible={!!formArea} animationType="slide" onRequestClose={() => setFormArea(null)}>
         {formArea && (
-          <ScrollView style={S.screen} contentContainerStyle={[S.content, { paddingTop: 50 }]}>
+          <VistaModale>
             <Text style={S.h1}>{formArea.id ? 'Modifica area' : 'Nuova area'}</Text>
             <Campo label="Nome area *" value={formArea.nome} onChange={setA('nome')}
               placeholder="es. Piano di lavoro, Cappa, Bagno" />
@@ -162,7 +164,7 @@ export default function SanificazioneScreen() {
                 onPress={() => { const a = formArea; setFormArea(null); elimina(a); }} />
             )}
             <Bottone testo="Annulla" ghost onPress={() => setFormArea(null)} />
-          </ScrollView>
+          </VistaModale>
         )}
       </Modal>
 
@@ -175,7 +177,7 @@ export default function SanificazioneScreen() {
       {/* Modale registrazione pulizia */}
       <Modal visible={!!reg} animationType="slide" onRequestClose={() => setReg(null)}>
         {reg && (
-          <ScrollView style={S.screen} contentContainerStyle={[S.content, { paddingTop: 50 }]}>
+          <VistaModale>
             <Text style={S.h1}>Registra pulizia</Text>
             <Text style={[S.muted, { marginBottom: 12 }]}>{reg.nome}</Text>
             <View style={S.card}>
@@ -185,7 +187,7 @@ export default function SanificazioneScreen() {
               <Bottone testo="Conferma pulizia" onPress={salvaReg} />
               <Bottone testo="Annulla" ghost onPress={() => setReg(null)} />
             </View>
-          </ScrollView>
+          </VistaModale>
         )}
       </Modal>
     </View>

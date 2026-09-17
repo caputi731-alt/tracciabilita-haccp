@@ -2,7 +2,9 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Modal, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, TIPI_PUNTO } from './theme';
-import { Campo, Chips, Bottone, conferma } from './UI';
+import {
+  Campo, Chips, Bottone, conferma, VistaModale,
+} from './UI';
 import {
   listaPuntiControllo, salvaPuntoControllo, eliminaPuntoControllo,
 } from './database';
@@ -87,7 +89,7 @@ export default function PuntiControlloScreen() {
 
       <Modal visible={!!form} animationType="slide" onRequestClose={() => setForm(null)}>
         {form && (
-          <ScrollView style={S.screen} contentContainerStyle={[S.content, { paddingTop: 50 }]}>
+          <VistaModale>
             <Text style={S.h1}>{form.id ? 'Modifica punto' : 'Nuovo punto di controllo'}</Text>
             <Campo label="Nome *" value={form.nome} onChange={set('nome')}
               placeholder="es. Frigo cucina 1" />
@@ -104,7 +106,7 @@ export default function PuntiControlloScreen() {
             </Text>
             <Bottone testo="Salva" onPress={salva} />
             <Bottone testo="Annulla" ghost onPress={() => setForm(null)} />
-          </ScrollView>
+          </VistaModale>
         )}
       </Modal>
     </View>

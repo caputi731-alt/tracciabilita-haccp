@@ -2,7 +2,9 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Modal, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, CATEGORIE_PRODOTTO, UNITA } from './theme';
-import { Campo, Chips, Selettore, Bottone, conferma } from './UI';
+import {
+  Campo, Chips, Selettore, Bottone, conferma, VistaModale,
+} from './UI';
 import {
   listaRicette, getRicetta, salvaRicetta, eliminaRicetta, listaProdotti, tabellaAllergeni, getImpostazioni,
 } from './database';
@@ -113,7 +115,7 @@ export default function RicetteScreen() {
 
       <Modal visible={!!form} animationType="slide" onRequestClose={() => setForm(null)}>
         {form && (
-          <ScrollView style={S.screen} contentContainerStyle={[S.content, { paddingTop: 50 }]}>
+          <VistaModale>
             <Text style={S.h1}>{form.id ? 'Modifica ricetta' : 'Nuova ricetta'}</Text>
             <Campo label="Nome *" value={form.nome} onChange={set('nome')} />
             <Chips label="Categoria" opzioni={CATEGORIE_PRODOTTO} valore={form.categoria} onChange={set('categoria')} />
@@ -149,7 +151,7 @@ export default function RicetteScreen() {
 
             <Bottone testo="Salva ricetta" onPress={salva} />
             <Bottone testo="Annulla" ghost onPress={() => setForm(null)} />
-          </ScrollView>
+          </VistaModale>
         )}
       </Modal>
     </View>

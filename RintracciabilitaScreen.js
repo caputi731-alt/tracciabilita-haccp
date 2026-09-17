@@ -2,7 +2,9 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, TextInput, TouchableOpacity, Modal, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, fmtData, fmtDataOra } from './theme';
-import { Bottone, AnteprimaFoto, Campo, Chips, useAvviso } from './UI';
+import {
+  Bottone, AnteprimaFoto, Campo, Chips, useAvviso, VistaModale,
+} from './UI';
 import {
   cercaLotti, movimentiDiLotto, getImpostazioni, produzioniDaLotto,
   bloccaLotto, sbloccaLotto, impattoLotto,
@@ -143,7 +145,7 @@ export default function RintracciabilitaScreen({ route }) {
 
       <Modal visible={!!sel} animationType="slide" onRequestClose={() => setSel(null)}>
         {sel && (
-          <ScrollView style={S.screen} contentContainerStyle={[S.content, { paddingTop: 50 }]}>
+          <VistaModale>
             <Text style={S.h1}>{sel.prodotto}</Text>
             {sel.stato === 'bloccato' && (
               <View style={[S.card, { backgroundColor: COLORS.dangerSoft, borderColor: COLORS.danger }]}>
@@ -243,7 +245,7 @@ export default function RintracciabilitaScreen({ route }) {
 
             <Bottone testo={sel.stato === 'bloccato' ? 'Rapporto di richiamo PDF' : 'Scheda PDF per ASL'} onPress={schedaPdf} />
             <Bottone testo="Chiudi" ghost onPress={() => setSel(null)} />
-          </ScrollView>
+          </VistaModale>
         )}
         <Modal visible={!!azione} transparent animationType="fade" onRequestClose={() => setAzione(null)}>
           {azione && (

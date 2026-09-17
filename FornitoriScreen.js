@@ -2,7 +2,9 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Modal, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS } from './theme';
-import { Campo, Bottone, conferma } from './UI';
+import {
+  Campo, Bottone, conferma, VistaModale,
+} from './UI';
 import { listaFornitori, salvaFornitore, eliminaFornitore } from './database';
 
 const VUOTO = {
@@ -63,7 +65,7 @@ export default function FornitoriScreen() {
 
       <Modal visible={!!form} animationType="slide" onRequestClose={() => setForm(null)}>
         {form && (
-          <ScrollView style={S.screen} contentContainerStyle={[S.content, { paddingTop: 50 }]}>
+          <VistaModale>
             <Text style={S.h1}>{form.id ? 'Modifica fornitore' : 'Nuovo fornitore'}</Text>
             <Campo label="Ragione sociale *" value={form.ragione_sociale} onChange={set('ragione_sociale')} />
             <Campo label="Categoria merceologica" value={form.categoria} onChange={set('categoria')}
@@ -79,7 +81,7 @@ export default function FornitoriScreen() {
             <Campo label="Note" value={form.note} onChange={set('note')} multiline />
             <Bottone testo="Salva" onPress={salva} />
             <Bottone testo="Annulla" ghost onPress={() => setForm(null)} />
-          </ScrollView>
+          </VistaModale>
         )}
       </Modal>
     </View>

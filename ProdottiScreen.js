@@ -3,7 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, Modal, Alert, TextInput } fro
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, ALLERGENI, CATEGORIE_PRODOTTO, CONSERVAZIONE, UNITA } from './theme';
 import {
-  Campo, Chips, Selettore, Scanner, Bottone, conferma, useFoto, AnteprimaFoto,
+  Campo, Chips, Selettore, Scanner, Bottone, conferma, useFoto, AnteprimaFoto, VistaModale,
 } from './UI';
 import {
   listaProdotti, salvaProdotto, eliminaProdotto, listaFornitori,
@@ -113,7 +113,7 @@ export default function ProdottiScreen() {
 
       <Modal visible={!!form} animationType="slide" onRequestClose={() => setForm(null)}>
         {form && (
-          <ScrollView style={S.screen} contentContainerStyle={[S.content, { paddingTop: 50 }]}>
+          <VistaModale>
             <Text style={S.h1}>{form.id ? 'Modifica prodotto' : 'Nuovo prodotto'}</Text>
 
             <Campo label="Denominazione *" value={form.denominazione} onChange={set('denominazione')} />
@@ -169,7 +169,7 @@ export default function ProdottiScreen() {
 
             <Bottone testo="Salva" onPress={salva} />
             <Bottone testo="Annulla" ghost onPress={() => setForm(null)} />
-          </ScrollView>
+          </VistaModale>
         )}
       </Modal>
 

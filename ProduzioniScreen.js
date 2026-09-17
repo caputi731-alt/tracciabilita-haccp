@@ -2,7 +2,9 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Modal, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, fmtData, fmtDataOra } from './theme';
-import { Campo, Selettore, Bottone, ModaleModifica, useAvviso } from './UI';
+import {
+  Campo, Selettore, Bottone, ModaleModifica, useAvviso, VistaModale,
+} from './UI';
 import {
   listaRicette, getRicetta, listaProduzioni, getProduzione,
   lottiDisponibiliProdotto, registraProduzione, correggiRecord,
@@ -133,7 +135,7 @@ export default function ProduzioniScreen() {
 
       {/* Nuova produzione */}
       <Modal visible={nuova} animationType="slide" onRequestClose={() => setNuova(false)}>
-        <ScrollView style={S.screen} contentContainerStyle={[S.content, { paddingTop: 50 }]}>
+        <VistaModale>
           <Text style={S.h1}>Nuova produzione</Text>
 
           <View style={S.card}>
@@ -172,13 +174,13 @@ export default function ProduzioniScreen() {
 
           <Bottone testo="Registra produzione" onPress={salva} />
           <Bottone testo="Annulla" ghost onPress={() => setNuova(false)} />
-        </ScrollView>
+        </VistaModale>
       </Modal>
 
       {/* Dettaglio produzione */}
       <Modal visible={!!dettaglio} animationType="slide" onRequestClose={() => setDettaglio(null)}>
         {dettaglio && (
-          <ScrollView style={S.screen} contentContainerStyle={[S.content, { paddingTop: 50 }]}>
+          <VistaModale>
             <Text style={S.h1}>{dettaglio.nome}</Text>
             <View style={S.card}>
               <Text style={S.muted}>Ricetta: {dettaglio.ricetta || '—'}</Text>
@@ -213,7 +215,7 @@ export default function ProduzioniScreen() {
             <ModaleModifica visibile={modifica} titolo="Modifica produzione" sottotitolo={dettaglio.nome}
               campi={CAMPI_PRODUZIONE} record={dettaglio} onSalva={salvaCorrezione}
               onChiudi={() => setModifica(false)} />
-          </ScrollView>
+          </VistaModale>
         )}
         {avviso}
       </Modal>

@@ -3,7 +3,7 @@ import { View, Text, ScrollView, TextInput, TouchableOpacity, Modal, Alert } fro
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, fmtData, fmtDataOra, giorniAllaScadenza } from './theme';
 import {
-  Campo, Bottone, Chips, ModaleModifica, useAvviso, conferma, useFoto, AnteprimaFoto,
+  Campo, Bottone, Chips, ModaleModifica, useAvviso, conferma, useFoto, AnteprimaFoto, VistaModale,
 } from './UI';
 import {
   listaLotti, registraScarico, query, correggiRecord, correggiUscita, annullaCarico, impostaFotoLotto, lottiBloccati,
@@ -307,7 +307,7 @@ export default function MagazzinoScreen({ navigation }) {
       <Modal visible={!!sel} animationType="slide" onRequestClose={() => setSel(null)}>
         {sel && (
           <View style={S.screen}>
-            <ScrollView contentContainerStyle={[S.content, { paddingTop: 50 }]}>
+            <VistaModale>
               <Text style={S.h1}>{sel.prodotto}</Text>
               <Riquadro>
                 <Text style={{ fontSize: 20, fontWeight: '800', color: COLORS.text }}>
@@ -370,7 +370,7 @@ export default function MagazzinoScreen({ navigation }) {
               </Riquadro>
 
               <Bottone testo="Chiudi" ghost onPress={() => setSel(null)} />
-            </ScrollView>
+            </VistaModale>
 
             <ModaleModifica visibile={modCarico} titolo="Modifica carico"
               sottotitolo={`${sel.prodotto} · lotto ${sel.numero_lotto || '—'}`}

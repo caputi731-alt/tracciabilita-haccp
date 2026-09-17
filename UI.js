@@ -47,6 +47,34 @@ export function Chips({ label, opzioni, valore, onChange, multiplo = false }) {
   );
 }
 
+/**
+ * Contenitore scorrevole per il contenuto di una modale.
+ * Su Android uno ScrollView figlio diretto di <Modal> viene misurato prima del layout:
+ * il contenuto risulta "più corto" dello schermo e lo scorrimento resta bloccato finché
+ * qualcosa non provoca un nuovo calcolo (per esempio toccando un'opzione). Qui lo
+ * avvolgiamo in una vista con altezza definita e forziamo una misura subito dopo l'apertura.
+ */
+export function VistaModale({ children, contentContainerStyle, ...resto }) {
+  const [misurato, setMisurato] = useState(false);
+  React.useEffect(() => {
+    const t = setTimeout(() => setMisurato(true), 60);
+    return () => clearTimeout(t);
+  }, []);
+  return (
+    <View style={{ flex: 1, backgroundColor: COLORS.bg }}>
+      <ScrollView
+        style={{ flex: 1 }}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        contentContainerStyle={[S.content, { paddingTop: 50, paddingBottom: misurato ? 48 : 49 }, contentContainerStyle]}
+        {...resto}
+      >
+        {children}
+      </ScrollView>
+    </View>
+  );
+}
+
 /** Selettore da elenco (fornitori, prodotti...) con ricerca */
 export function Selettore({ label, elementi, valore, etichetta, onChange, placeholder }) {
   const [aperto, setAperto] = useState(false);
@@ -283,8 +311,7 @@ export function ModaleModifica({ visibile, titolo, sottotitolo, campi, record, o
 
   return (
     <Modal visible={!!visibile} animationType="slide" onRequestClose={onChiudi}>
-      <ScrollView style={S.screen} contentContainerStyle={[S.content, { paddingTop: 50 }]}
-        keyboardShouldPersistTaps="handled">
+      <VistaModale keyboardShouldPersistTaps="handled">
         <Text style={S.h1}>{titolo}</Text>
         {!!sottotitolo && <Text style={[S.muted, { marginBottom: 8 }]}>{sottotitolo}</Text>}
         <View style={S.card}>
@@ -302,7 +329,7 @@ export function ModaleModifica({ visibile, titolo, sottotitolo, campi, record, o
           {azioni}
           <Bottone testo="Annulla" ghost onPress={onChiudi} />
         </View>
-      </ScrollView>
+      </VistaModale>
     </Modal>
   );
 }

@@ -2,7 +2,9 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Modal, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, fmtDataOra } from './theme';
-import { Campo, Chips, Bottone, ModaleModifica, useAvviso } from './UI';
+import {
+  Campo, Chips, Bottone, ModaleModifica, useAvviso, VistaModale,
+} from './UI';
 import {
   tutteNonConformita, chiudiNonConformita, aggiungiNonConformita, correggiRecord,
 } from './database';
@@ -107,7 +109,7 @@ export default function NonConformitaScreen() {
       {/* Chiusura */}
       <Modal visible={!!sel} animationType="slide" onRequestClose={() => setSel(null)}>
         {sel && (
-          <ScrollView style={S.screen} contentContainerStyle={[S.content, { paddingTop: 50 }]}>
+          <VistaModale>
             <Text style={S.h1}>Chiudi non conformità</Text>
             <View style={S.card}>
               <Text style={{ fontSize: 15 }}>{sel.descrizione}</Text>
@@ -120,7 +122,7 @@ export default function NonConformitaScreen() {
             <Bottone testo="✎ Correggi la descrizione" ghost
               onPress={() => { const n = sel; setSel(null); setAzione(''); setInModifica(n); }} />
             <Bottone testo="Annulla" ghost onPress={() => { setSel(null); setAzione(''); }} />
-          </ScrollView>
+          </VistaModale>
         )}
       </Modal>
 
@@ -133,7 +135,7 @@ export default function NonConformitaScreen() {
       {/* Nuova */}
       <Modal visible={!!nuova} animationType="slide" onRequestClose={() => setNuova(null)}>
         {nuova && (
-          <ScrollView style={S.screen} contentContainerStyle={[S.content, { paddingTop: 50 }]}>
+          <VistaModale>
             <Text style={S.h1}>Nuova non conformità</Text>
             <View style={S.card}>
               <Chips label="Origine" opzioni={ORIGINI} valore={nuova.origine} onChange={setN('origine')} />
@@ -145,7 +147,7 @@ export default function NonConformitaScreen() {
               <Bottone testo="Salva" onPress={salvaNuova} />
               <Bottone testo="Annulla" ghost onPress={() => setNuova(null)} />
             </View>
-          </ScrollView>
+          </VistaModale>
         )}
       </Modal>
     </View>
