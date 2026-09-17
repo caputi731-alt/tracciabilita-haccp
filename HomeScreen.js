@@ -4,7 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, giorniAllaScadenza } from './theme';
 import {
   lottiInScadenza, temperatureDiOggi, listaPuntiControllo, nonConformitaAperte,
-  listaAree, sanificazioniOggi,
+  listaAree, sanificazioniOggi, prodottiDaCompletare, lottiBloccati,
 } from './database';
 import { statoBackup } from './backupAutomatico';
 
@@ -75,6 +75,8 @@ export default function HomeScreen({ navigation }) {
   const [pulizie, setPulizie] = useState({ fatte: 0, totali: 0 });
   const [menuAperto, setMenuAperto] = useState(false);
   const [backup, setBackup] = useState(null);
+  const [daCompletare, setDaCompletare] = useState(0);
+  const [bloccati, setBloccati] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
@@ -87,6 +89,8 @@ export default function HomeScreen({ navigation }) {
         const giornaliere = (await listaAree()).filter((a) => a.frequenza === 'giornaliera');
         const fatteOggi = new Set((await sanificazioniOggi()).map((x) => x.area_id));
         setBackup(await statoBackup());
+        setDaCompletare((await prodottiDaCompletare()).length);
+        setBloccati((await lottiBloccati()).length);
         setPulizie({ fatte: giornaliere.filter((a) => fatteOggi.has(a.id)).length, totali: giornaliere.length });
       })();
     }, [])
@@ -96,7 +100,7 @@ export default function HomeScreen({ navigation }) {
   const pulizieOk = pulizie.totali > 0 && pulizie.fatte >= pulizie.totali;
   const scaduti = scadenze.filter((l) => giorniAllaScadenza(l.data_scadenza) < 0).length;
   const backupOk = backup && backup.cartella && backup.giorni !== null && backup.giorni <= 2 && !backup.errore;
-  const tuttoOk = backupOk && (puntiTot === 0 || tempOk) && (pulizie.totali === 0 || pulizieOk) && ncAperte === 0 && scadenze.length === 0;
+  const tuttoOk = backupOk && (puntiTot === 0 || tempOk) && (pulizie.totali === 0 || pulizieOk) && ncAperte === 0 && scadenze.length === 0 && daCompletare === 0 && bloccati === 0;
 
   return (
     <ScrollView style={S.screen} contentContainerStyle={S.content}>
@@ -138,6 +142,18 @@ export default function HomeScreen({ navigation }) {
               : backup.errore ? 'Controlla la cartella dei backup'
               : backup.giorni === null ? 'Nessun backup ancora eseguito' : `Ultimo backup ${backup.giorni} giorni fa`}
             onPress={() => navigation.navigate('Backup')} />
+        )}
+        {bloccati > 0 && (
+          <RigaStato colore={COLORS.danger}
+            titolo={`${bloccati} lott${bloccati > 1 ? 'i bloccati' : 'o bloccato'} (richiamo)`}
+            testo="Merce da tenere separata finché non è risolto"
+            onPress={() => navigation.navigate('Magazzino')} />
+        )}
+        {daCompletare > 0 && (
+          <RigaStato colore={COLORS.warning}
+            titolo={`${daCompletare} prodott${daCompletare > 1 ? 'i' : 'o'} da completare`}
+            testo="Allergeni e conservazione da verificare sull'etichetta"
+            onPress={() => navigation.navigate('Prodotti')} />
         )}
         {ncAperte > 0 && (
           <RigaStato colore={COLORS.danger}

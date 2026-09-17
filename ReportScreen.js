@@ -5,9 +5,9 @@ import { S, COLORS, fmtData, fmtDataOra } from './theme';
 import { Campo, Bottone } from './UI';
 import {
   temperatureTra, carichiTra, tutteNonConformita, sanificazioniTra,
-  getImpostazioni, salvaImpostazioni,
+  getImpostazioni, salvaImpostazioni, tabellaAllergeni,
 } from './database';
-import { wrapDoc, stampa, esc } from './report';
+import { wrapDoc, stampa, esc, htmlTabellaAllergeni } from './report';
 
 const oggiISO = () => new Date().toISOString().slice(0, 10);
 const meseFaISO = () => {
@@ -83,6 +83,13 @@ export default function ReportScreen() {
     catch (e) { Alert.alert('Stampa non riuscita', String(e?.message || e)); }
   };
 
+  const reportAllergeni = async () => {
+    const piatti = await tabellaAllergeni();
+    if (piatti.length === 0) return Alert.alert('Nessuna ricetta', 'Inserisci prima le ricette con i loro ingredienti.');
+    try { await stampa(htmlTabellaAllergeni(piatti, imp)); }
+    catch (e) { Alert.alert('Stampa non riuscita', String(e?.message || e)); }
+  };
+
   const reportNC = async () => {
     const righe = await tutteNonConformita();
     if (righe.length === 0) return Alert.alert('Vuoto', 'Nessuna non conformità registrata.');
@@ -125,6 +132,7 @@ export default function ReportScreen() {
         <Bottone testo="Registro carichi merce (PDF)" onPress={reportCarichi} />
         <Bottone testo="Registro sanificazione (PDF)" onPress={reportSanificazione} />
         <Bottone testo="Registro non conformità (PDF)" onPress={reportNC} />
+        <Bottone testo="Tabella allergeni dei piatti (PDF)" onPress={reportAllergeni} />
       </View>
 
       <Text style={S.muted}>

@@ -50,3 +50,6 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
   Ogni build deve mostrare questa impronta nel passo "Mostra con quale chiave è firmato l'APK". Non cambiare mai la chiave.
 - Foto: sempre tramite `useFoto()` (UI.js), che copia in `documentDirectory/foto/` (`foto.js`); mai salvare URI della cache.
   Visualizzazione con `AnteprimaFoto`. Il backup automatico copia le foto nella sottocartella `foto` e `recuperaFotoMancanti` le riporta dopo una reinstallazione.
+- Stati del lotto: disponibile, esaurito, bloccato (richiamo), annullato. Usare `statoDopo()` quando cambia la giacenza: bloccato/annullato non si perdono.
+- Allergeni: `prodotti.allergeni_verificati` (1 quando il prodotto è salvato dall'anagrafica, 0 se creato dalle fatture). `tabellaAllergeni()` + `htmlTabellaAllergeni()` per il documento clienti.
+- Schema: una sola definizione per tabella in `initDatabase`; le colonne nuove si aggiungono con `aggiungiSeManca`.

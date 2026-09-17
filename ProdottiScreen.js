@@ -19,6 +19,7 @@ export default function ProdottiScreen() {
   const [form, setForm] = useState(null);
   const [scanner, setScanner] = useState(false);
   const [cerca, setCerca] = useState('');
+  const [soloDaCompletare, setSoloDaCompletare] = useState(false);
 
   const ricarica = useCallback(() => {
     listaProdotti().then(setProdotti);
@@ -45,8 +46,10 @@ export default function ProdottiScreen() {
   const set = (k) => (v) => setForm((f) => ({ ...f, [k]: v }));
   const setNum = (k) => (v) => setForm((f) => ({ ...f, [k]: v === '' ? null : Number(v) }));
 
+  const daCompletare = prodotti.filter((p) => !p.allergeni_verificati).length;
   const filtrati = prodotti.filter((p) =>
-    p.denominazione.toLowerCase().includes(cerca.toLowerCase()));
+    p.denominazione.toLowerCase().includes(cerca.toLowerCase())
+    && (!soloDaCompletare || !p.allergeni_verificati));
 
   return (
     <View style={S.screen}>
@@ -56,6 +59,17 @@ export default function ProdottiScreen() {
       </View>
 
       <ScrollView contentContainerStyle={S.content}>
+        {daCompletare > 0 && (
+          <TouchableOpacity onPress={() => setSoloDaCompletare((v) => !v)} activeOpacity={0.7}
+            style={[S.card, { backgroundColor: COLORS.warningSoft, borderColor: COLORS.warning }]}>
+            <Text style={{ color: COLORS.warning, fontWeight: '800', fontSize: 15 }}>
+              {soloDaCompletare ? '✓ ' : ''}{daCompletare} prodott{daCompletare > 1 ? 'i' : 'o'} con allergeni da verificare
+            </Text>
+            <Text style={S.muted}>
+              {soloDaCompletare ? 'Tocca per vedere tutti i prodotti' : 'Tocca per vedere solo questi. Aprili, controlla allergeni e conservazione e salva.'}
+            </Text>
+          </TouchableOpacity>
+        )}
         {filtrati.length === 0 && (
           <Text style={S.empty}>
             Nessun prodotto. Il catalogo si costruisce man mano che ricevi la merce.
@@ -70,10 +84,16 @@ export default function ProdottiScreen() {
               <Text style={S.muted}>
                 {[p.categoria, p.fornitore, p.conservazione].filter(Boolean).join(' · ')}
               </Text>
-              {all.length > 0 && (
+              {!p.allergeni_verificati ? (
+                <Text style={{ color: COLORS.warning, fontSize: 13, marginTop: 4, fontWeight: '700' }}>
+                  ⚠ Allergeni da verificare{all.length ? ` (indicati: ${all.join(', ')})` : ''}
+                </Text>
+              ) : all.length > 0 ? (
                 <Text style={{ color: COLORS.warning, fontSize: 13, marginTop: 4 }}>
                   Allergeni: {all.join(', ')}
                 </Text>
+              ) : (
+                <Text style={[S.muted, { marginTop: 4 }]}>Nessun allergene</Text>
               )}
             </TouchableOpacity>
           );
@@ -125,6 +145,10 @@ export default function ProdottiScreen() {
 
             <Chips label="Allergeni contenuti (Reg. UE 1169/2011)" opzioni={ALLERGENI}
               valore={form.allergeni} onChange={set('allergeni')} multiplo />
+            <Text style={[S.muted, { marginTop: 6 }]}>
+              Controlla l'etichetta: salvando confermi che gli allergeni indicati sono verificati
+              (anche se non ce ne sono).
+            </Text>
 
             <Campo label="Note" value={form.note} onChange={set('note')} multiline />
 

@@ -90,3 +90,50 @@ test('foto del lotto: aggiunta, sostituzione con traccia ed elenco', async () =>
   await db.aggiornaIndirizzoFoto('file:///foto/etichetta-1.jpg', 'file:///nuova/etichetta-1.jpg');
   assert.equal((await db.queryOne('SELECT foto_etichetta f FROM lotti WHERE id = ?', [id])).f, 'file:///nuova/etichetta-1.jpg');
 });
+
+test('ricette e produzioni: salvataggio e collegamento ai lotti (schema corretto)', async () => {
+  const pid = (await db.exec("INSERT INTO prodotti (denominazione, allergeni, allergeni_verificati) VALUES ('Farina', '[\"Glutine\"]', 1)")).lastInsertRowId;
+  const uid = (await db.exec("INSERT INTO prodotti (denominazione, allergeni) VALUES ('Uova sfuse', '[\"Uova\"]')")).lastInsertRowId;
+  const rid = await db.salvaRicetta({ nome: 'Tagliatelle', categoria: 'Primi', porzioni: 4, ingredienti: [{ prodotto_id: pid, quantita: 1 }, { prodotto_id: uid, quantita: 2 }] });
+  assert.ok((await db.listaRicette()).some((r) => r.id === rid));
+  const lotto = await carico({ prodotto_id: pid, numero_lotto: 'FAR1' });
+  const prod = await db.registraProduzione({ ricetta_id: rid, nome: 'Tagliatelle', lotto_produzione: 'P1' }, [{ lotto_id: lotto, quantita: 1 }]);
+  const dett = await db.getProduzione(prod);
+  assert.equal(dett.nome, 'Tagliatelle');
+  assert.equal(dett.lotti.length, 1);
+
+  const tab = await db.tabellaAllergeni();
+  const t = tab.find((x) => x.id === rid);
+  assert.deepEqual(t.allergeni.sort(), ['Glutine', 'Uova']);
+  assert.deepEqual(t.fonti.Uova, ['Uova sfuse']);
+  assert.deepEqual(t.daVerificare, ['Uova sfuse']);
+  assert.ok((await db.prodottiDaCompletare()).some((p) => p.id === uid));
+});
+
+test('richiamo: blocco, esclusione dal magazzino, impatto sui piatti, sblocco', async () => {
+  const pid = (await db.exec("INSERT INTO prodotti (denominazione) VALUES ('Mascarpone')")).lastInsertRowId;
+  const rid = await db.salvaRicetta({ nome: 'Tiramisù', ingredienti: [{ prodotto_id: pid, quantita: 1 }] });
+  const a = await carico({ prodotto_id: pid, numero_lotto: 'M77' });
+  const b = await carico({ prodotto_id: pid, numero_lotto: 'M77' });
+  await db.registraProduzione({ ricetta_id: rid, nome: 'Tiramisù', lotto_produzione: 'T1' }, [{ lotto_id: a, quantita: 1 }]);
+
+  await assert.rejects(db.bloccaLotto(a, ''), /motivo/);
+  await db.bloccaLotto(a, 'Richiamo del fornitore');
+  assert.ok(!(await db.listaLotti('')).some((l) => l.id === a), 'il lotto bloccato non è più utilizzabile');
+  assert.ok(!(await db.lottiDisponibiliProdotto(pid)).some((l) => l.id === a));
+  assert.ok((await db.lottiBloccati()).some((l) => l.id === a));
+  const nc = await db.queryOne("SELECT * FROM non_conformita WHERE origine = 'richiamo' AND lotto_id = ?", [a]);
+  assert.match(nc.descrizione, /M77/);
+
+  const imp = await db.impattoLotto(a);
+  assert.deepEqual(imp.piatti.map((p) => p.lotto_produzione), ['T1']);
+  assert.deepEqual(imp.stessaPartita.map((l) => l.id), [b]);
+  assert.equal(imp.usato, 1);
+
+  await db.registraScarico(a, 1, 'reso');
+  assert.equal((await db.queryOne('SELECT stato FROM lotti WHERE id = ?', [a])).stato, 'bloccato', 'un reso non sblocca il lotto');
+  await assert.rejects(db.registraProduzione({ nome: 'X' }, [{ lotto_id: a, quantita: 1 }]), /bloccato/);
+
+  await db.sbloccaLotto(a, 'Verificato: lotto non coinvolto');
+  assert.equal((await db.queryOne('SELECT stato FROM lotti WHERE id = ?', [a])).stato, 'disponibile');
+});

@@ -1,5 +1,5 @@
 import * as Print from 'expo-print';
-import { fmtData, fmtDataOra } from './theme';
+import { fmtData, fmtDataOra, ALLERGENI } from './theme';
 
 const esc = (v) => {
   if (v === null || v === undefined) return '';
@@ -46,6 +46,37 @@ export function wrapDoc(titolo, corpo, imp = {}, periodo = '') {
 
 export async function stampa(html) {
   await Print.printAsync({ html });
+}
+
+/** Tabella allergeni dei piatti (Reg. UE 1169/2011), A4 orizzontale. */
+export function htmlTabellaAllergeni(piatti, imp = {}) {
+  const intest = ALLERGENI.map((a) => `<th class="rot"><div>${esc(a)}</div></th>`).join('');
+  const righe = piatti.map((p) => `<tr>
+      <td class="piatto">${esc(p.nome)}${p.categoria ? `<div class="cat">${esc(p.categoria)}</div>` : ''}</td>
+      ${ALLERGENI.map((a) => `<td class="c">${p.allergeni.includes(a) ? '●' : ''}</td>`).join('')}
+    </tr>`).join('');
+  const daVerificare = piatti.filter((p) => p.daVerificare.length || p.senzaIngredienti);
+  const avvisi = daVerificare.length ? `<div class="avviso"><b>Da verificare prima dell'esposizione:</b><ul>${
+    daVerificare.map((p) => `<li>${esc(p.nome)}: ${p.senzaIngredienti ? 'ricetta senza ingredienti'
+      : `allergeni non confermati per ${esc(p.daVerificare.join(', '))}`}</li>`).join('')}</ul></div>` : '';
+  const corpo = `
+    <style>
+      @page { size: A4 landscape; margin: 10mm; }
+      th.rot { height: 110px; vertical-align: bottom; padding: 4px 2px; width: 38px; }
+      th.rot div { writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; font-size: 11px; margin: 0 auto; }
+      td.c { text-align: center; font-size: 15px; color: #B03A2E; }
+      td.piatto { font-weight: 700; font-size: 12px; }
+      .cat { font-weight: 400; color: #666; font-size: 10px; }
+      .avviso { margin-top: 12px; border: 2px solid #C77A12; padding: 6px 10px; font-size: 11px; }
+      .legale { margin-top: 10px; font-size: 11px; }
+    </style>
+    <table><thead><tr><th>Piatto</th>${intest}</tr></thead>
+    <tbody>${righe || `<tr><td colspan="${ALLERGENI.length + 1}">Nessuna ricetta registrata</td></tr>`}</tbody></table>
+    <div class="legale">● = contiene l'allergene o suoi derivati (Reg. UE 1169/2011, allegato II).
+      Le preparazioni possono contenere tracce di altri allergeni per contaminazione crociata:
+      chiedere sempre al personale.</div>
+    ${avvisi}`;
+  return wrapDoc('Informazioni sugli allergeni dei piatti', corpo, imp);
 }
 
 export { esc, fmtData, fmtDataOra };

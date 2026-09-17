@@ -4,8 +4,9 @@ import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, CATEGORIE_PRODOTTO, UNITA } from './theme';
 import { Campo, Chips, Selettore, Bottone, conferma } from './UI';
 import {
-  listaRicette, getRicetta, salvaRicetta, eliminaRicetta, listaProdotti,
+  listaRicette, getRicetta, salvaRicetta, eliminaRicetta, listaProdotti, tabellaAllergeni, getImpostazioni,
 } from './database';
+import { stampa, htmlTabellaAllergeni } from './report';
 
 const VUOTA = { nome: '', categoria: '', porzioni: '', procedura: '', ingredienti: [] };
 
@@ -102,6 +103,12 @@ export default function RicetteScreen() {
 
       <View style={{ padding: 16, paddingTop: 0 }}>
         <Bottone testo="+ Nuova ricetta" onPress={() => apri(null)} />
+        {ricette.length > 0 && (
+          <Bottone testo="Tabella allergeni per i clienti (PDF)" ghost onPress={async () => {
+            try { await stampa(htmlTabellaAllergeni(await tabellaAllergeni(), await getImpostazioni())); }
+            catch (e) { Alert.alert('Stampa non riuscita', String(e?.message || e)); }
+          }} />
+        )}
       </View>
 
       <Modal visible={!!form} animationType="slide" onRequestClose={() => setForm(null)}>

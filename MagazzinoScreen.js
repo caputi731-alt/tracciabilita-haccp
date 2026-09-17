@@ -6,7 +6,7 @@ import {
   Campo, Bottone, Chips, ModaleModifica, useAvviso, conferma, useFoto, AnteprimaFoto,
 } from './UI';
 import {
-  listaLotti, registraScarico, query, correggiRecord, correggiUscita, annullaCarico, impostaFotoLotto,
+  listaLotti, registraScarico, query, correggiRecord, correggiUscita, annullaCarico, impostaFotoLotto, lottiBloccati,
 } from './database';
 
 const fmtQ = (n) => (n === null || n === undefined ? '—'
@@ -53,8 +53,9 @@ const fifo = (a, b) => {
   return (a.data_ricevimento || '') < (b.data_ricevimento || '') ? -1 : 1;
 };
 
-export default function MagazzinoScreen() {
+export default function MagazzinoScreen({ navigation }) {
   const [lotti, setLotti] = useState([]);
+  const [bloccati, setBloccati] = useState([]);
   const [cerca, setCerca] = useState('');
   const [aperti, setAperti] = useState({});
   const [sel, setSel] = useState(null);           // lotto aperto nel dettaglio
@@ -66,7 +67,7 @@ export default function MagazzinoScreen() {
   const { avviso, mostra } = useAvviso();
   const { chiediFoto, fotocamera } = useFoto();
 
-  const ricarica = useCallback(() => { listaLotti(cerca).then(setLotti); }, [cerca]);
+  const ricarica = useCallback(() => { listaLotti(cerca).then(setLotti); lottiBloccati().then(setBloccati); }, [cerca]);
   useFocusEffect(ricarica);
   React.useEffect(() => { ricarica(); }, [cerca]);
 
@@ -233,6 +234,22 @@ export default function MagazzinoScreen() {
       </View>
 
       <ScrollView contentContainerStyle={S.content}>
+        {bloccati.length > 0 && (
+          <View style={[S.card, { backgroundColor: COLORS.dangerSoft, borderColor: COLORS.danger }]}>
+            <Text style={{ color: COLORS.danger, fontWeight: '800', fontSize: 16 }}>
+              🚫 {bloccati.length} lott{bloccati.length > 1 ? 'i bloccati' : 'o bloccato'}: da tenere separat{bloccati.length > 1 ? 'i' : 'o'}
+            </Text>
+            {bloccati.map((l) => (
+              <TouchableOpacity key={l.id} style={{ paddingVertical: 8 }}
+                onPress={() => navigation.navigate('Rintracciabilita', { lottoId: l.id })}>
+                <Text style={{ fontWeight: '700', color: COLORS.text }}>
+                  {l.prodotto} · lotto {l.numero_lotto || '—'} · {fmtQ(l.quantita_residua)} {l.unita_misura}
+                </Text>
+                <Text style={S.muted}>{l.fornitore} · tocca per gestire il richiamo ›</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
         {gruppi.length === 0 && <Text style={S.empty}>Nessun prodotto in magazzino.</Text>}
 
         {gruppi.map((g) => {
@@ -327,6 +344,9 @@ export default function MagazzinoScreen() {
 
               <Bottone testo="Scarica da questo lotto"
                 onPress={() => setUscita({ lotto: sel, qta: '', causale: 'consumo' })} />
+
+              <Bottone testo="🚫 Blocca lotto (richiamo)" ghost colore={COLORS.danger}
+                onPress={() => { const id = sel.id; setSel(null); navigation.navigate('Rintracciabilita', { lottoId: id, blocca: true }); }} />
 
               <Text style={[S.h2, { marginTop: 20 }]}>Movimenti</Text>
               <Riquadro>

@@ -173,42 +173,6 @@ export async function initDatabase() {
       quantita_usata REAL
     );
 
-    CREATE TABLE IF NOT EXISTS ricette (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      nome TEXT NOT NULL,
-      categoria TEXT,
-      porzioni INTEGER,
-      procedura TEXT,
-      attiva INTEGER DEFAULT 1
-    );
-
-    CREATE TABLE IF NOT EXISTS ricetta_ingredienti (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      ricetta_id INTEGER REFERENCES ricette(id),
-      prodotto_id INTEGER REFERENCES prodotti(id),
-      quantita REAL,
-      unita_misura TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS produzioni (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      ricetta_id INTEGER REFERENCES ricette(id),
-      nome TEXT,
-      data_ora TEXT NOT NULL,
-      quantita_prodotta REAL,
-      lotto_produzione TEXT,
-      data_scadenza TEXT,
-      operatore TEXT,
-      note TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS produzione_lotti (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      produzione_id INTEGER REFERENCES produzioni(id),
-      lotto_id INTEGER REFERENCES lotti(id),
-      quantita_usata REAL
-    );
-
     CREATE TABLE IF NOT EXISTS abbinamenti_articoli (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       fornitore_id INTEGER NOT NULL REFERENCES fornitori(id),
@@ -256,6 +220,27 @@ export async function initDatabase() {
       await d.execAsync('ALTER TABLE movimenti ADD COLUMN produzione_id INTEGER');
     }
   } catch (e) {}
+
+  // migrazione: colonne che mancavano per le differenze tra vecchie versioni dello schema
+  // (prima esistevano due definizioni di ricette/produzioni e vinceva quella senza "porzioni"/"nome")
+  const aggiungiSeManca = async (tabella, colonna, tipo) => {
+    const cols = await d.getAllAsync(`PRAGMA table_info(${tabella})`);
+    if (!cols.some((c) => c.name === colonna)) {
+      await d.execAsync(`ALTER TABLE ${tabella} ADD COLUMN ${colonna} ${tipo}`);
+      return true;
+    }
+    return false;
+  };
+  await aggiungiSeManca('ricette', 'porzioni', 'INTEGER');
+  await aggiungiSeManca('ricette', 'attiva', 'INTEGER DEFAULT 1');
+  await aggiungiSeManca('produzioni', 'nome', 'TEXT');
+  await aggiungiSeManca('produzioni', 'nome_ricetta', 'TEXT');
+  await d.execAsync("UPDATE produzioni SET nome = nome_ricetta WHERE nome IS NULL AND nome_ricetta IS NOT NULL");
+  if (await aggiungiSeManca('prodotti', 'allergeni_verificati', 'INTEGER DEFAULT 0')) {
+    // i prodotti già esistenti inseriti a mano si considerano verificati; quelli nati dalle fatture no
+    await d.execAsync(`UPDATE prodotti SET allergeni_verificati = 1
+      WHERE id NOT IN (SELECT prodotto_id FROM abbinamenti_articoli)`);
+  }
 
   // migrazione leggera: numero di colli ricevuti per lotto
   try {
@@ -324,7 +309,8 @@ export const salvaProdotto = (p) => {
     ? exec(
         `UPDATE prodotti SET denominazione=?, categoria=?, fornitore_abituale_id=?,
          unita_misura=?, barcode_ean=?, allergeni=?, conservazione=?, temp_min=?,
-         temp_max=?, shelf_life_giorni=?, giorni_dopo_apertura=?, origine=?, note=?
+         temp_max=?, shelf_life_giorni=?, giorni_dopo_apertura=?, origine=?, note=?,
+         allergeni_verificati=1
          WHERE id=?`,
         [p.denominazione, p.categoria, p.fornitore_abituale_id, p.unita_misura,
          p.barcode_ean, allergeni, p.conservazione, p.temp_min, p.temp_max,
@@ -333,8 +319,8 @@ export const salvaProdotto = (p) => {
     : exec(
         `INSERT INTO prodotti (denominazione, categoria, fornitore_abituale_id,
          unita_misura, barcode_ean, allergeni, conservazione, temp_min, temp_max,
-         shelf_life_giorni, giorni_dopo_apertura, origine, note)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         shelf_life_giorni, giorni_dopo_apertura, origine, note, allergeni_verificati)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,1)`,
         [p.denominazione, p.categoria, p.fornitore_abituale_id, p.unita_misura,
          p.barcode_ean, allergeni, p.conservazione, p.temp_min, p.temp_max,
          p.shelf_life_giorni, p.giorni_dopo_apertura, p.origine, p.note]
@@ -360,6 +346,11 @@ export const eliminaPuntoControllo = (id) =>
   exec('UPDATE punti_controllo SET attivo = 0 WHERE id = ?', [id]);
 
 /* ---------- lotti e movimenti ---------- */
+
+/** Stato del lotto dopo un cambio di giacenza: un lotto bloccato o annullato resta tale. */
+const statoDopo = (statoAttuale, residua) =>
+  (statoAttuale === 'bloccato' || statoAttuale === 'annullato'
+    ? statoAttuale : residua <= 0 ? 'esaurito' : 'disponibile');
 
 export async function registraCarico(l) {
   const res = await exec(
@@ -408,7 +399,7 @@ export async function registraScarico(lottoId, quantita, causale) {
   const residua = Math.max(0, lotto.quantita_residua - quantita);
   await exec(
     'UPDATE lotti SET quantita_residua = ?, stato = ? WHERE id = ?',
-    [residua, residua <= 0 ? 'esaurito' : 'disponibile', lottoId]
+    [residua, statoDopo(lotto.stato, residua), lottoId]
   );
   await exec(
     'INSERT INTO movimenti (lotto_id, tipo, quantita, data_ora, causale) VALUES (?,?,?,?,?)',
@@ -785,10 +776,11 @@ export async function registraProduzione(p, usi) {
       await d.runAsync(
         'INSERT INTO produzione_lotti (produzione_id, lotto_id, quantita_usata) VALUES (?,?,?)',
         [prodId, u.lotto_id, u.quantita]);
-      const lotto = await d.getFirstAsync('SELECT quantita_residua FROM lotti WHERE id=?', [u.lotto_id]);
+      const lotto = await d.getFirstAsync('SELECT quantita_residua, stato FROM lotti WHERE id=?', [u.lotto_id]);
+      if (lotto && lotto.stato === 'bloccato') throw new Error('Un lotto usato è bloccato (richiamo): non può essere impiegato.');
       const residua = Math.max(0, (lotto?.quantita_residua || 0) - u.quantita);
       await d.runAsync('UPDATE lotti SET quantita_residua=?, stato=? WHERE id=?',
-        [residua, residua <= 0 ? 'esaurito' : 'disponibile', u.lotto_id]);
+        [residua, statoDopo(lotto?.stato, residua), u.lotto_id]);
       await d.runAsync(
         'INSERT INTO movimenti (lotto_id, tipo, quantita, data_ora, causale) VALUES (?,?,?,?,?)',
         [u.lotto_id, 'scarico', u.quantita, new Date().toISOString(), `Produzione: ${p.nome || ''}`]);
@@ -971,7 +963,7 @@ export async function correggiRecord(tabella, id, cambi) {
       }
       const residua = Math.round((nuova - uscite) * 1000) / 1000;
       set.push('quantita_residua = ?', 'stato = ?');
-      valori.push(residua, residua <= 0 ? 'esaurito' : 'disponibile');
+      valori.push(residua, statoDopo(vecchio.stato, residua));
       await exec("UPDATE movimenti SET quantita = ? WHERE lotto_id = ? AND tipo = 'carico'", [nuova, id]);
     }
 
@@ -1010,7 +1002,7 @@ export async function correggiUscita(movimentoId, nuovaQuantita) {
     await exec('UPDATE movimenti SET quantita = ?, note = ? WHERE id = ?',
       [nuovaQuantita, m.note ? `${m.note} | ${traccia}` : traccia, movimentoId]);
     await exec('UPDATE lotti SET quantita_residua = ?, stato = ? WHERE id = ?',
-      [residua, residua <= 0 ? 'esaurito' : 'disponibile', lotto.id]);
+      [residua, statoDopo(lotto.stato, residua), lotto.id]);
     await exec(
       `INSERT INTO registro_modifiche (tabella, record_id, data_ora, campo, valore_precedente, valore_nuovo)
        VALUES ('movimenti', ?, ?, 'quantita', ?, ?)`,
@@ -1058,5 +1050,105 @@ export const fotoDeiLotti = () =>
 export async function aggiornaIndirizzoFoto(vecchio, nuovo) {
   await exec('UPDATE lotti SET foto_etichetta = ? WHERE foto_etichetta = ?', [nuovo, vecchio]);
   await exec('UPDATE lotti SET foto_ddt = ? WHERE foto_ddt = ?', [nuovo, vecchio]);
+}
+
+/* ---------- allergeni ---------- */
+
+const leggiAllergeni = (json) => { try { return JSON.parse(json || '[]'); } catch (e) { return []; } };
+
+/** Prodotti creati dalle fatture a cui mancano ancora allergeni/conservazione verificati. */
+export const prodottiDaCompletare = () =>
+  query(`SELECT * FROM prodotti WHERE attivo = 1 AND COALESCE(allergeni_verificati, 0) = 0 ORDER BY denominazione`);
+
+/**
+ * Tabella allergeni dei piatti (Reg. UE 1169/2011): per ogni ricetta attiva
+ * gli allergeni presenti, con l'ingrediente da cui derivano, e gli ingredienti non ancora verificati.
+ */
+export async function tabellaAllergeni() {
+  const ricette = await query('SELECT * FROM ricette WHERE COALESCE(attiva, 1) = 1 ORDER BY categoria, nome');
+  const out = [];
+  for (const r of ricette) {
+    const ing = await query(
+      `SELECT p.id, p.denominazione, p.allergeni, COALESCE(p.allergeni_verificati, 0) AS verificato
+       FROM ricetta_ingredienti ri JOIN prodotti p ON p.id = ri.prodotto_id WHERE ri.ricetta_id = ?`, [r.id]);
+    const fonti = {};
+    for (const i of ing) {
+      for (const a of leggiAllergeni(i.allergeni)) (fonti[a] = fonti[a] || []).push(i.denominazione);
+    }
+    out.push({
+      id: r.id, nome: r.nome, categoria: r.categoria, fonti,
+      allergeni: Object.keys(fonti),
+      daVerificare: ing.filter((i) => !i.verificato).map((i) => i.denominazione),
+      senzaIngredienti: ing.length === 0,
+    });
+  }
+  return out;
+}
+
+/* ---------- blocco e richiamo lotti ---------- */
+
+/** Blocca un lotto (richiamo o sospetto): esce dal magazzino utilizzabile e apre una non conformità. */
+export async function bloccaLotto(lottoId, motivo) {
+  if (!motivo || !String(motivo).trim()) throw new Error('Indica il motivo del blocco.');
+  const d = await getDb();
+  await d.withTransactionAsync(async () => {
+    const l = await queryOne(
+      `SELECT l.*, p.denominazione AS prodotto FROM lotti l JOIN prodotti p ON p.id = l.prodotto_id WHERE l.id = ?`, [lottoId]);
+    if (!l) throw new Error('Lotto non trovato');
+    if (l.stato === 'bloccato') throw new Error('Il lotto è già bloccato.');
+    if (l.stato === 'annullato') throw new Error('Il carico di questo lotto è stato annullato.');
+    const adesso = new Date().toISOString();
+    const traccia = `Bloccato il ${new Date().toLocaleDateString('it-IT')}: ${motivo}`;
+    await exec("UPDATE lotti SET stato = 'bloccato', note = ? WHERE id = ?",
+      [l.note ? `${l.note} | ${traccia}` : traccia, lottoId]);
+    await exec(
+      `INSERT INTO registro_modifiche (tabella, record_id, data_ora, campo, valore_precedente, valore_nuovo)
+       VALUES ('lotti', ?, ?, 'stato', ?, 'bloccato')`, [lottoId, adesso, l.stato]);
+    await exec('INSERT INTO non_conformita (data_ora, origine, descrizione, lotto_id) VALUES (?,?,?,?)',
+      [adesso, 'richiamo', `Lotto bloccato: ${l.prodotto}, lotto ${l.numero_lotto || l.id}. Motivo: ${motivo}`, lottoId]);
+  });
+}
+
+/** Sblocca un lotto dopo la verifica: torna disponibile (o esaurito se non ne resta). */
+export async function sbloccaLotto(lottoId, esito) {
+  if (!esito || !String(esito).trim()) throw new Error('Indica l\'esito della verifica.');
+  const d = await getDb();
+  await d.withTransactionAsync(async () => {
+    const l = await queryOne('SELECT * FROM lotti WHERE id = ?', [lottoId]);
+    if (!l || l.stato !== 'bloccato') throw new Error('Il lotto non è bloccato.');
+    const nuovo = l.quantita_residua > 0 ? 'disponibile' : 'esaurito';
+    const traccia = `Sbloccato il ${new Date().toLocaleDateString('it-IT')}: ${esito}`;
+    await exec('UPDATE lotti SET stato = ?, note = ? WHERE id = ?',
+      [nuovo, l.note ? `${l.note} | ${traccia}` : traccia, lottoId]);
+    await exec(
+      `INSERT INTO registro_modifiche (tabella, record_id, data_ora, campo, valore_precedente, valore_nuovo)
+       VALUES ('lotti', ?, ?, 'stato', 'bloccato', ?)`, [lottoId, new Date().toISOString(), nuovo]);
+  });
+}
+
+export const lottiBloccati = () =>
+  query(`SELECT l.*, p.denominazione AS prodotto, f.ragione_sociale AS fornitore
+         FROM lotti l JOIN prodotti p ON p.id = l.prodotto_id JOIN fornitori f ON f.id = l.fornitore_id
+         WHERE l.stato = 'bloccato' ORDER BY p.denominazione`);
+
+/**
+ * Cosa coinvolge un richiamo: i piatti in cui il lotto è stato usato e gli altri carichi
+ * dello stesso prodotto con lo stesso numero di lotto (stessa partita arrivata più volte).
+ */
+export async function impattoLotto(lottoId) {
+  const l = await queryOne('SELECT * FROM lotti WHERE id = ?', [lottoId]);
+  if (!l) return null;
+  const piatti = await query(
+    `SELECT pr.id, pr.nome, pr.data_ora, pr.lotto_produzione, pr.data_scadenza, pl.quantita_usata
+     FROM produzione_lotti pl JOIN produzioni pr ON pr.id = pl.produzione_id
+     WHERE pl.lotto_id = ? ORDER BY pr.data_ora DESC`, [lottoId]);
+  const stessaPartita = l.numero_lotto
+    ? await query(
+      `SELECT l.*, f.ragione_sociale AS fornitore FROM lotti l JOIN fornitori f ON f.id = l.fornitore_id
+       WHERE l.prodotto_id = ? AND l.numero_lotto = ? AND l.id <> ? AND l.stato <> 'annullato'`,
+      [l.prodotto_id, l.numero_lotto, lottoId])
+    : [];
+  const usato = Math.round((l.quantita_iniziale - l.quantita_residua) * 1000) / 1000;
+  return { lotto: l, piatti, stessaPartita, usato };
 }
 
