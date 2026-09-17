@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ActivityIndicator, StatusBar } from 'react-native';
+import { View, Text, ActivityIndicator, StatusBar, AppState } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { initDatabase } from './database';
+import { backupAutomaticoSeServe } from './backupAutomatico';
 import { COLORS, S } from './theme';
 
 import HomeScreen from './HomeScreen';
@@ -30,7 +31,13 @@ export default function App() {
   const [errore, setErrore] = useState(null);
 
   useEffect(() => {
-    initDatabase().then(() => setPronto(true)).catch((e) => setErrore(e.message));
+    initDatabase()
+      .then(() => { setPronto(true); backupAutomaticoSeServe(); })
+      .catch((e) => setErrore(e.message));
+    const sub = AppState.addEventListener('change', (stato) => {
+      if (stato === 'active') backupAutomaticoSeServe();
+    });
+    return () => sub.remove();
   }, []);
 
   if (errore) {

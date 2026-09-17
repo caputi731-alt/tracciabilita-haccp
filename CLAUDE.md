@@ -11,7 +11,7 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
 - Dopo il push, riepilogare a Luca cosa è cambiato e cosa testare.
 
 ## Regole vincolanti
-- Struttura piatta: nessuna sottocartella per il codice (eccezione: `.github/workflows/`).
+- Struttura piatta: nessuna sottocartella per il codice (eccezioni: `.github/workflows/` e `test/`).
 - Nomi file in PascalCase esatto (es. `RicevimentoScreen.js`): Linux distingue maiuscole/minuscole.
 - Kotlin resta fissato a 1.9.25 tramite `expo-build-properties` in `app.json`. Non rimuoverlo.
 - `database.js`: prima di ogni commit verificare che non esistano funzioni dichiarate due volte
@@ -38,3 +38,10 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
   `registro_modifiche` e nelle note), `correggiUscita`, `annullaCarico`. Nuovi campi correggibili vanno in `CAMPI_CORREGGIBILI`.
 - Form di correzione: componente `ModaleModifica` (UI.js). Conferme brevi: `useAvviso()` → "Salvato ✓".
 - Date nei campi di testo: `dataPerCampo` / `isoDaCampo` (theme.js), formato gg/mm/aaaa.
+
+## Test e backup
+- `npm test` (Node 22): test in `test/*.test.mjs`, eseguiti da GitHub Actions prima della build; se falliscono l'APK non viene creato.
+  I moduli dell'app girano in Node grazie a `test/hooks.mjs` (expo-sqlite sostituito da node:sqlite). Ogni nuova logica di database va coperta da un test.
+- Nel repository (pubblico) mai dati reali: la fattura di test `test/fattura-esempio.pdf` ha dati inventati.
+- Backup automatico: `backupAutomatico.js` (cartella scelta via Storage Access Framework, 1 al giorno, ultime 14 copie). La tabella `preferenze` è locale e non va nel backup.
+- Firma APK: se esistono i Secrets ANDROID_KEYSTORE_BASE64, ANDROID_STORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD la build firma con quella chiave, altrimenti con la chiave di debug.

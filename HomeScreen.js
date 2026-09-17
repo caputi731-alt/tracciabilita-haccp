@@ -6,6 +6,7 @@ import {
   lottiInScadenza, temperatureDiOggi, listaPuntiControllo, nonConformitaAperte,
   listaAree, sanificazioniOggi,
 } from './database';
+import { statoBackup } from './backupAutomatico';
 
 const SEZIONI = [
   {
@@ -73,6 +74,7 @@ export default function HomeScreen({ navigation }) {
   const [ncAperte, setNcAperte] = useState(0);
   const [pulizie, setPulizie] = useState({ fatte: 0, totali: 0 });
   const [menuAperto, setMenuAperto] = useState(false);
+  const [backup, setBackup] = useState(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -84,6 +86,7 @@ export default function HomeScreen({ navigation }) {
         setNcAperte((await nonConformitaAperte()).length);
         const giornaliere = (await listaAree()).filter((a) => a.frequenza === 'giornaliera');
         const fatteOggi = new Set((await sanificazioniOggi()).map((x) => x.area_id));
+        setBackup(await statoBackup());
         setPulizie({ fatte: giornaliere.filter((a) => fatteOggi.has(a.id)).length, totali: giornaliere.length });
       })();
     }, [])
@@ -92,7 +95,8 @@ export default function HomeScreen({ navigation }) {
   const tempOk = puntiTot > 0 && tempFatte >= puntiTot;
   const pulizieOk = pulizie.totali > 0 && pulizie.fatte >= pulizie.totali;
   const scaduti = scadenze.filter((l) => giorniAllaScadenza(l.data_scadenza) < 0).length;
-  const tuttoOk = (puntiTot === 0 || tempOk) && (pulizie.totali === 0 || pulizieOk) && ncAperte === 0 && scadenze.length === 0;
+  const backupOk = backup && backup.cartella && backup.giorni !== null && backup.giorni <= 2 && !backup.errore;
+  const tuttoOk = backupOk && (puntiTot === 0 || tempOk) && (pulizie.totali === 0 || pulizieOk) && ncAperte === 0 && scadenze.length === 0;
 
   return (
     <ScrollView style={S.screen} contentContainerStyle={S.content}>
@@ -127,6 +131,14 @@ export default function HomeScreen({ navigation }) {
           testo={scaduti ? `${scaduti} scadut${scaduti > 1 ? 'i' : 'o'} da togliere · ${scadenze.length - scaduti} in scadenza`
             : scadenze.length ? `${scadenze.length} in scadenza entro 3 giorni` : 'Nulla in scadenza nei prossimi 3 giorni'}
           onPress={() => navigation.navigate('Magazzino')} />
+        {backup && !backupOk && (
+          <RigaStato colore={backup.cartella && !backup.errore ? COLORS.warning : COLORS.danger}
+            titolo={!backup.cartella ? 'Backup automatico non attivo' : backup.errore ? 'Backup non riuscito' : 'Backup vecchio'}
+            testo={!backup.cartella ? 'Attivalo: se il telefono si rompe perdi tutti i registri'
+              : backup.errore ? 'Controlla la cartella dei backup'
+              : backup.giorni === null ? 'Nessun backup ancora eseguito' : `Ultimo backup ${backup.giorni} giorni fa`}
+            onPress={() => navigation.navigate('Backup')} />
+        )}
         {ncAperte > 0 && (
           <RigaStato colore={COLORS.danger}
             titolo={`${ncAperte} non conformità apert${ncAperte > 1 ? 'e' : 'a'}`}

@@ -41,6 +41,46 @@ const WS = (c) => c === 32 || c === 10 || c === 13 || c === 9 || c === 12 || c =
 const DELIM = (c) => c === 40 || c === 41 || c === 60 || c === 62 || c === 91 || c === 93
   || c === 123 || c === 125 || c === 47 || c === 37;
 
+function ascii85(bytes) {
+  const out = [];
+  let gruppo = [];
+  for (let i = 0; i < bytes.length; i++) {
+    const c = bytes[i];
+    if (c === 126) break; // "~>" fine dati
+    if (c === 122 && gruppo.length === 0) { out.push(0, 0, 0, 0); continue; } // "z"
+    if (c < 33 || c > 117) continue;
+    gruppo.push(c - 33);
+    if (gruppo.length === 5) {
+      let n = 0;
+      for (const g of gruppo) n = n * 85 + g;
+      out.push((n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255);
+      gruppo = [];
+    }
+  }
+  if (gruppo.length > 1) {
+    const mancanti = 5 - gruppo.length;
+    let n = 0;
+    for (const g of gruppo.concat(Array(mancanti).fill(84))) n = n * 85 + g;
+    const b = [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255];
+    out.push(...b.slice(0, 4 - mancanti));
+  }
+  return new Uint8Array(out);
+}
+
+function asciiHex(bytes) {
+  const out = [];
+  let prec = -1;
+  for (let i = 0; i < bytes.length; i++) {
+    const c = bytes[i];
+    if (c === 62) break;
+    const v = c >= 48 && c <= 57 ? c - 48 : c >= 65 && c <= 70 ? c - 55 : c >= 97 && c <= 102 ? c - 87 : -1;
+    if (v < 0) continue;
+    if (prec < 0) prec = v; else { out.push(prec * 16 + v); prec = -1; }
+  }
+  if (prec >= 0) out.push(prec * 16);
+  return new Uint8Array(out);
+}
+
 /* ---------- parser degli oggetti PDF ---------- */
 
 class Lexer {
@@ -232,6 +272,10 @@ class Documento {
         try { dati = pako.inflate(dati); } catch (e) {
           try { dati = pako.inflateRaw(dati.subarray(2)); } catch (e2) { return ''; }
         }
+      } else if (nome === 'ASCII85Decode' || nome === 'A85') {
+        dati = ascii85(dati);
+      } else if (nome === 'ASCIIHexDecode' || nome === 'AHx') {
+        dati = asciiHex(dati);
       } else {
         return ''; // immagini o filtri non gestiti: non contengono testo utile
       }
@@ -356,6 +400,8 @@ function preparaFont(doc, fontRef) {
       }
     }
   } else {
+    const base = (f.BaseFont && f.BaseFont.n) || '';
+    if (/Courier/i.test(base)) font.def = 600; // font standard a larghezza fissa, spesso senza /Widths
     const primo = doc.risolvi(f.FirstChar) || 0;
     (doc.risolvi(f.Widths) || []).forEach((l, k) => { font.larghezze[primo + k] = doc.risolvi(l); });
     const desc = doc.risolvi(f.FontDescriptor);

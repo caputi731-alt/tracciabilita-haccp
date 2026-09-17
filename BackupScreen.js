@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { View, Text, ScrollView, Alert } from 'react-native';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import { S, COLORS } from './theme';
-import { Bottone, conferma } from './UI';
+import { Bottone, conferma, useAvviso } from './UI';
+import { statoBackup, scegliCartellaBackup, eseguiBackup, MAX_COPIE } from './backupAutomatico';
 import { esportaTutto, importaTutto, csvRegistroCarichi, csvTabella } from './database';
 
 const stamp = () => {
@@ -28,6 +30,47 @@ async function scriviECondividi(nomeFile, contenuto, mime) {
 
 export default function BackupScreen() {
   const [occupato, setOccupato] = useState(false);
+  const [stato, setStato] = useState(null);
+  const { avviso, mostra } = useAvviso();
+
+  const aggiornaStato = useCallback(() => { statoBackup().then(setStato); }, []);
+  useFocusEffect(aggiornaStato);
+
+  const attiva = async () => {
+    try {
+      const ok = await scegliCartellaBackup();
+      if (!ok) return;
+      setOccupato(true);
+      await eseguiBackup();
+      mostra('Backup automatico attivo ✓');
+    } catch (e) {
+      Alert.alert('Backup non riuscito', String(e?.message || e));
+    } finally {
+      setOccupato(false);
+      aggiornaStato();
+    }
+  };
+
+  const oraSubito = async () => {
+    try {
+      setOccupato(true);
+      const r = await eseguiBackup();
+      mostra(`Backup salvato ✓ (${Math.round(r.byte / 1024)} KB)`);
+    } catch (e) {
+      Alert.alert('Backup non riuscito', String(e?.message || e));
+    } finally {
+      setOccupato(false);
+      aggiornaStato();
+    }
+  };
+
+  const quando = (s) => {
+    if (!s || !s.ultimo) return 'mai';
+    const ora = new Date(s.ultimo).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+    if (s.giorni === 0) return `oggi alle ${ora}`;
+    if (s.giorni === 1) return `ieri alle ${ora}`;
+    return `${s.giorni} giorni fa`;
+  };
 
   const backupJson = async () => {
     try {
@@ -88,8 +131,8 @@ export default function BackupScreen() {
             setOccupato(true);
             await importaTutto(dump);
             Alert.alert(
-              'Ripristino completato',
-              'Chiudi e riapri l\'app per vedere i dati ripristinati.'
+              'Ripristino completato ✓',
+              'Tutti i dati del backup sono stati caricati. Torna alla Home per vederli.'
             );
           } catch (e) {
             Alert.alert('Errore ripristino', String(e?.message || e));
@@ -104,6 +147,7 @@ export default function BackupScreen() {
   };
 
   return (
+    <View style={S.screen}>
     <ScrollView style={S.screen} contentContainerStyle={S.content}>
       <Text style={S.h1}>Backup e sicurezza dati</Text>
       <Text style={[S.muted, { marginBottom: 16 }]}>
@@ -111,6 +155,37 @@ export default function BackupScreen() {
         conservalo altrove (Drive, email, chiavetta): se il telefono si rompe o si
         perde, è l'unico modo per non perdere la tracciabilità.
       </Text>
+
+      <View style={[S.card, {
+        borderLeftWidth: 5,
+        borderLeftColor: !stato?.cartella || stato?.errore ? COLORS.danger : stato.giorni <= 2 ? COLORS.ok : COLORS.warning,
+      }]}>
+        <Text style={S.h2}>Backup automatico</Text>
+        {stato?.cartella ? (
+          <>
+            <Text style={{ fontSize: 15, color: COLORS.text }}>Attivo · ultimo backup {quando(stato)}</Text>
+            <Text style={S.muted}>Cartella: {stato.nomeCartella}</Text>
+            <Text style={S.muted}>Un backup al giorno all'apertura dell'app, conservando le ultime {MAX_COPIE} copie.</Text>
+            {!!stato.errore && (
+              <Text style={{ color: COLORS.danger, marginTop: 6 }}>Ultimo tentativo fallito: {stato.errore}</Text>
+            )}
+            <Bottone testo="Fai un backup adesso" onPress={oraSubito} />
+            <Bottone testo="Cambia cartella" ghost onPress={attiva} />
+          </>
+        ) : (
+          <>
+            <Text style={S.muted}>
+              Scegli una cartella del telefono (per esempio crea "Backup HACCP" in Documenti): l'app ci salva
+              un backup ogni giorno. La cartella resta anche se l'app viene disinstallata.
+            </Text>
+            <Bottone testo="Attiva backup automatico" onPress={attiva} />
+          </>
+        )}
+        <Text style={[S.muted, { marginTop: 10 }]}>
+          Per avere una copia anche fuori dal telefono, ogni tanto usa "Esporta backup completo" e
+          invialo a Drive o via email.
+        </Text>
+      </View>
 
       <View style={S.card}>
         <Text style={S.h2}>Backup completo</Text>
@@ -136,5 +211,7 @@ export default function BackupScreen() {
         dei documenti. La copia delle foto arriverà in un aggiornamento successivo.
       </Text>
     </ScrollView>
+    {avviso}
+    </View>
   );
 }

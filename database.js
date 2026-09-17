@@ -218,6 +218,11 @@ export async function initDatabase() {
       UNIQUE (fornitore_id, chiave)
     );
 
+    CREATE TABLE IF NOT EXISTS preferenze (
+      chiave TEXT PRIMARY KEY,
+      valore TEXT
+    );
+
     CREATE TABLE IF NOT EXISTS registro_modifiche (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       tabella TEXT NOT NULL,
@@ -501,33 +506,67 @@ async function elencoTabelle() {
   return r.map((x) => x.name);
 }
 
+/** Tabelle locali al dispositivo, escluse dal backup (es. la cartella scelta per i backup). */
+const TABELLE_LOCALI = ['preferenze'];
+
 export async function esportaTutto() {
-  const tabelle = await elencoTabelle();
+  const tabelle = (await elencoTabelle()).filter((t) => !TABELLE_LOCALI.includes(t));
   const dati = {};
   for (const t of tabelle) dati[t] = await query(`SELECT * FROM ${t}`);
-  return { versione: 1, generato: new Date().toISOString(), tabelle: dati };
+  return { versione: 2, generato: new Date().toISOString(), tabelle: dati };
 }
 
+/**
+ * Sostituisce tutti i dati con quelli del backup, in un'unica transazione.
+ * Le chiavi esterne vengono sospese durante la copia (altrimenti la cancellazione
+ * dei fornitori con lotti collegati fallisce) e verificate alla fine.
+ * Colonne sconosciute (backup di versioni diverse) vengono ignorate.
+ */
 export async function importaTutto(dump) {
-  if (!dump || !dump.tabelle) throw new Error('File di backup non valido.');
+  if (!dump || !dump.tabelle || typeof dump.tabelle !== 'object') throw new Error('File di backup non valido.');
   const d = await getDb();
-  await d.withTransactionAsync(async () => {
-    for (const t of Object.keys(dump.tabelle)) {
-      const righe = dump.tabelle[t];
-      if (!Array.isArray(righe)) continue;
-      await d.execAsync(`DELETE FROM ${t}`);
-      for (const row of righe) {
-        const cols = Object.keys(row);
-        if (cols.length === 0) continue;
-        const ph = cols.map(() => '?').join(',');
-        await d.runAsync(
-          `INSERT INTO ${t} (${cols.join(',')}) VALUES (${ph})`,
-          cols.map((c) => row[c])
-        );
+  const esistenti = (await elencoTabelle()).filter((t) => !TABELLE_LOCALI.includes(t));
+  const colonne = {};
+  for (const t of esistenti) {
+    colonne[t] = (await d.getAllAsync(`PRAGMA table_info(${t})`)).map((c) => c.name);
+  }
+  await d.execAsync('PRAGMA foreign_keys = OFF;');
+  try {
+    await d.withTransactionAsync(async () => {
+      for (const t of esistenti) await d.execAsync(`DELETE FROM ${t}`);
+      for (const t of Object.keys(dump.tabelle)) {
+        if (!colonne[t]) continue;
+        const righe = dump.tabelle[t];
+        if (!Array.isArray(righe)) continue;
+        for (const row of righe) {
+          const cols = Object.keys(row).filter((c) => colonne[t].includes(c));
+          if (cols.length === 0) continue;
+          await d.runAsync(
+            `INSERT INTO ${t} (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`,
+            cols.map((c) => row[c])
+          );
+        }
       }
-    }
-  });
+      const violazioni = await d.getAllAsync('PRAGMA foreign_key_check');
+      if (violazioni.length) {
+        throw new Error(`Backup incoerente: ${violazioni.length} collegamenti non validi (es. tabella ${violazioni[0].table}).`);
+      }
+    });
+  } finally {
+    await d.execAsync('PRAGMA foreign_keys = ON;');
+  }
 }
+
+/* ---------- preferenze locali del dispositivo ---------- */
+
+export async function leggiPreferenza(chiave) {
+  const r = await queryOne('SELECT valore FROM preferenze WHERE chiave = ?', [chiave]);
+  return r ? r.valore : null;
+}
+
+export const salvaPreferenza = (chiave, valore) =>
+  exec(`INSERT INTO preferenze (chiave, valore) VALUES (?, ?)
+        ON CONFLICT(chiave) DO UPDATE SET valore = excluded.valore`, [chiave, valore]);
 
 export function toCsv(righe) {
   if (!righe || righe.length === 0) return '';

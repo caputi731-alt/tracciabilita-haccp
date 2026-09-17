@@ -9,8 +9,28 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
+    steps:
+      - name: Scarica il codice
+        uses: actions/checkout@v4
+
+      - name: Prepara Node.js 22 (serve node:sqlite per i test)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Installa le dipendenze
+        run: npm install
+
+      - name: Esegui i test
+        run: npm test
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      HA_CHIAVE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
     steps:
       - name: Scarica il codice
         uses: actions/checkout@v4
@@ -37,8 +57,40 @@ jobs:
       - name: Genera il progetto Android nativo
         run: npx expo prebuild --platform android --clean
 
+      - name: Firma con la chiave dell'app (solo se configurata nei Secrets)
+        if: env.HA_CHIAVE == 'true'
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/haccp.keystore"
+          python3 - <<'PY'
+          import re, sys
+          p = 'android/app/build.gradle'
+          s = open(p).read()
+          rel = """signingConfigs {
+                  release {
+                      storeFile file(System.getenv('HACCP_KEYSTORE'))
+                      storePassword System.getenv('HACCP_STORE_PASSWORD')
+                      keyAlias System.getenv('HACCP_KEY_ALIAS')
+                      keyPassword System.getenv('HACCP_KEY_PASSWORD')
+                  }"""
+          if s.count('signingConfigs {') != 1:
+              sys.exit('build.gradle inatteso: blocco signingConfigs non trovato')
+          s = s.replace('signingConfigs {', rel, 1)
+          i = s.index('release {', s.index('buildTypes {'))
+          j = s.index('signingConfig signingConfigs.debug', i)
+          s = s[:j] + 'signingConfig signingConfigs.release' + s[j + len('signingConfig signingConfigs.debug'):]
+          open(p, 'w').write(s)
+          print('Firma release configurata')
+          PY
+
       - name: Compila l'APK
         working-directory: android
+        env:
+          HACCP_KEYSTORE: ${{ runner.temp }}/haccp.keystore
+          HACCP_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          HACCP_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          HACCP_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           chmod +x ./gradlew
           ./gradlew assembleRelease --no-daemon
@@ -47,6 +99,11 @@ jobs:
         run: |
           mkdir -p dist
           cp android/app/build/outputs/apk/release/*.apk "dist/tracciabilita-haccp-build-${{ github.run_number }}.apk"
+
+      - name: Mostra con quale chiave è firmato l'APK
+        run: |
+          APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          "$APKSIGNER" verify --print-certs dist/*.apk | grep -E "Signer #1 certificate (DN|SHA-256)" | tee firma.txt || echo "Impossibile leggere la firma (non bloccante)"
 
       - name: Pubblica l'APK come Release (download diretto dal telefono)
         uses: softprops/action-gh-release@v2
