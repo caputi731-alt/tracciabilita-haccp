@@ -37,7 +37,7 @@ export default function FornitoriScreen() {
 
   return (
     <View style={S.screen}>
-      <ScrollView contentContainerStyle={S.content}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={S.content}>
         {fornitori.length === 0 && (
           <Text style={S.empty}>Nessun fornitore. Aggiungine uno con il pulsante in basso.</Text>
         )}

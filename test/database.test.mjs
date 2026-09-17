@@ -137,3 +137,25 @@ test('richiamo: blocco, esclusione dal magazzino, impatto sui piatti, sblocco', 
   await db.sbloccaLotto(a, 'Verificato: lotto non coinvolto');
   assert.equal((await db.queryOne('SELECT stato FROM lotti WHERE id = ?', [a])).stato, 'disponibile');
 });
+
+test('foto etichetta sulla scheda prodotto: dal ricevimento, dalle fatture e a mano', async () => {
+  const pid = (await db.exec("INSERT INTO prodotti (denominazione) VALUES ('Grana')")).lastInsertRowId;
+  assert.equal(await db.impostaFotoProdotto(pid, 'file:///foto/a.jpg', true), true);
+  assert.equal(await db.impostaFotoProdotto(pid, 'file:///foto/b.jpg', true), false, 'non sovrascrive una foto già presente');
+  assert.equal((await db.queryOne('SELECT foto_etichetta f FROM prodotti WHERE id = ?', [pid])).f, 'file:///foto/a.jpg');
+  assert.equal(await db.impostaFotoProdotto(pid, 'file:///foto/b.jpg'), true, 'dalla scheda prodotto si sostituisce');
+
+  // import fattura: la foto della riga diventa anche la foto del prodotto nuovo
+  await db.importaFattura({
+    fornitore_id: 1, numero: '90', data: '2026-09-17', integrita_imballo: true, conformita_etichettatura: true,
+    righe: [{ chiave: 'cod:99', descrizione: 'ART 99', prodotto_id: null, nuovo_prodotto: 'Articolo 99',
+      quantita: 1, unita_misura: 'kg', numero_lotto: 'FT90', foto_etichetta: 'file:///foto/c.jpg' }],
+  });
+  const nuovo = await db.queryOne("SELECT * FROM prodotti WHERE denominazione = 'Articolo 99'");
+  assert.equal(nuovo.foto_etichetta, 'file:///foto/c.jpg');
+  assert.equal((await db.queryOne("SELECT foto_etichetta f FROM lotti WHERE numero_lotto = 'FT90'")).f, 'file:///foto/c.jpg');
+
+  const salvato = await db.salvaProdotto({ denominazione: 'Con foto', allergeni: [], foto_etichetta: 'file:///foto/d.jpg' });
+  assert.ok(salvato);
+  assert.equal((await db.queryOne("SELECT foto_etichetta f FROM prodotti WHERE denominazione = 'Con foto'")).f, 'file:///foto/d.jpg');
+});

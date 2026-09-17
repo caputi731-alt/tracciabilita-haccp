@@ -2,7 +2,9 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Modal, Alert, TextInput } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, ALLERGENI, CATEGORIE_PRODOTTO, CONSERVAZIONE, UNITA } from './theme';
-import { Campo, Chips, Selettore, Scanner, Bottone, conferma } from './UI';
+import {
+  Campo, Chips, Selettore, Scanner, Bottone, conferma, useFoto, AnteprimaFoto,
+} from './UI';
 import {
   listaProdotti, salvaProdotto, eliminaProdotto, listaFornitori,
 } from './database';
@@ -11,6 +13,7 @@ const VUOTO = {
   denominazione: '', categoria: '', fornitore_abituale_id: null, unita_misura: 'kg',
   barcode_ean: '', allergeni: [], conservazione: 'ambiente', temp_min: null,
   temp_max: null, shelf_life_giorni: null, giorni_dopo_apertura: null, origine: '', note: '',
+  foto_etichetta: null,
 };
 
 export default function ProdottiScreen() {
@@ -20,6 +23,7 @@ export default function ProdottiScreen() {
   const [scanner, setScanner] = useState(false);
   const [cerca, setCerca] = useState('');
   const [soloDaCompletare, setSoloDaCompletare] = useState(false);
+  const { chiediFoto, fotocamera } = useFoto();
 
   const ricarica = useCallback(() => {
     listaProdotti().then(setProdotti);
@@ -58,7 +62,7 @@ export default function ProdottiScreen() {
           onChangeText={setCerca} placeholderTextColor="#9CA3AF" />
       </View>
 
-      <ScrollView contentContainerStyle={S.content}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={S.content}>
         {daCompletare > 0 && (
           <TouchableOpacity onPress={() => setSoloDaCompletare((v) => !v)} activeOpacity={0.7}
             style={[S.card, { backgroundColor: COLORS.warningSoft, borderColor: COLORS.warning }]}>
@@ -80,7 +84,10 @@ export default function ProdottiScreen() {
           return (
             <TouchableOpacity key={p.id} style={S.card} onPress={() => apri(p)}
               onLongPress={() => elimina(p)}>
-              <Text style={{ fontSize: 16, fontWeight: '700' }}>{p.denominazione}</Text>
+              <View style={S.row}>
+                <Text style={{ fontSize: 16, fontWeight: '700', flex: 1 }}>{p.denominazione}</Text>
+                {!!p.foto_etichetta && <Text style={{ fontSize: 16 }}>📷</Text>}
+              </View>
               <Text style={S.muted}>
                 {[p.categoria, p.fornitore, p.conservazione].filter(Boolean).join(' · ')}
               </Text>
@@ -150,6 +157,14 @@ export default function ProdottiScreen() {
               (anche se non ce ne sono).
             </Text>
 
+            <AnteprimaFoto uri={form.foto_etichetta} titolo="Foto dell'etichetta" altezza={220} />
+            <Bottone testo={form.foto_etichetta ? "📷 Sostituisci foto dell'etichetta" : "📷 Fotografa l'etichetta"}
+              ghost onPress={() => chiediFoto('etichetta', set('foto_etichetta'))} />
+            {!!form.foto_etichetta && (
+              <Bottone testo="Rimuovi foto" ghost colore={COLORS.danger}
+                onPress={() => set('foto_etichetta')(null)} />
+            )}
+
             <Campo label="Note" value={form.note} onChange={set('note')} multiline />
 
             <Bottone testo="Salva" onPress={salva} />
@@ -157,6 +172,8 @@ export default function ProdottiScreen() {
           </ScrollView>
         )}
       </Modal>
+
+      {fotocamera}
 
       <Scanner visibile={scanner} onChiudi={() => setScanner(false)}
         onLetto={(code) => { setForm((f) => ({ ...f, barcode_ean: code })); setScanner(false); }} />

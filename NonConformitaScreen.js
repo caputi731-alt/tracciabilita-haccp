@@ -83,7 +83,7 @@ export default function NonConformitaScreen() {
 
   return (
     <View style={S.screen}>
-      <ScrollView contentContainerStyle={S.content}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={S.content}>
         <Text style={S.h1}>Non conformità</Text>
 
         <Text style={[S.h2, { marginTop: 8 }]}>Aperte ({aperte.length})</Text>

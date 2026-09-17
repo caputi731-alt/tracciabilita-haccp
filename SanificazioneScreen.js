@@ -79,7 +79,7 @@ export default function SanificazioneScreen() {
 
   return (
     <View style={S.screen}>
-      <ScrollView contentContainerStyle={S.content}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={S.content}>
         <Text style={S.h1}>Sanificazione</Text>
         <Text style={[S.muted, { marginBottom: 12 }]}>
           Registra le pulizie delle tue aree. Tocca un'area per segnare la pulizia fatta.

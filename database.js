@@ -231,6 +231,7 @@ export async function initDatabase() {
     }
     return false;
   };
+  await aggiungiSeManca('prodotti', 'foto_etichetta', 'TEXT');
   await aggiungiSeManca('ricette', 'porzioni', 'INTEGER');
   await aggiungiSeManca('ricette', 'attiva', 'INTEGER DEFAULT 1');
   await aggiungiSeManca('produzioni', 'nome', 'TEXT');
@@ -310,20 +311,20 @@ export const salvaProdotto = (p) => {
         `UPDATE prodotti SET denominazione=?, categoria=?, fornitore_abituale_id=?,
          unita_misura=?, barcode_ean=?, allergeni=?, conservazione=?, temp_min=?,
          temp_max=?, shelf_life_giorni=?, giorni_dopo_apertura=?, origine=?, note=?,
-         allergeni_verificati=1
+         foto_etichetta=?, allergeni_verificati=1
          WHERE id=?`,
         [p.denominazione, p.categoria, p.fornitore_abituale_id, p.unita_misura,
          p.barcode_ean, allergeni, p.conservazione, p.temp_min, p.temp_max,
-         p.shelf_life_giorni, p.giorni_dopo_apertura, p.origine, p.note, p.id]
+         p.shelf_life_giorni, p.giorni_dopo_apertura, p.origine, p.note, p.foto_etichetta || null, p.id]
       )
     : exec(
         `INSERT INTO prodotti (denominazione, categoria, fornitore_abituale_id,
          unita_misura, barcode_ean, allergeni, conservazione, temp_min, temp_max,
-         shelf_life_giorni, giorni_dopo_apertura, origine, note, allergeni_verificati)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,1)`,
+         shelf_life_giorni, giorni_dopo_apertura, origine, note, foto_etichetta, allergeni_verificati)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)`,
         [p.denominazione, p.categoria, p.fornitore_abituale_id, p.unita_misura,
          p.barcode_ean, allergeni, p.conservazione, p.temp_min, p.temp_max,
-         p.shelf_life_giorni, p.giorni_dopo_apertura, p.origine, p.note]
+         p.shelf_life_giorni, p.giorni_dopo_apertura, p.origine, p.note, p.foto_etichetta || null]
       );
 };
 
@@ -869,6 +870,12 @@ export async function importaFattura(imp) {
           [riga.nuovo_prodotto, fornitoreId, riga.unita_misura, riga.origine || null, '[]']);
         prodottoId = r.lastInsertRowId;
       }
+      if (riga.foto_etichetta) {
+        const p = await queryOne('SELECT foto_etichetta FROM prodotti WHERE id = ?', [prodottoId]);
+        if (p && !p.foto_etichetta) {
+          await exec('UPDATE prodotti SET foto_etichetta = ? WHERE id = ?', [riga.foto_etichetta, prodottoId]);
+        }
+      }
       await exec(
         `INSERT INTO abbinamenti_articoli (fornitore_id, chiave, descrizione, prodotto_id)
          VALUES (?,?,?,?)
@@ -1041,15 +1048,18 @@ export async function impostaFotoLotto(lottoId, campo, uri) {
      VALUES ('lotti', ?, ?, ?, ?, ?)`, [lottoId, new Date().toISOString(), campo, l.foto, uri]);
 }
 
-/** Tutte le foto collegate ai lotti (per backup e recupero). */
+/** Tutte le foto archiviate (lotti e schede prodotto), per backup e recupero. */
 export const fotoDeiLotti = () =>
   query(`SELECT id, 'foto_etichetta' AS campo, foto_etichetta AS uri FROM lotti WHERE foto_etichetta IS NOT NULL
          UNION ALL
-         SELECT id, 'foto_ddt' AS campo, foto_ddt AS uri FROM lotti WHERE foto_ddt IS NOT NULL`);
+         SELECT id, 'foto_ddt' AS campo, foto_ddt AS uri FROM lotti WHERE foto_ddt IS NOT NULL
+         UNION ALL
+         SELECT id, 'foto_prodotto' AS campo, foto_etichetta AS uri FROM prodotti WHERE foto_etichetta IS NOT NULL`);
 
 export async function aggiornaIndirizzoFoto(vecchio, nuovo) {
   await exec('UPDATE lotti SET foto_etichetta = ? WHERE foto_etichetta = ?', [nuovo, vecchio]);
   await exec('UPDATE lotti SET foto_ddt = ? WHERE foto_ddt = ?', [nuovo, vecchio]);
+  await exec('UPDATE prodotti SET foto_etichetta = ? WHERE foto_etichetta = ?', [nuovo, vecchio]);
 }
 
 /* ---------- allergeni ---------- */
@@ -1150,5 +1160,17 @@ export async function impattoLotto(lottoId) {
     : [];
   const usato = Math.round((l.quantita_iniziale - l.quantita_residua) * 1000) / 1000;
   return { lotto: l, piatti, stessaPartita, usato };
+}
+
+/**
+ * Foto dell'etichetta sulla scheda del prodotto.
+ * Con soloSeMancante = true (ricevimento e import fattura) non sovrascrive una foto già scelta.
+ */
+export async function impostaFotoProdotto(prodottoId, uri, soloSeMancante = false) {
+  if (!prodottoId || !uri) return false;
+  const p = await queryOne('SELECT foto_etichetta FROM prodotti WHERE id = ?', [prodottoId]);
+  if (!p || (soloSeMancante && p.foto_etichetta)) return false;
+  await exec('UPDATE prodotti SET foto_etichetta = ? WHERE id = ?', [uri, prodottoId]);
+  return true;
 }
 

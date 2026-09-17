@@ -81,7 +81,7 @@ export default function RicetteScreen() {
 
   return (
     <View style={S.screen}>
-      <ScrollView contentContainerStyle={S.content}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={S.content}>
         <Text style={S.h1}>Ricette</Text>
         <Text style={[S.muted, { marginBottom: 12 }]}>
           Gli allergeni della ricetta si calcolano da soli dagli ingredienti del catalogo.

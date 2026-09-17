@@ -233,7 +233,7 @@ export default function MagazzinoScreen({ navigation }) {
           onChangeText={setCerca} placeholderTextColor="#9CA3AF" />
       </View>
 
-      <ScrollView contentContainerStyle={S.content}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={S.content}>
         {bloccati.length > 0 && (
           <View style={[S.card, { backgroundColor: COLORS.dangerSoft, borderColor: COLORS.danger }]}>
             <Text style={{ color: COLORS.danger, fontWeight: '800', fontSize: 16 }}>

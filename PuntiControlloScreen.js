@@ -52,7 +52,7 @@ export default function PuntiControlloScreen() {
 
   return (
     <View style={S.screen}>
-      <ScrollView contentContainerStyle={S.content}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={S.content}>
         <Text style={[S.muted, { marginBottom: 12 }]}>
           Qui inserisci i tuoi frigoriferi, congelatori e celle con i relativi limiti di
           temperatura. Ogni giorno l'app ti chiederà una rilevazione per ciascuno.

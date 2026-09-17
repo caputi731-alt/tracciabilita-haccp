@@ -4,7 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, UNITA, isoDaCampo } from './theme';
 import { Campo, Chips, Selettore, Scanner, Bottone, useFoto, AnteprimaFoto } from './UI';
 import {
-  listaFornitori, listaProdotti, prodottoDaBarcode, registraCarico,
+  listaFornitori, listaProdotti, prodottoDaBarcode, registraCarico, impostaFotoProdotto,
 } from './database';
 
 const oggi = () => new Date().toISOString().slice(0, 10);
@@ -53,6 +53,7 @@ export default function RicevimentoScreen({ navigation }) {
 
     const nonConforme = !f.integrita_imballo || !f.conformita_etichettatura;
 
+    if (f.foto_etichetta) await impostaFotoProdotto(f.prodotto_id, f.foto_etichetta, true);
     await registraCarico({
       ...f,
       quantita: Number(String(f.quantita).replace(',', '.')),

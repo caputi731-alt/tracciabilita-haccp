@@ -110,7 +110,7 @@ export default function ProduzioniScreen() {
 
   return (
     <View style={S.screen}>
-      <ScrollView contentContainerStyle={S.content}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={S.content}>
         <Text style={S.h1}>Produzioni</Text>
         <Text style={[S.muted, { marginBottom: 12 }]}>
           Registra un piatto preparato: scegli la ricetta, indica i lotti usati e l'app li

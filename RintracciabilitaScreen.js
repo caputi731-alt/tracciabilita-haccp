@@ -125,7 +125,7 @@ export default function RintracciabilitaScreen({ route }) {
           value={cerca} onChangeText={setCerca} placeholderTextColor="#9CA3AF" />
       </View>
 
-      <ScrollView contentContainerStyle={S.content}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={S.content}>
         {lotti.length === 0 && (
           <Text style={S.empty}>Nessun lotto trovato.</Text>
         )}
