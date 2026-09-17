@@ -71,7 +71,7 @@ export function analizzaFattura(pagine, pivaPropria = '') {
     if (a) {
       ultimo = {
         codice: a[1], descrizione: a[2].trim(), confezione: Number(a[3]),
-        unita_misura: UM[a[4].toUpperCase()] || 'pz', colli: Number(a[5]),
+        unita_misura: UM[a[4].toUpperCase()] || 'pz', um_fattura: a[4].toUpperCase(), colli: Number(a[5]),
         quantita: numeroIt(a[6]), prezzo_unitario: numeroIt(a[7]), importo: numeroIt(a[8]),
         iva: Number(a[9]), lotto: null, origine: null, scadenza: null,
       };
@@ -104,7 +104,7 @@ export function analizzaFattura(pagine, pivaPropria = '') {
       if (!g || /totale|imponibile|iva\s+\d/i.test(riga)) continue;
       articoli.push({
         codice: g[1] || null, descrizione: g[2].trim(), confezione: null,
-        unita_misura: UM[g[3].toUpperCase()] || 'pz', colli: null,
+        unita_misura: UM[g[3].toUpperCase()] || 'pz', um_fattura: g[3].toUpperCase(), colli: null,
         quantita: numeroIt(g[4]), prezzo_unitario: numeroIt(g[5]), importo: numeroIt(g[6]),
         iva: g[7] ? Number(g[7]) : null, lotto: null, origine: null, scadenza: null,
       });

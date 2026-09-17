@@ -1,12 +1,12 @@
 import React, { useState, useCallback } from 'react';
 import {
-  View, Text, ScrollView, Alert, Switch, TouchableOpacity, ActivityIndicator,
+  View, Text, ScrollView, Alert, Switch, TouchableOpacity, ActivityIndicator, TextInput,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import * as FileSystem from 'expo-file-system';
 import * as DocumentPicker from 'expo-document-picker';
-import { S, COLORS } from './theme';
-import { Campo, Selettore, Bottone } from './UI';
+import { S, COLORS, UNITA } from './theme';
+import { Campo, Selettore, Bottone, Chips } from './UI';
 import { base64ToBytes, estraiTestoPdf } from './letturaPdf';
 import { analizzaFattura, chiaveArticolo, nomeProdottoProposto } from './fattura';
 import {
@@ -92,7 +92,8 @@ export default function ImportaFatturaScreen({ navigation }) {
         return {
           key: String(i), chiave, includi: true, descrizione: a.descrizione,
           prodotto_id: abbinati[chiave] || null, nuovo_prodotto: nomeProdottoProposto(a.descrizione),
-          quantitaTesto: numTesto(a.quantita), unita_misura: a.unita_misura, colliTesto: a.colli ? String(a.colli) : '',
+          quantitaTesto: numTesto(a.quantita), unita_misura: a.unita_misura,
+          rigaFattura: `${numTesto(a.quantita)} ${a.um_fattura || ''}${a.colli ? ` · colli ${a.colli}` : ''}${a.confezione ? ` · conf. ${a.confezione}` : ''}`, colliTesto: a.colli ? String(a.colli) : '',
           prezzo_unitario: a.prezzo_unitario, importo: a.importo, origine: a.origine,
           numero_lotto: a.lotto || '', scadenzaTesto: testoDaIso(a.scadenza),
           lottoDaFattura: !!a.lotto, note,
@@ -329,6 +330,7 @@ export default function ImportaFatturaScreen({ navigation }) {
             {espansa && (
               <View style={{ marginTop: 8 }}>
                 <Text style={[S.muted, { fontStyle: 'italic' }]}>In fattura: {r.descrizione}</Text>
+                <Text style={[S.muted, { fontStyle: 'italic' }]}>Qtà {r.rigaFattura}</Text>
                 <Selettore label="Prodotto in anagrafica" elementi={prodotti} valore={r.prodotto_id}
                   etichetta={(p) => p.denominazione} onChange={aggiorna(r.key, 'prodotto_id')}
                   placeholder="Crea nuovo prodotto (tocca per abbinarne uno)" />
@@ -343,15 +345,28 @@ export default function ImportaFatturaScreen({ navigation }) {
                     onChange={aggiorna(r.key, 'nuovo_prodotto')} />
                 )}
                 <View style={{ flexDirection: 'row', gap: 10 }}>
-                  <View style={{ flex: 1 }}>
-                    <Campo label={`Quantità (${r.unita_misura})`} value={r.quantitaTesto}
-                      keyboardType="decimal-pad" onChange={aggiorna(r.key, 'quantitaTesto')} />
+                  <View style={{ flex: 1.4 }}>
+                    <Text style={S.label}>Quantità</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'stretch' }}>
+                      <TextInput style={[S.input, { flex: 1, borderTopRightRadius: 0, borderBottomRightRadius: 0 }]}
+                        value={r.quantitaTesto} keyboardType="decimal-pad"
+                        onChangeText={aggiorna(r.key, 'quantitaTesto')} />
+                      <View style={{
+                        justifyContent: 'center', paddingHorizontal: 12, backgroundColor: COLORS.primarySoft,
+                        borderWidth: 1, borderLeftWidth: 0, borderColor: COLORS.border,
+                        borderTopRightRadius: 12, borderBottomRightRadius: 12,
+                      }}>
+                        <Text style={{ fontSize: 16, fontWeight: '800', color: COLORS.primaryDark }}>{r.unita_misura}</Text>
+                      </View>
+                    </View>
                   </View>
                   <View style={{ flex: 1 }}>
                     <Campo label="Colli" value={r.colliTesto}
                       keyboardType="number-pad" onChange={aggiorna(r.key, 'colliTesto')} />
                   </View>
                 </View>
+                <Chips label="Unità di misura" opzioni={UNITA} valore={r.unita_misura}
+                  onChange={aggiorna(r.key, 'unita_misura')} />
                 <Campo label="Scadenza / TMC" value={r.scadenzaTesto} placeholder="gg/mm/aaaa"
                   onChange={aggiorna(r.key, 'scadenzaTesto')} />
                 <Campo label={r.lottoDaFattura ? 'Lotto (letto dalla fattura)' : 'Lotto'}
