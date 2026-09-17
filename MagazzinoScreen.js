@@ -63,7 +63,7 @@ export default function MagazzinoScreen() {
               style={[S.card, { borderLeftWidth: 4, borderLeftColor: colore(l) }]}>
               <Text style={{ fontSize: 16, fontWeight: '700' }}>{l.prodotto}</Text>
               <Text style={S.muted}>
-                {l.quantita_residua} {l.unita_misura} · lotto {l.numero_lotto || '—'}
+                {l.quantita_residua} {l.unita_misura}{l.colli ? ` (ricevuti ${l.quantita_iniziale} ${l.unita_misura} in ${l.colli} ${l.colli === 1 ? 'collo' : 'colli'})` : ''} · lotto {l.numero_lotto || '—'}
               </Text>
               <Text style={S.muted}>{l.fornitore} · DDT {l.ddt_numero || '—'}</Text>
               <Text style={{ marginTop: 4, color: colore(l), fontWeight: '600' }}>

@@ -86,12 +86,13 @@ export default function ImportaFatturaScreen({ navigation }) {
         const note = [
           f.numero ? `Da fattura n. ${f.numero}` : 'Da fattura PDF',
           a.codice ? `cod. art. ${a.codice}` : null,
+          a.confezione ? `conf. fornitore ${a.confezione}` : null,
           a.origine ? `origine ${a.origine}` : null,
         ].filter(Boolean).join(' · ');
         return {
           key: String(i), chiave, includi: true, descrizione: a.descrizione,
           prodotto_id: abbinati[chiave] || null, nuovo_prodotto: nomeProdottoProposto(a.descrizione),
-          quantitaTesto: numTesto(a.quantita), unita_misura: a.unita_misura,
+          quantitaTesto: numTesto(a.quantita), unita_misura: a.unita_misura, colliTesto: a.colli ? String(a.colli) : '',
           prezzo_unitario: a.prezzo_unitario, importo: a.importo, origine: a.origine,
           numero_lotto: a.lotto || '', scadenzaTesto: testoDaIso(a.scadenza),
           lottoDaFattura: !!a.lotto, note,
@@ -134,12 +135,16 @@ export default function ImportaFatturaScreen({ navigation }) {
       if (!q || q <= 0) return Alert.alert('Quantità non valida', `Controlla la quantità di: ${r.descrizione}`);
       const sc = isoDaTesto(r.scadenzaTesto);
       if (sc === undefined) return Alert.alert('Scadenza non valida', `Scrivi la scadenza di "${r.descrizione}" come gg/mm/aaaa.`);
+      const colli = r.colliTesto === '' ? null : aNumero(r.colliTesto);
+      if (colli !== null && (!Number.isInteger(colli) || colli <= 0)) {
+        return Alert.alert('Colli non validi', `Controlla il numero di colli di: ${r.descrizione}`);
+      }
       if (!r.prodotto_id && !r.nuovo_prodotto.trim()) {
         return Alert.alert('Prodotto mancante', `Abbina o dai un nome al prodotto: ${r.descrizione}`);
       }
       righeFinali.push({
         chiave: r.chiave, descrizione: r.descrizione, prodotto_id: r.prodotto_id,
-        nuovo_prodotto: r.nuovo_prodotto.trim(), quantita: q, unita_misura: r.unita_misura,
+        nuovo_prodotto: r.nuovo_prodotto.trim(), quantita: q, unita_misura: r.unita_misura, colli,
         prezzo_unitario: r.prezzo_unitario, origine: r.origine,
         numero_lotto: r.numero_lotto.trim() || `FT ${doc.numero || ''} ${doc.dataTesto}`.trim(),
         data_scadenza: sc, note: r.note,
@@ -306,7 +311,7 @@ export default function ImportaFatturaScreen({ navigation }) {
                     {prodotto ? prodotto.denominazione : r.nuovo_prodotto}
                   </Text>
                   <Text style={S.muted}>
-                    {r.quantitaTesto} {r.unita_misura} · {euro(r.importo)}
+                    {r.quantitaTesto} {r.unita_misura}{r.colliTesto ? ` in ${r.colliTesto} ${r.colliTesto === '1' ? 'collo' : 'colli'}` : ''} · {euro(r.importo)}
                     {r.numero_lotto ? ` · lotto ${r.numero_lotto}` : ''}
                     {r.scadenzaTesto ? ` · scad. ${r.scadenzaTesto}` : ''}
                   </Text>
@@ -343,10 +348,12 @@ export default function ImportaFatturaScreen({ navigation }) {
                       keyboardType="decimal-pad" onChange={aggiorna(r.key, 'quantitaTesto')} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Campo label="Scadenza / TMC" value={r.scadenzaTesto} placeholder="gg/mm/aaaa"
-                      onChange={aggiorna(r.key, 'scadenzaTesto')} />
+                    <Campo label="Colli" value={r.colliTesto}
+                      keyboardType="number-pad" onChange={aggiorna(r.key, 'colliTesto')} />
                   </View>
                 </View>
+                <Campo label="Scadenza / TMC" value={r.scadenzaTesto} placeholder="gg/mm/aaaa"
+                  onChange={aggiorna(r.key, 'scadenzaTesto')} />
                 <Campo label={r.lottoDaFattura ? 'Lotto (letto dalla fattura)' : 'Lotto'}
                   value={r.numero_lotto} onChange={aggiorna(r.key, 'numero_lotto')}
                   placeholder={`Se vuoto: FT ${doc.numero} ${doc.dataTesto}`} />

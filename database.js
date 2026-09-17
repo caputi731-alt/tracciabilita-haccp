@@ -242,6 +242,14 @@ export async function initDatabase() {
     }
   } catch (e) {}
 
+  // migrazione leggera: numero di colli ricevuti per lotto
+  try {
+    const colsLotti = await d.getAllAsync('PRAGMA table_info(lotti)');
+    if (!colsLotti.some((c) => c.name === 'colli')) {
+      await d.execAsync('ALTER TABLE lotti ADD COLUMN colli INTEGER');
+    }
+  } catch (e) {}
+
   return d;
 }
 
@@ -343,13 +351,13 @@ export async function registraCarico(l) {
     `INSERT INTO lotti (prodotto_id, fornitore_id, numero_lotto, ddt_numero, ddt_data,
      data_ricevimento, quantita_iniziale, quantita_residua, unita_misura, data_scadenza,
      tipo_scadenza, temperatura_rilevata, esito_controllo, integrita_imballo,
-     conformita_etichettatura, foto_etichetta, foto_ddt, prezzo_unitario, note)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+     conformita_etichettatura, foto_etichetta, foto_ddt, prezzo_unitario, note, colli)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [l.prodotto_id, l.fornitore_id, l.numero_lotto, l.ddt_numero, l.ddt_data,
      l.data_ricevimento, l.quantita, l.quantita, l.unita_misura, l.data_scadenza,
      l.tipo_scadenza || 'scadenza', l.temperatura_rilevata, l.esito_controllo || 'conforme',
      l.integrita_imballo ? 1 : 0, l.conformita_etichettatura ? 1 : 0,
-     l.foto_etichetta, l.foto_ddt, l.prezzo_unitario, l.note]
+     l.foto_etichetta, l.foto_ddt, l.prezzo_unitario, l.note, l.colli || null]
   );
   const lottoId = res.lastInsertRowId;
   await exec(
@@ -829,7 +837,7 @@ export async function importaFattura(imp) {
       await registraCarico({
         prodotto_id: prodottoId, fornitore_id: fornitoreId,
         numero_lotto: riga.numero_lotto, ddt_numero: imp.numero, ddt_data: imp.data,
-        data_ricevimento: adesso, quantita: riga.quantita, unita_misura: riga.unita_misura,
+        data_ricevimento: adesso, quantita: riga.quantita, unita_misura: riga.unita_misura, colli: riga.colli,
         data_scadenza: riga.data_scadenza || null, temperatura_rilevata: imp.temperatura,
         esito_controllo: imp.non_conforme ? 'non conforme' : 'conforme',
         integrita_imballo: imp.integrita_imballo, conformita_etichettatura: imp.conformita_etichettatura,

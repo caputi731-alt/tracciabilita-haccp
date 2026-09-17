@@ -12,7 +12,7 @@ const oggi = () => new Date().toISOString().slice(0, 10);
 
 const VUOTO = {
   fornitore_id: null, ddt_numero: '', ddt_data: oggi(), prodotto_id: null,
-  numero_lotto: '', quantita: '', unita_misura: 'kg', data_scadenza: '',
+  numero_lotto: '', quantita: '', colli: '', unita_misura: 'kg', data_scadenza: '',
   temperatura_rilevata: '', integrita_imballo: true, conformita_etichettatura: true,
   prezzo_unitario: '', note: '', foto_ddt: null, foto_etichetta: null,
 };
@@ -79,7 +79,8 @@ export default function RicevimentoScreen({ navigation }) {
 
     await registraCarico({
       ...f,
-      quantita: Number(f.quantita),
+      quantita: Number(String(f.quantita).replace(',', '.')),
+      colli: f.colli ? parseInt(f.colli, 10) || null : null,
       temperatura_rilevata: f.temperatura_rilevata === '' ? null : Number(f.temperatura_rilevata),
       prezzo_unitario: f.prezzo_unitario === '' ? null : Number(f.prezzo_unitario),
       data_scadenza: f.data_scadenza || null,
@@ -131,6 +132,8 @@ export default function RicevimentoScreen({ navigation }) {
         <Campo label="Quantità *" value={f.quantita} onChange={set('quantita')}
           keyboardType="numeric" />
         <Chips label="Unità" opzioni={UNITA} valore={f.unita_misura} onChange={set('unita_misura')} />
+        <Campo label="Colli (facoltativo)" value={f.colli} onChange={set('colli')}
+          keyboardType="number-pad" placeholder="numero di confezioni/casse ricevute" />
         <Campo label="Data di scadenza / TMC" value={f.data_scadenza}
           onChange={set('data_scadenza')} placeholder="AAAA-MM-GG" />
         <Campo label="Prezzo unitario (€)" value={f.prezzo_unitario}
