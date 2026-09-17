@@ -106,6 +106,8 @@ jobs:
           "$APKSIGNER" verify --print-certs dist/*.apk | grep -E "Signer #1 certificate (DN|SHA-256)" | tee firma.txt || echo "Impossibile leggere la firma (non bloccante)"
 
       - name: Pubblica l'APK come Release (download diretto dal telefono)
+        id: release
+        continue-on-error: true
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
@@ -115,6 +117,23 @@ jobs:
             ${{ github.event.head_commit.message }}
           files: dist/*.apk
           make_latest: true
+
+      - name: Riprova la pubblicazione se l'upload non è riuscito
+        if: steps.release.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: build-${{ github.run_number }}
+        run: |
+          gh release create "$TAG" --title "Build ${{ github.run_number }}" --notes "Commit: ${{ github.sha }}" || true
+          for tentativo in 1 2 3; do
+            if gh release upload "$TAG" dist/*.apk --clobber; then
+              echo "APK pubblicato al tentativo $tentativo"
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "Pubblicazione della Release non riuscita: l'APK resta disponibile come artifact."
+          exit 1
 
       - name: Conserva anche l'artifact (backup)
         uses: actions/upload-artifact@v4
