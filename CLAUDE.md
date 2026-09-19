@@ -55,3 +55,4 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
 - Schema: una sola definizione per tabella in `initDatabase`; le colonne nuove si aggiungono con `aggiungiSeManca`.
 - Contenuto di una modale: sempre dentro `VistaModale` (UI.js), non uno `ScrollView` figlio diretto di `<Modal>` (su Android non scorrerebbe fino al primo nuovo layout).
 - Struttura schermate: Magazzino contiene anche la rintracciabilità (modalità "In giacenza" / "Tutti i lotti"); la rotta `Rintracciabilita` punta a MagazzinoScreen per compatibilità. `CaricoMerce` è l'ingresso unico verso ImportaFattura e Ricevimento. PDF del lotto in `schedaLotto.js`.
+- Anagrafiche (Prodotti/Fornitori/Ricette/Frigoriferi) e Documenti e dati (Registri PDF/Backup) sono contenitori a linguette: le schermate interne restano file separati e si aprono anche da rotta diretta con `{ scheda: '...' }`.

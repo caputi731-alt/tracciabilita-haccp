@@ -18,15 +18,6 @@ const SEZIONI = [
     ],
   },
   {
-    titolo: 'Anagrafiche',
-    voci: [
-      { titolo: 'Prodotti', rotta: 'Prodotti', desc: 'Catalogo e allergeni', c: COLORS.accent },
-      { titolo: 'Fornitori', rotta: 'Fornitori', desc: 'Anagrafica fornitori', c: COLORS.accent },
-      { titolo: 'Ricette', rotta: 'Ricette', desc: 'Ingredienti e allergeni calcolati', c: COLORS.accent },
-      { titolo: 'Frigoriferi', rotta: 'PuntiControllo', desc: 'Punti di controllo e limiti', c: COLORS.accent },
-    ],
-  },
-  {
     titolo: 'Registri HACCP',
     voci: [
       { titolo: 'Temperature', rotta: 'Temperature', desc: 'Registro giornaliero', c: COLORS.warning },
@@ -35,11 +26,11 @@ const SEZIONI = [
     ],
   },
   {
-    titolo: 'Tracciabilità e documenti',
+    titolo: 'Archivio e documenti',
     voci: [
-      { titolo: 'Report ASL', rotta: 'Report', desc: 'Registri PDF stampabili', c: COLORS.primaryDark },
+      { titolo: 'Anagrafiche', rotta: 'Anagrafiche', desc: 'Prodotti, fornitori, ricette, frigoriferi', c: COLORS.accent },
       { titolo: 'Etichette', rotta: 'Etichette', desc: 'Apertura, congelamento, produzione', c: COLORS.primaryDark },
-      { titolo: 'Backup e dati', rotta: 'Backup', desc: 'Salvataggio, ripristino, export', c: COLORS.primaryDark },
+      { titolo: 'Documenti e dati', rotta: 'Documenti', desc: 'Registri PDF, dati attività e backup', c: COLORS.primaryDark },
     ],
   },
 ];
@@ -119,7 +110,9 @@ export default function HomeScreen({ navigation }) {
           testo={puntiTot === 0 ? 'Nessun frigorifero configurato'
             : tempOk ? `Registrate tutte (${tempFatte}/${puntiTot})`
             : `Mancano ${puntiTot - tempFatte} su ${puntiTot}`}
-          onPress={() => navigation.navigate(puntiTot === 0 ? 'PuntiControllo' : 'Temperature')} />
+          onPress={() => (puntiTot === 0
+            ? navigation.navigate('Anagrafiche', { scheda: 'Frigoriferi' })
+            : navigation.navigate('Temperature'))} />
         <RigaStato
           colore={pulizie.totali === 0 ? COLORS.muted : pulizieOk ? COLORS.ok : COLORS.warning}
           titolo="Pulizie giornaliere"
@@ -139,7 +132,7 @@ export default function HomeScreen({ navigation }) {
             testo={!backup.cartella ? 'Attivalo: se il telefono si rompe perdi tutti i registri'
               : backup.errore ? 'Controlla la cartella dei backup'
               : backup.giorni === null ? 'Nessun backup ancora eseguito' : `Ultimo backup ${backup.giorni} giorni fa`}
-            onPress={() => navigation.navigate('Backup')} />
+            onPress={() => navigation.navigate('Documenti', { scheda: 'Backup e dati' })} />
         )}
         {bloccati > 0 && (
           <RigaStato colore={COLORS.danger}
@@ -151,7 +144,7 @@ export default function HomeScreen({ navigation }) {
           <RigaStato colore={COLORS.warning}
             titolo={`${daCompletare} prodott${daCompletare > 1 ? 'i' : 'o'} da completare`}
             testo="Allergeni e conservazione da verificare sull'etichetta"
-            onPress={() => navigation.navigate('Prodotti')} />
+            onPress={() => navigation.navigate('Anagrafiche', { scheda: 'Prodotti' })} />
         )}
         {ncAperte > 0 && (
           <RigaStato colore={COLORS.danger}

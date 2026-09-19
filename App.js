@@ -13,6 +13,8 @@ import ProdottiScreen from './ProdottiScreen';
 import RicevimentoScreen from './RicevimentoScreen';
 import ImportaFatturaScreen from './ImportaFatturaScreen';
 import CaricoMerceScreen from './CaricoMerceScreen';
+import AnagraficheScreen from './AnagraficheScreen';
+import DocumentiScreen from './DocumentiScreen';
 import MagazzinoScreen from './MagazzinoScreen';
 import PuntiControlloScreen from './PuntiControlloScreen';
 import TemperatureScreen from './TemperatureScreen';
@@ -74,6 +76,8 @@ export default function App() {
         <Stack.Screen name="Ricevimento" component={RicevimentoScreen} options={{ title: 'Carico a mano' }} />
         <Stack.Screen name="ImportaFattura" component={ImportaFatturaScreen} options={{ title: 'Importa fattura PDF' }} />
         <Stack.Screen name="Magazzino" component={MagazzinoScreen} options={{ title: 'Magazzino e lotti' }} />
+        <Stack.Screen name="Anagrafiche" component={AnagraficheScreen} options={{ title: 'Anagrafiche' }} />
+        <Stack.Screen name="Documenti" component={DocumentiScreen} options={{ title: 'Documenti e dati' }} />
         <Stack.Screen name="Prodotti" component={ProdottiScreen} options={{ title: 'Prodotti' }} />
         <Stack.Screen name="Fornitori" component={FornitoriScreen} options={{ title: 'Fornitori' }} />
         <Stack.Screen name="PuntiControlloScreen" component={PuntiControlloScreen} options={{ title: 'Frigoriferi' }} />
