@@ -6,8 +6,17 @@ import {
   Campo, Bottone, Chips, ModaleModifica, useAvviso, conferma, useFoto, AnteprimaFoto, VistaModale,
 } from './UI';
 import {
-  listaLotti, registraScarico, query, correggiRecord, correggiUscita, annullaCarico, impostaFotoLotto, lottiBloccati,
+  listaLotti, registraScarico, query, correggiRecord, correggiUscita, annullaCarico, impostaFotoLotto,
+  lottiBloccati, cercaLotti, movimentiDiLotto, produzioniDaLotto, impattoLotto, bloccaLotto, sbloccaLotto,
+  getImpostazioni,
 } from './database';
+import { stampaSchedaLotto } from './schedaLotto';
+
+const MOTIVI = ['Richiamo del fornitore', 'Allerta sanitaria', 'Sospetta non conformità'];
+
+const coloreStato = (stato) =>
+  (stato === 'disponibile' ? COLORS.ok
+    : stato === 'bloccato' || stato === 'scartato' ? COLORS.danger : COLORS.muted);
 
 const fmtQ = (n) => (n === null || n === undefined ? '—'
   : (Math.round(Number(n) * 1000) / 1000).toLocaleString('it-IT'));
@@ -53,9 +62,14 @@ const fifo = (a, b) => {
   return (a.data_ricevimento || '') < (b.data_ricevimento || '') ? -1 : 1;
 };
 
-export default function MagazzinoScreen({ navigation }) {
+export default function MagazzinoScreen({ route }) {
   const [lotti, setLotti] = useState([]);
+  const [tutti, setTutti] = useState([]);
+  const [modo, setModo] = useState('In giacenza');
   const [bloccati, setBloccati] = useState([]);
+  const [produzioni, setProduzioni] = useState([]);
+  const [impatto, setImpatto] = useState(null);
+  const [azione, setAzione] = useState(null); // { tipo: 'blocca' | 'sblocca', lotti: [id], testo }
   const [cerca, setCerca] = useState('');
   const [aperti, setAperti] = useState({});
   const [sel, setSel] = useState(null);           // lotto aperto nel dettaglio
@@ -67,7 +81,11 @@ export default function MagazzinoScreen({ navigation }) {
   const { avviso, mostra } = useAvviso();
   const { chiediFoto, fotocamera } = useFoto();
 
-  const ricarica = useCallback(() => { listaLotti(cerca).then(setLotti); lottiBloccati().then(setBloccati); }, [cerca]);
+  const ricarica = useCallback(() => {
+    listaLotti(cerca).then(setLotti);
+    cercaLotti(cerca).then(setTutti);
+    lottiBloccati().then(setBloccati);
+  }, [cerca]);
   useFocusEffect(ricarica);
   React.useEffect(() => { ricarica(); }, [cerca]);
 
@@ -88,13 +106,51 @@ export default function MagazzinoScreen({ navigation }) {
 
   const apriLotto = async (l) => {
     setSel(l);
-    setStorico(await query('SELECT * FROM movimenti WHERE lotto_id = ? ORDER BY data_ora DESC', [l.id]));
+    setStorico(await movimentiDiLotto(l.id));
+    setProduzioni(await produzioniDaLotto(l.id));
+    setImpatto(await impattoLotto(l.id));
   };
   const ricaricaLotto = async (id) => {
-    const nuovi = await listaLotti(cerca);
-    setLotti(nuovi);
-    const l = nuovi.find((x) => x.id === id);
+    ricarica();
+    const l = (await cercaLotti('')).find((x) => x.id === id);
     if (l) await apriLotto(l); else setSel(null);
+  };
+
+  // apertura diretta di un lotto (es. dal riquadro dei lotti bloccati o da un'altra schermata)
+  React.useEffect(() => {
+    const id = route?.params?.lottoId;
+    if (!id) return;
+    (async () => {
+      const l = (await cercaLotti('')).find((x) => x.id === id);
+      if (l) {
+        await apriLotto(l);
+        if (route.params.blocca && l.stato !== 'bloccato') setAzione({ tipo: 'blocca', lotti: [l.id], testo: '' });
+      }
+    })();
+  }, [route?.params?.lottoId]);
+
+  const confermaAzione = async () => {
+    try {
+      if (azione.tipo === 'blocca') {
+        for (const id of azione.lotti) await bloccaLotto(id, azione.testo);
+        mostra(azione.lotti.length > 1 ? `${azione.lotti.length} lotti bloccati ✓` : 'Lotto bloccato ✓ Non conformità aperta');
+      } else {
+        await sbloccaLotto(azione.lotti[0], azione.testo);
+        mostra('Lotto sbloccato ✓');
+      }
+      setAzione(null);
+      await ricaricaLotto(sel.id);
+    } catch (e) {
+      Alert.alert('Operazione non riuscita', String(e?.message || e));
+    }
+  };
+
+  const schedaPdf = async () => {
+    try {
+      await stampaSchedaLotto({ lotto: sel, movimenti: storico, produzioni, impatto }, await getImpostazioni());
+    } catch (e) {
+      Alert.alert('Stampa non riuscita', String(e?.message || e));
+    }
   };
 
   /* --- uscite: su un gruppo si scarica in ordine FIFO, anche su più lotti --- */
@@ -229,8 +285,9 @@ export default function MagazzinoScreen({ navigation }) {
   return (
     <View style={S.screen}>
       <View style={{ padding: 16, paddingBottom: 0 }}>
-        <TextInput style={S.input} placeholder="Cerca prodotto o lotto…" value={cerca}
+        <TextInput style={S.input} placeholder="Cerca prodotto, lotto o fornitore…" value={cerca}
           onChangeText={setCerca} placeholderTextColor="#9CA3AF" />
+        <Chips opzioni={['In giacenza', 'Tutti i lotti']} valore={modo} onChange={setModo} />
       </View>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={S.content}>
@@ -240,8 +297,7 @@ export default function MagazzinoScreen({ navigation }) {
               🚫 {bloccati.length} lott{bloccati.length > 1 ? 'i bloccati' : 'o bloccato'}: da tenere separat{bloccati.length > 1 ? 'i' : 'o'}
             </Text>
             {bloccati.map((l) => (
-              <TouchableOpacity key={l.id} style={{ paddingVertical: 8 }}
-                onPress={() => navigation.navigate('Rintracciabilita', { lottoId: l.id })}>
+              <TouchableOpacity key={l.id} style={{ paddingVertical: 8 }} onPress={() => apriLotto(l)}>
                 <Text style={{ fontWeight: '700', color: COLORS.text }}>
                   {l.prodotto} · lotto {l.numero_lotto || '—'} · {fmtQ(l.quantita_residua)} {l.unita_misura}
                 </Text>
@@ -250,9 +306,39 @@ export default function MagazzinoScreen({ navigation }) {
             ))}
           </View>
         )}
-        {gruppi.length === 0 && <Text style={S.empty}>Nessun prodotto in magazzino.</Text>}
+        {modo === 'Tutti i lotti' && (
+          <>
+            <Text style={[S.muted, { marginBottom: 6 }]}>
+              Storico completo, anche lotti esauriti, bloccati o annullati: qui trovi la rintracciabilità di ogni partita.
+            </Text>
+            {tutti.length === 0 && <Text style={S.empty}>Nessun lotto trovato.</Text>}
+            {tutti.map((l) => (
+              <TouchableOpacity key={l.id} style={[S.card, { borderLeftWidth: 4, borderLeftColor: coloreStato(l.stato) }]}
+                onPress={() => apriLotto(l)} activeOpacity={0.7}>
+                <View style={S.row}>
+                  <Text style={{ fontSize: 16, fontWeight: '800', color: COLORS.text, flex: 1, paddingRight: 8 }}>
+                    {l.prodotto}
+                  </Text>
+                  <Text style={{ fontWeight: '700', color: COLORS.text }}>
+                    {fmtQ(l.quantita_residua)} / {fmtQ(l.quantita_iniziale)} {l.unita_misura}
+                  </Text>
+                </View>
+                <Text style={S.muted}>
+                  Lotto {l.numero_lotto || '—'} · {l.fornitore} · ricevuto {fmtData(l.data_ricevimento)}
+                </Text>
+                <Text style={{ color: coloreStato(l.stato), fontWeight: l.stato === 'bloccato' ? '800' : '600' }}>
+                  {l.stato === 'bloccato' ? '🚫 BLOCCATO' : l.stato} · {testoScadenza(l.data_scadenza)}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </>
+        )}
 
-        {gruppi.map((g) => {
+        {modo === 'In giacenza' && gruppi.length === 0 && (
+          <Text style={S.empty}>Nessun prodotto in magazzino.</Text>
+        )}
+
+        {modo === 'In giacenza' && gruppi.map((g) => {
           const primo = g.lotti[0];
           const aperto = !!aperti[g.chiave];
           return (
@@ -345,8 +431,57 @@ export default function MagazzinoScreen({ navigation }) {
               <Bottone testo="Scarica da questo lotto"
                 onPress={() => setUscita({ lotto: sel, qta: '', causale: 'consumo' })} />
 
-              <Bottone testo="🚫 Blocca lotto (richiamo)" ghost colore={COLORS.danger}
-                onPress={() => { const id = sel.id; setSel(null); navigation.navigate('Rintracciabilita', { lottoId: id, blocca: true }); }} />
+              {sel.stato === 'bloccato' && (
+                <View style={[S.card, { backgroundColor: COLORS.dangerSoft, borderColor: COLORS.danger }]}>
+                  <Text style={{ color: COLORS.danger, fontWeight: '800', fontSize: 17 }}>🚫 Lotto bloccato</Text>
+                  <Text style={{ color: COLORS.text, marginTop: 4 }}>
+                    Non è utilizzabile né nelle produzioni. Tienilo separato e identificato finché il
+                    fornitore o l'autorità non indicano cosa fare.
+                  </Text>
+                </View>
+              )}
+
+              <Text style={[S.h2, { marginTop: 16 }]}>Impiego e richiamo</Text>
+              <Riquadro>
+                {impatto && (
+                  <>
+                    <Text style={{ color: COLORS.text }}>
+                      Usati {fmtQ(impatto.usato)} {sel.unita_misura} su {fmtQ(sel.quantita_iniziale)} · in magazzino {fmtQ(sel.quantita_residua)} {sel.unita_misura}
+                    </Text>
+                    {produzioni.length ? produzioni.map((pr) => (
+                      <Text key={pr.id} style={S.muted}>
+                        • {fmtData(pr.data_ora)} · {pr.nome} · lotto {pr.lotto_produzione || '—'} · {pr.quantita_usata} {sel.unita_misura}
+                      </Text>
+                    )) : <Text style={S.muted}>Non risulta impiegato in produzioni.</Text>}
+                    {impatto.stessaPartita.length > 0 && (
+                      <View style={{ marginTop: 10, borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 8 }}>
+                        <Text style={{ fontWeight: '700', color: COLORS.warning }}>
+                          Stesso numero di lotto ricevuto altre {impatto.stessaPartita.length} volte:
+                        </Text>
+                        {impatto.stessaPartita.map((x) => (
+                          <Text key={x.id} style={S.muted}>
+                            • {fmtData(x.data_ricevimento)} · {x.fornitore} · residuo {fmtQ(x.quantita_residua)} {x.unita_misura} · {x.stato}
+                          </Text>
+                        ))}
+                      </View>
+                    )}
+                    {sel.stato === 'bloccato' ? (
+                      <Bottone testo="Sblocca dopo la verifica" ghost
+                        onPress={() => setAzione({ tipo: 'sblocca', lotti: [sel.id], testo: '' })} />
+                    ) : sel.stato !== 'annullato' && (
+                      <Bottone testo={impatto.stessaPartita.some((x) => x.stato !== 'bloccato')
+                        ? '🚫 Blocca questo lotto e gli altri con lo stesso numero' : '🚫 Blocca lotto (richiamo)'}
+                        colore={COLORS.danger}
+                        onPress={() => setAzione({
+                          tipo: 'blocca', testo: '',
+                          lotti: [sel.id, ...impatto.stessaPartita.filter((x) => x.stato !== 'bloccato').map((x) => x.id)],
+                        })} />
+                    )}
+                  </>
+                )}
+                <Bottone testo={sel.stato === 'bloccato' ? 'Rapporto di richiamo PDF' : 'Scheda PDF per ASL'}
+                  ghost onPress={schedaPdf} />
+              </Riquadro>
 
               <Text style={[S.h2, { marginTop: 20 }]}>Movimenti</Text>
               <Riquadro>
@@ -390,6 +525,34 @@ export default function MagazzinoScreen({ navigation }) {
               </View>
             </Modal>
             {modaleUscita}
+            <Modal visible={!!azione} transparent animationType="fade" onRequestClose={() => setAzione(null)}>
+              {azione && (
+                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', padding: 20 }}>
+                  <View style={S.card}>
+                    <Text style={S.h2}>
+                      {azione.tipo === 'blocca'
+                        ? (azione.lotti.length > 1 ? `Blocca ${azione.lotti.length} lotti` : 'Blocca lotto')
+                        : 'Sblocca lotto'}
+                    </Text>
+                    {azione.tipo === 'blocca' && (
+                      <Chips label="Motivo" opzioni={MOTIVI} valore={azione.testo}
+                        onChange={(v) => setAzione((a) => ({ ...a, testo: v }))} />
+                    )}
+                    <Campo label={azione.tipo === 'blocca' ? 'Dettagli (n. avviso, comunicazione…)' : 'Esito della verifica *'}
+                      value={azione.testo} multiline
+                      onChange={(v) => setAzione((a) => ({ ...a, testo: v }))} />
+                    <Text style={[S.muted, { marginTop: 8 }]}>
+                      {azione.tipo === 'blocca'
+                        ? 'Il lotto esce dalla merce utilizzabile e si apre una non conformità.'
+                        : 'Il lotto torna utilizzabile. La non conformità resta da chiudere con l\'azione correttiva.'}
+                    </Text>
+                    <Bottone testo={azione.tipo === 'blocca' ? 'Conferma blocco' : 'Conferma sblocco'}
+                      colore={azione.tipo === 'blocca' ? COLORS.danger : undefined} onPress={confermaAzione} />
+                    <Bottone testo="Annulla" ghost onPress={() => setAzione(null)} />
+                  </View>
+                </View>
+              )}
+            </Modal>
             {fotocamera}
             {avviso}
           </View>

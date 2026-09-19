@@ -12,12 +12,12 @@ import FornitoriScreen from './FornitoriScreen';
 import ProdottiScreen from './ProdottiScreen';
 import RicevimentoScreen from './RicevimentoScreen';
 import ImportaFatturaScreen from './ImportaFatturaScreen';
+import CaricoMerceScreen from './CaricoMerceScreen';
 import MagazzinoScreen from './MagazzinoScreen';
 import PuntiControlloScreen from './PuntiControlloScreen';
 import TemperatureScreen from './TemperatureScreen';
 import EtichetteScreen from './EtichetteScreen';
 import BackupScreen from './BackupScreen';
-import RintracciabilitaScreen from './RintracciabilitaScreen';
 import ReportScreen from './ReportScreen';
 import SanificazioneScreen from './SanificazioneScreen';
 import NonConformitaScreen from './NonConformitaScreen';
@@ -70,9 +70,10 @@ export default function App() {
         }}
       >
         <Stack.Screen name="Home" component={HomeScreen} options={{ title: 'Tracciabilità HACCP' }} />
-        <Stack.Screen name="Ricevimento" component={RicevimentoScreen} options={{ title: 'Ricevimento merce' }} />
+        <Stack.Screen name="CaricoMerce" component={CaricoMerceScreen} options={{ title: 'Carico merce' }} />
+        <Stack.Screen name="Ricevimento" component={RicevimentoScreen} options={{ title: 'Carico a mano' }} />
         <Stack.Screen name="ImportaFattura" component={ImportaFatturaScreen} options={{ title: 'Importa fattura PDF' }} />
-        <Stack.Screen name="Magazzino" component={MagazzinoScreen} options={{ title: 'Magazzino' }} />
+        <Stack.Screen name="Magazzino" component={MagazzinoScreen} options={{ title: 'Magazzino e lotti' }} />
         <Stack.Screen name="Prodotti" component={ProdottiScreen} options={{ title: 'Prodotti' }} />
         <Stack.Screen name="Fornitori" component={FornitoriScreen} options={{ title: 'Fornitori' }} />
         <Stack.Screen name="PuntiControlloScreen" component={PuntiControlloScreen} options={{ title: 'Frigoriferi' }} />
@@ -80,7 +81,8 @@ export default function App() {
         <Stack.Screen name="Temperature" component={TemperatureScreen} options={{ title: 'Temperature' }} />
         <Stack.Screen name="Etichette" component={EtichetteScreen} options={{ title: 'Etichette' }} />
         <Stack.Screen name="Backup" component={BackupScreen} options={{ title: 'Backup e dati' }} />
-        <Stack.Screen name="Rintracciabilita" component={RintracciabilitaScreen} options={{ title: 'Rintracciabilità' }} />
+        {/* la rintracciabilità vive dentro il magazzino: la rotta resta per i collegamenti esistenti */}
+        <Stack.Screen name="Rintracciabilita" component={MagazzinoScreen} options={{ title: 'Magazzino e lotti' }} />
         <Stack.Screen name="Report" component={ReportScreen} options={{ title: 'Report ASL' }} />
         <Stack.Screen name="Sanificazione" component={SanificazioneScreen} options={{ title: 'Sanificazione' }} />
         <Stack.Screen name="NonConformita" component={NonConformitaScreen} options={{ title: 'Non conformità' }} />

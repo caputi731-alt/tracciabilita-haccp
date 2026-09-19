@@ -54,3 +54,4 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
 - Allergeni: `prodotti.allergeni_verificati` (1 quando il prodotto è salvato dall'anagrafica, 0 se creato dalle fatture). `tabellaAllergeni()` + `htmlTabellaAllergeni()` per il documento clienti.
 - Schema: una sola definizione per tabella in `initDatabase`; le colonne nuove si aggiungono con `aggiungiSeManca`.
 - Contenuto di una modale: sempre dentro `VistaModale` (UI.js), non uno `ScrollView` figlio diretto di `<Modal>` (su Android non scorrerebbe fino al primo nuovo layout).
+- Struttura schermate: Magazzino contiene anche la rintracciabilità (modalità "In giacenza" / "Tutti i lotti"); la rotta `Rintracciabilita` punta a MagazzinoScreen per compatibilità. `CaricoMerce` è l'ingresso unico verso ImportaFattura e Ricevimento. PDF del lotto in `schedaLotto.js`.

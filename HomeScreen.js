@@ -12,9 +12,8 @@ const SEZIONI = [
   {
     titolo: 'Operativo',
     voci: [
-      { titolo: 'Importa fattura PDF', rotta: 'ImportaFattura', desc: 'Carica in magazzino tutte le righe di una fattura', c: COLORS.primary },
-      { titolo: 'Ricevi merce', rotta: 'Ricevimento', desc: 'Carico manuale di un singolo prodotto', c: COLORS.primary },
-      { titolo: 'Magazzino', rotta: 'Magazzino', desc: 'Lotti disponibili e scarichi', c: COLORS.primary },
+      { titolo: 'Carico merce', rotta: 'CaricoMerce', desc: 'Da fattura PDF o a mano', c: COLORS.primary },
+      { titolo: 'Magazzino e lotti', rotta: 'Magazzino', desc: 'Giacenze, scarichi, storico lotti e richiami', c: COLORS.primary },
       { titolo: 'Produzioni', rotta: 'Produzioni', desc: 'Prepara un piatto e collega i lotti', c: COLORS.primary },
     ],
   },
@@ -38,7 +37,6 @@ const SEZIONI = [
   {
     titolo: 'Tracciabilità e documenti',
     voci: [
-      { titolo: 'Rintracciabilità', rotta: 'Rintracciabilita', desc: 'Cerca un lotto e la sua storia', c: COLORS.primaryDark },
       { titolo: 'Report ASL', rotta: 'Report', desc: 'Registri PDF stampabili', c: COLORS.primaryDark },
       { titolo: 'Etichette', rotta: 'Etichette', desc: 'Apertura, congelamento, produzione', c: COLORS.primaryDark },
       { titolo: 'Backup e dati', rotta: 'Backup', desc: 'Salvataggio, ripristino, export', c: COLORS.primaryDark },
@@ -47,7 +45,7 @@ const SEZIONI = [
 ];
 
 const AZIONI = [
-  { titolo: 'Importa fattura', sotto: 'PDF → magazzino', rotta: 'ImportaFattura', icona: '📄' },
+  { titolo: 'Carico merce', sotto: 'Fattura PDF o a mano', rotta: 'CaricoMerce', icona: '📄' },
   { titolo: 'Temperature', sotto: 'Frigoriferi', rotta: 'Temperature', icona: '🌡️' },
   { titolo: 'Scarica merce', sotto: 'Magazzino', rotta: 'Magazzino', icona: '📦' },
   { titolo: 'Pulizie', sotto: 'Sanificazione', rotta: 'Sanificazione', icona: '🧽' },
