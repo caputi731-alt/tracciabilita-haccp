@@ -3,11 +3,10 @@ import { View, Text, ScrollView, TouchableOpacity, Modal, Alert } from 'react-na
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, fmtData, fmtDataOra } from './theme';
 import {
-  Campo, Selettore, Bottone, ModaleModifica, useAvviso, VistaModale, useErrori,
+  Campo, Selettore, Bottone, ModaleModifica, useAvviso, VistaModale, useErrori, Vuoto,
 } from './UI';
 import {
-  listaRicette, getRicetta, listaProduzioni, getProduzione,
-  lottiDisponibiliProdotto, registraProduzione, correggiRecord,
+  listaRicette, getRicetta, listaProduzioni, getProduzione, lottiDisponibiliProdotto, registraProduzione, correggiRecord, allergeniRicetta,
 } from './database';
 
 const CAMPI_PRODUZIONE = [
@@ -25,7 +24,7 @@ const lottoAuto = () => {
   return `P${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
 };
 
-export default function ProduzioniScreen() {
+export default function ProduzioniScreen({ navigation }) {
   const [ricette, setRicette] = useState([]);
   const [produzioni, setProduzioni] = useState([]);
   const [nuova, setNuova] = useState(false);
@@ -121,7 +120,10 @@ export default function ProduzioniScreen() {
           scarica dal magazzino, creando il legame lotto → piatto.
         </Text>
 
-        {produzioni.length === 0 && <Text style={S.empty}>Nessuna produzione registrata.</Text>}
+        {produzioni.length === 0 && (
+          <Vuoto icona="pot-steam-outline" titolo="Nessuna produzione"
+            testo="Registra un piatto preparato: l'app scarica gli ingredienti dal magazzino e ne tiene la rintracciabilità." />
+        )}
         {produzioni.map((pr) => (
           <TouchableOpacity key={pr.id} style={S.card} onPress={() => apriDettaglio(pr)}>
             <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.text }}>{pr.nome}</Text>
@@ -196,6 +198,17 @@ export default function ProduzioniScreen() {
               <TouchableOpacity onPress={() => setModifica(true)}>
                 <Text style={{ color: COLORS.azione, fontWeight: '800', marginTop: 10, fontSize: 15 }}>✎ Modifica dati</Text>
               </TouchableOpacity>
+              <Bottone testo="Stampa etichetta" icona="label-outline" ghost onPress={async () => {
+                const d = dettaglio;
+                const allergeni = d.ricetta_id ? await allergeniRicetta(d.ricetta_id) : [];
+                setDettaglio(null);
+                navigation.navigate('Etichette', {
+                  precompila: {
+                    tipo: 'Produzione', nome: d.nome, lotto: d.lotto_produzione || '',
+                    scadenza: d.data_scadenza || '', allergeni,
+                  },
+                });
+              }} />
               <Text style={[S.muted, { marginTop: 4 }]}>I lotti impiegati non si modificano da qui: sono già stati scaricati.</Text>
             </View>
 

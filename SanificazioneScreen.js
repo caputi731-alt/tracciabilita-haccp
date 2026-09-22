@@ -3,7 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, Modal, Alert } from 'react-na
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, fmtDataOra } from './theme';
 import {
-  Campo, Chips, Bottone, conferma, ModaleModifica, useAvviso, VistaModale, useErrori,
+  Campo, Chips, Bottone, conferma, ModaleModifica, useAvviso, VistaModale, useErrori, Vuoto, Icona,
 } from './UI';
 import {
   listaAree, salvaArea, eliminaArea,
@@ -24,7 +24,8 @@ export default function SanificazioneScreen() {
   const [oggi, setOggi] = useState([]);
   const [recenti, setRecenti] = useState([]);
   const [formArea, setFormArea] = useState(null);
-  const [reg, setReg] = useState(null); // area su cui registrare la pulizia
+  const [reg, setReg] = useState(null); // area su cui registrare la pulizia, oppure { multi: true, aree }
+  const [selezione, setSelezione] = useState(null); // null = modalità normale; array di id in selezione multipla
   const [inModifica, setInModifica] = useState(null);
   const { avviso, mostra } = useAvviso();
   const { errori, segnala, azzera, riepilogo } = useErrori();
@@ -60,15 +61,39 @@ export default function SanificazioneScreen() {
     setNote('');
   };
   const salvaReg = async () => {
-    const id = await registraSanificazione({
-      area_id: reg.id, prodotto_utilizzato: prodotto, operatore, note, esito: 'conforme',
-    });
+    const elenco = reg.multi ? reg.aree : [reg];
+    const ids = [];
+    for (const a of elenco) {
+      ids.push(await registraSanificazione({
+        area_id: a.id,
+        prodotto_utilizzato: reg.multi ? (prodotto || a.prodotto_previsto || '') : prodotto,
+        operatore, note, esito: 'conforme',
+      }));
+    }
     setReg(null);
+    setSelezione(null);
     ricarica();
-    mostra(`Salvato ✓ Pulizia: ${reg.nome}`, {
+    mostra(elenco.length > 1 ? `Salvate ${elenco.length} pulizie ✓` : `Salvato ✓ Pulizia: ${elenco[0].nome}`, {
       testo: 'Annulla',
-      onPress: async () => { await annullaSanificazione(id); ricarica(); mostra('Pulizia annullata'); },
+      onPress: async () => {
+        for (const id of ids) await annullaSanificazione(id);
+        ricarica();
+        mostra(ids.length > 1 ? 'Pulizie annullate' : 'Pulizia annullata');
+      },
     });
+  };
+
+  const toccaArea = (a) => {
+    if (!selezione) return apriReg(a);
+    setSelezione((sel) => (sel.includes(a.id) ? sel.filter((x) => x !== a.id) : [...sel, a.id]));
+  };
+  const registraSelezione = () => {
+    const scelte = aree.filter((a) => selezione.includes(a.id));
+    if (!scelte.length) return;
+    setReg({ multi: true, aree: scelte, nome: `${scelte.length} aree` });
+    setProdotto('');
+    setOperatore('');
+    setNote('');
   };
 
   const salvaCorrezione = async (cambi) => {
@@ -93,7 +118,29 @@ export default function SanificazioneScreen() {
         </Text>
 
         {aree.length === 0 && (
-          <Text style={S.empty}>Nessuna area. Aggiungine una col pulsante in basso.</Text>
+          <Vuoto icona="spray-bottle" titolo="Nessuna area da pulire"
+            testo="Aggiungi le aree della cucina (piani di lavoro, frigoriferi, pavimenti…) col pulsante in basso." />
+        )}
+
+        {aree.length > 1 && (
+          selezione ? (
+            <View style={[S.card, { backgroundColor: COLORS.azioneSoft || COLORS.primarySoft }]}>
+              <Text style={{ fontWeight: '800', fontSize: 16, color: COLORS.text }}>
+                Tocca le aree pulite ({selezione.length} scelte)
+              </Text>
+              <View style={[S.chipWrap, { marginTop: 8 }]}>
+                <TouchableOpacity style={S.chip}
+                  onPress={() => setSelezione(aree.filter((a) => !fattaOggi(a.id)).map((a) => a.id))}>
+                  <Text style={S.chipText}>Tutte quelle da fare</Text>
+                </TouchableOpacity>
+              </View>
+              <Bottone testo={`Registra ${selezione.length} pulizie`} icona="check-all" onPress={registraSelezione} />
+              <Bottone testo="Annulla selezione" ghost onPress={() => setSelezione(null)} />
+            </View>
+          ) : (
+            <Bottone testo="Registra più aree insieme" icona="checkbox-multiple-marked-outline" ghost
+              onPress={() => setSelezione([])} />
+          )
         )}
 
         {aree.map((a) => {
@@ -101,8 +148,16 @@ export default function SanificazioneScreen() {
           return (
             <TouchableOpacity key={a.id} style={[S.card, fatta && {
               borderLeftWidth: 4, borderLeftColor: COLORS.ok,
-            }]} onPress={() => apriReg(a)} onLongPress={() => setFormArea({ ...a })}>
-              <Text style={{ fontSize: 16, fontWeight: '700' }}>{a.nome}</Text>
+            }, selezione && selezione.includes(a.id) && {
+              borderWidth: 2, borderColor: COLORS.azione || COLORS.primary,
+            }]} onPress={() => toccaArea(a)} onLongPress={() => !selezione && setFormArea({ ...a })}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                {!!selezione && (
+                  <Icona nome={selezione.includes(a.id) ? 'checkbox-marked' : 'checkbox-blank-outline'}
+                    colore={COLORS.azione || COLORS.primary} size={26} style={{ marginRight: 10 }} />
+                )}
+                <Text style={{ fontSize: 16, fontWeight: '700', flex: 1 }}>{a.nome}</Text>
+              </View>
               <Text style={S.muted}>Frequenza: {a.frequenza}{a.prodotto_previsto ? ` · ${a.prodotto_previsto}` : ''}</Text>
               {fatta ? (
                 <Text style={{ color: COLORS.ok, fontWeight: '600', marginTop: 4 }}>
@@ -185,9 +240,12 @@ export default function SanificazioneScreen() {
         {reg && (
           <VistaModale>
             <Text style={S.h1}>Registra pulizia</Text>
-            <Text style={[S.muted, { marginBottom: 12 }]}>{reg.nome}</Text>
+            <Text style={[S.muted, { marginBottom: 12 }]}>
+              {reg.multi ? reg.aree.map((a) => a.nome).join(', ') : reg.nome}
+            </Text>
             <View style={S.card}>
-              <Campo label="Prodotto utilizzato" value={prodotto} onChange={setProdotto} />
+              <Campo label="Prodotto utilizzato" value={prodotto} onChange={setProdotto}
+                placeholder={reg.multi ? 'se vuoto: quello previsto per ogni area' : undefined} />
               <Campo label="Operatore" value={operatore} onChange={setOperatore} />
               <Campo label="Note" value={note} onChange={setNote} multiline />
               <Bottone testo="Conferma pulizia" onPress={salvaReg} />

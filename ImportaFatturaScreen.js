@@ -7,7 +7,7 @@ import * as FileSystem from 'expo-file-system';
 import * as DocumentPicker from 'expo-document-picker';
 import { S, COLORS, UNITA } from './theme';
 import {
-  Campo, Selettore, Bottone, Chips, useFoto, AnteprimaFoto, useErrori,
+  Campo, Selettore, Bottone, Chips, useFoto, AnteprimaFoto, useErrori, CampoData, Icona,
 } from './UI';
 import { base64ToBytes, estraiTestoPdf } from './letturaPdf';
 import { analizzaFattura, chiaveArticolo, nomeProdottoProposto } from './fattura';
@@ -33,6 +33,15 @@ const isoDaTesto = (t) => {
   return `${a}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
 };
 const testoDaIso = (iso) => (iso ? iso.split('-').reverse().join('/') : '');
+
+/** Scadenza proposta: data di arrivo + durata indicata nella scheda prodotto. */
+const scadenzaProposta = (prodotto, dataIso) => {
+  if (!prodotto || !prodotto.shelf_life_giorni) return '';
+  const d = new Date(`${(dataIso || new Date().toISOString()).slice(0, 10)}T12:00:00`);
+  d.setDate(d.getDate() + Number(prodotto.shelf_life_giorni));
+  return d.toISOString().slice(0, 10).split('-').reverse().join('/');
+};
+const eFreddo = (p) => !!p && (p.conservazione === 'refrigerato' || p.conservazione === 'congelato');
 
 export default function ImportaFatturaScreen({ navigation }) {
   const [fornitori, setFornitori] = useState([]);
@@ -99,7 +108,11 @@ export default function ImportaFatturaScreen({ navigation }) {
           quantitaTesto: numTesto(a.quantita), unita_misura: a.unita_misura,
           rigaFattura: `${numTesto(a.quantita)} ${a.um_fattura || ''}${a.colli ? ` · colli ${a.colli}` : ''}${a.confezione ? ` · conf. ${a.confezione}` : ''}`, colliTesto: a.colli ? String(a.colli) : '',
           prezzo_unitario: a.prezzo_unitario, importo: a.importo, origine: a.origine,
-          numero_lotto: a.lotto || '', scadenzaTesto: testoDaIso(a.scadenza),
+          numero_lotto: a.lotto || '',
+          scadenzaTesto: testoDaIso(a.scadenza)
+            || scadenzaProposta(prodotti.find((p) => p.id === abbinati[chiave]), f.data),
+          scadenzaAuto: !a.scadenza && !!scadenzaProposta(prodotti.find((p) => p.id === abbinati[chiave])),
+          temperaturaTesto: '',
           lottoDaFattura: !!a.lotto, note, foto_etichetta: null,
         };
       }));
@@ -164,6 +177,7 @@ export default function ImportaFatturaScreen({ navigation }) {
         nuovo_prodotto: r.nuovo_prodotto.trim(), quantita: q, unita_misura: r.unita_misura, colli,
         prezzo_unitario: r.prezzo_unitario, origine: r.origine,
         numero_lotto: r.numero_lotto.trim() || `FT ${doc.numero || ''} ${doc.dataTesto}`.trim(),
+        temperatura: r.temperaturaTesto === '' ? null : aNumero(r.temperaturaTesto),
         data_scadenza: sc, note: r.note, foto_etichetta: r.foto_etichetta,
       });
     }
@@ -245,8 +259,8 @@ export default function ImportaFatturaScreen({ navigation }) {
             <Campo label="Numero" value={doc.numero} onChange={(v) => setDoc((d) => ({ ...d, numero: v }))} />
           </View>
           <View style={{ flex: 1 }}>
-            <Campo label="Data" value={doc.dataTesto} placeholder="gg/mm/aaaa" errore={errori.data}
-              onChange={(v) => setDoc((d) => ({ ...d, dataTesto: v }))} />
+            <CampoData label="Data" value={isoDaTesto(doc.dataTesto) || null} errore={errori.data} facoltativo={false}
+              onChange={(iso) => setDoc((d) => ({ ...d, dataTesto: testoDaIso(iso) }))} />
           </View>
         </View>
 
@@ -332,7 +346,8 @@ export default function ImportaFatturaScreen({ navigation }) {
                     {r.quantitaTesto} {r.unita_misura}{r.colliTesto ? ` in ${r.colliTesto} ${r.colliTesto === '1' ? 'collo' : 'colli'}` : ''} · {euro(r.importo)}
                     {r.numero_lotto ? ` · lotto ${r.numero_lotto}` : ''}
                     {r.scadenzaTesto ? ` · scad. ${r.scadenzaTesto}` : ''}
-                    {r.foto_etichetta ? ' · 📷' : ''}
+                    {eFreddo(prodotti.find((p) => p.id === r.prodotto_id)) ? ' · da frigo' : ''}
+                    {r.foto_etichetta ? ' · con foto' : ''}
                   </Text>
                   {!r.prodotto_id && r.includi && (
                     <Text style={{ color: COLORS.warning, fontSize: 12, fontWeight: '700' }}>Nuovo prodotto</Text>
@@ -350,7 +365,13 @@ export default function ImportaFatturaScreen({ navigation }) {
                 <Text style={[S.muted, { fontStyle: 'italic' }]}>In fattura: {r.descrizione}</Text>
                 <Text style={[S.muted, { fontStyle: 'italic' }]}>Qtà {r.rigaFattura}</Text>
                 <Selettore label="Prodotto in anagrafica" elementi={prodotti} valore={r.prodotto_id}
-                  etichetta={(p) => p.denominazione} onChange={aggiorna(r.key, 'prodotto_id')}
+                  etichetta={(p) => p.denominazione}
+                  onChange={(id) => setRighe((rr) => rr.map((x) => {
+                    if (x.key !== r.key) return x;
+                    const prop = !x.scadenzaTesto || x.scadenzaAuto
+                      ? scadenzaProposta(prodotti.find((p) => p.id === id), new Date().toISOString()) : '';
+                    return prop ? { ...x, prodotto_id: id, scadenzaTesto: prop, scadenzaAuto: true } : { ...x, prodotto_id: id };
+                  }))}
                   placeholder="Crea nuovo prodotto (tocca per abbinarne uno)" />
                 {r.prodotto_id ? (
                   <TouchableOpacity onPress={() => aggiorna(r.key, 'prodotto_id')(null)}>
@@ -386,10 +407,18 @@ export default function ImportaFatturaScreen({ navigation }) {
                 </View>
                 <Chips label="Unità di misura" opzioni={UNITA} valore={r.unita_misura}
                   onChange={aggiorna(r.key, 'unita_misura')} />
-                <Campo label="Scadenza / TMC" value={r.scadenzaTesto} placeholder="gg/mm/aaaa" errore={r.errori?.scadenza}
-                  onChange={aggiorna(r.key, 'scadenzaTesto')} />
+                <CampoData label="Scadenza / TMC" value={isoDaTesto(r.scadenzaTesto) || null} errore={r.errori?.scadenza}
+                  nota={r.scadenzaAuto ? 'Proposta dalla durata indicata nella scheda prodotto: controlla l\'etichetta' : null}
+                  scorciatoie={[{ testo: '+3 gg', giorni: 3 }, { testo: '+7 gg', giorni: 7 }, { testo: '+30 gg', giorni: 30 }]}
+                  onChange={(iso) => setRighe((rr) => rr.map((x) => (x.key === r.key
+                    ? { ...x, scadenzaTesto: testoDaIso(iso), scadenzaAuto: false } : x)))} />
+                {(eFreddo(prodotti.find((p) => p.id === r.prodotto_id)) || !!r.temperaturaTesto) && (
+                  <Campo label="Temperatura di questo prodotto (°C)" value={r.temperaturaTesto}
+                    keyboardType="numbers-and-punctuation" placeholder="se diversa da quella generale"
+                    onChange={aggiorna(r.key, 'temperaturaTesto')} />
+                )}
                 <AnteprimaFoto uri={r.foto_etichetta} titolo="Foto etichetta" altezza={150} />
-                <Bottone testo={r.foto_etichetta ? '📷 Rifai foto etichetta' : "📷 Fotografa l'etichetta"} ghost
+                <Bottone testo={r.foto_etichetta ? 'Rifai foto etichetta' : "Fotografa l'etichetta"} icona="camera" ghost
                   onPress={() => chiediFoto('etichetta', aggiorna(r.key, 'foto_etichetta'))} />
                 <Campo label={r.lottoDaFattura ? 'Lotto (letto dalla fattura)' : 'Lotto'}
                   value={r.numero_lotto} onChange={aggiorna(r.key, 'numero_lotto')}

@@ -49,7 +49,8 @@ export async function stampa(html) {
 }
 
 /** Tabella allergeni dei piatti (Reg. UE 1169/2011), A4 orizzontale. */
-export function htmlTabellaAllergeni(piatti, imp = {}) {
+/** Corpo HTML della tabella allergeni (senza intestazione del documento). */
+export function corpoTabellaAllergeni(piatti) {
   const intest = ALLERGENI.map((a) => `<th class="rot"><div>${esc(a)}</div></th>`).join('');
   const righe = piatti.map((p) => `<tr>
       <td class="piatto">${esc(p.nome)}${p.categoria ? `<div class="cat">${esc(p.categoria)}</div>` : ''}</td>
@@ -76,7 +77,75 @@ export function htmlTabellaAllergeni(piatti, imp = {}) {
       Le preparazioni possono contenere tracce di altri allergeni per contaminazione crociata:
       chiedere sempre al personale.</div>
     ${avvisi}`;
-  return wrapDoc('Informazioni sugli allergeni dei piatti', corpo, imp);
+  return corpo;
+}
+
+/** Tabella allergeni dei piatti (Reg. UE 1169/2011), A4 orizzontale. */
+export function htmlTabellaAllergeni(piatti, imp = {}) {
+  return wrapDoc('Informazioni sugli allergeni dei piatti', corpoTabellaAllergeni(piatti), imp);
+}
+
+/* ---------- registri (corpo HTML, riusati nei singoli PDF e nel pacchetto ASL) ---------- */
+
+export const corpoTemperature = (righe) => `<table><thead><tr>
+  <th>Data e ora</th><th>Punto</th><th>Limiti</th><th>Rilevata</th><th>Esito</th></tr></thead><tbody>
+  ${righe.map((r) => `<tr>
+    <td>${fmtDataOra(r.data_ora)}</td><td>${esc(r.nome)}</td>
+    <td>${esc(r.temp_min)}/${esc(r.temp_max)} °C</td>
+    <td>${esc(r.temperatura)} °C</td>
+    <td class="${r.esito === 'conforme' ? 'ok' : 'nc'}">${esc(r.esito)}</td></tr>`).join('')
+  || '<tr><td colspan="5">Nessuna rilevazione nel periodo</td></tr>'}
+  </tbody></table>`;
+
+export const corpoCarichi = (righe) => `<table><thead><tr>
+  <th>Data</th><th>Prodotto</th><th>Fornitore</th><th>Lotto</th><th>DDT</th>
+  <th>Q.tà</th><th>Scad.</th><th>Temp.</th><th>Esito</th></tr></thead><tbody>
+  ${righe.map((r) => `<tr>
+    <td>${fmtData(r.data_ricevimento)}</td><td>${esc(r.prodotto)}</td>
+    <td>${esc(r.fornitore)}</td><td>${esc(r.numero_lotto)}</td><td>${esc(r.ddt_numero)}</td>
+    <td>${esc(r.quantita_iniziale)} ${esc(r.unita_misura)}${r.colli ? ` (${esc(r.colli)} colli)` : ''}</td>
+    <td>${fmtData(r.data_scadenza)}</td>
+    <td>${r.temperatura_rilevata === null || r.temperatura_rilevata === undefined ? '—' : `${esc(r.temperatura_rilevata)} °C`}</td>
+    <td class="${r.esito_controllo === 'conforme' ? 'ok' : 'nc'}">${esc(r.esito_controllo)}</td></tr>`).join('')
+  || '<tr><td colspan="9">Nessun carico nel periodo</td></tr>'}
+  </tbody></table>`;
+
+export const corpoSanificazione = (righe) => `<table><thead><tr>
+  <th>Data e ora</th><th>Area</th><th>Prodotto</th><th>Operatore</th><th>Esito</th></tr></thead><tbody>
+  ${righe.map((r) => `<tr>
+    <td>${fmtDataOra(r.data_ora)}</td><td>${esc(r.nome) || '—'}</td>
+    <td>${esc(r.prodotto_utilizzato) || '—'}</td><td>${esc(r.operatore) || '—'}</td>
+    <td class="${r.esito === 'conforme' ? 'ok' : 'nc'}">${esc(r.esito)}</td></tr>`).join('')
+  || '<tr><td colspan="5">Nessuna sanificazione nel periodo</td></tr>'}
+  </tbody></table>`;
+
+export const corpoNonConformita = (righe) => `<table><thead><tr>
+  <th>Data</th><th>Origine</th><th>Descrizione</th><th>Azione correttiva</th><th>Stato</th></tr></thead><tbody>
+  ${righe.map((r) => `<tr>
+    <td>${fmtDataOra(r.data_ora)}</td><td>${esc(r.origine)}</td>
+    <td>${esc(r.descrizione)}</td><td>${esc(r.azione_correttiva) || '—'}</td>
+    <td class="${r.stato === 'aperta' ? 'nc' : 'ok'}">${esc(r.stato)}</td></tr>`).join('')
+  || '<tr><td colspan="5">Nessuna non conformità</td></tr>'}
+  </tbody></table>`;
+
+/**
+ * Pacchetto per il controllo: tutti i registri del periodo in un unico PDF,
+ * ogni registro su una pagina nuova, con un indice in apertura.
+ */
+export function htmlPacchettoASL({ temperature, carichi, sanificazioni, nonConformita, piatti }, imp = {}, periodoTxt = '') {
+  const nc = nonConformita.filter((r) => r.stato === 'aperta').length;
+  const sezioni = [
+    ['Registro temperature', corpoTemperature(temperature), `${temperature.length} rilevazioni`],
+    ['Registro carichi merce', corpoCarichi(carichi), `${carichi.length} carichi`],
+    ['Registro sanificazione', corpoSanificazione(sanificazioni), `${sanificazioni.length} pulizie`],
+    ['Registro non conformità', corpoNonConformita(nonConformita), `${nonConformita.length} registrate, ${nc} aperte`],
+    ['Allergeni dei piatti', piatti.length ? corpoTabellaAllergeni(piatti) : '<p>Nessuna ricetta registrata.</p>', `${piatti.length} piatti`],
+  ];
+  const indice = `<h1>Contenuto</h1><table><tbody>${sezioni.map(([t, , n], i) =>
+    `<tr><td>${i + 1}. ${esc(t)}</td><td>${esc(n)}</td></tr>`).join('')}</tbody></table>`;
+  const corpo = indice + sezioni.map(([t, c]) =>
+    `<div style="page-break-before: always"></div><h1>${esc(t)}</h1>${c}`).join('');
+  return wrapDoc('Documentazione autocontrollo HACCP', corpo, imp, periodoTxt);
 }
 
 export { esc, fmtData, fmtDataOra };

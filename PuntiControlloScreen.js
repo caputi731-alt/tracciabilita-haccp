@@ -3,7 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, Modal, Alert } from 'react-na
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, TIPI_PUNTO } from './theme';
 import {
-  Campo, Chips, Bottone, conferma, VistaModale, useErrori,
+  Campo, Chips, Bottone, conferma, VistaModale, useErrori, Vuoto,
 } from './UI';
 import {
   listaPuntiControllo, salvaPuntoControllo, eliminaPuntoControllo,
@@ -64,7 +64,8 @@ export default function PuntiControlloScreen() {
         </Text>
 
         {punti.length === 0 && (
-          <Text style={S.empty}>Nessun punto di controllo configurato.</Text>
+          <Vuoto icona="fridge-outline" titolo="Nessun frigorifero"
+            testo="Aggiungi frigoriferi, congelatori e vetrine con i limiti di temperatura: servono per il registro giornaliero." />
         )}
 
         {punti.map((p) => (

@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, giorniAllaScadenza } from './theme';
+import { Icona } from './UI';
 import {
   lottiInScadenza, temperatureDiOggi, listaPuntiControllo, nonConformitaAperte,
   listaAree, sanificazioniOggi, prodottiDaCompletare, lottiBloccati,
@@ -36,10 +37,10 @@ const SEZIONI = [
 ];
 
 const AZIONI = [
-  { titolo: 'Carico merce', sotto: 'Fattura PDF o a mano', rotta: 'CaricoMerce', icona: '📄' },
-  { titolo: 'Temperature', sotto: 'Frigoriferi', rotta: 'Temperature', icona: '🌡️' },
-  { titolo: 'Scarica merce', sotto: 'Magazzino', rotta: 'Magazzino', icona: '📦' },
-  { titolo: 'Pulizie', sotto: 'Sanificazione', rotta: 'Sanificazione', icona: '🧽' },
+  { titolo: 'Carico merce', sotto: 'Fattura PDF o a mano', rotta: 'CaricoMerce', icona: 'truck-delivery-outline' },
+  { titolo: 'Temperature', sotto: 'Frigoriferi', rotta: 'Temperature', icona: 'thermometer' },
+  { titolo: 'Scarica merce', sotto: 'Magazzino', rotta: 'Magazzino', icona: 'package-variant-closed' },
+  { titolo: 'Pulizie', sotto: 'Sanificazione', rotta: 'Sanificazione', icona: 'spray-bottle' },
 ];
 
 function RigaStato({ colore, titolo, testo, onPress }) {
@@ -162,7 +163,7 @@ export default function HomeScreen({ navigation }) {
               width: '48.5%', backgroundColor: COLORS.azione, borderRadius: 16, paddingVertical: 18,
               paddingHorizontal: 14, marginBottom: 10, minHeight: 104, justifyContent: 'space-between', elevation: 3,
             }}>
-            <Text style={{ fontSize: 26 }}>{a.icona}</Text>
+            <Icona nome={a.icona} size={30} colore="#fff" />
             <View>
               <Text style={{ color: '#fff', fontSize: 17, fontWeight: '800' }}>{a.titolo}</Text>
               <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 13 }}>{a.sotto}</Text>

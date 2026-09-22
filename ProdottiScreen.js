@@ -3,7 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, Modal, Alert, TextInput } fro
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, ALLERGENI, CATEGORIE_PRODOTTO, CONSERVAZIONE, UNITA } from './theme';
 import {
-  Campo, Chips, Selettore, Scanner, Bottone, conferma, useFoto, AnteprimaFoto, VistaModale, useErrori,
+  Campo, Chips, Selettore, Scanner, Bottone, conferma, useFoto, AnteprimaFoto, VistaModale, useErrori, Icona, Vuoto, Caricamento,
 } from './UI';
 import {
   listaProdotti, salvaProdotto, eliminaProdotto, listaFornitori,
@@ -18,6 +18,7 @@ const VUOTO = {
 
 export default function ProdottiScreen() {
   const [prodotti, setProdotti] = useState([]);
+  const [caricato, setCaricato] = useState(false);
   const [fornitori, setFornitori] = useState([]);
   const [form, setForm] = useState(null);
   const [scanner, setScanner] = useState(false);
@@ -26,7 +27,7 @@ export default function ProdottiScreen() {
   const { chiediFoto, fotocamera } = useFoto();
 
   const ricarica = useCallback(() => {
-    listaProdotti().then(setProdotti);
+    listaProdotti().then((r) => { setProdotti(r); setCaricato(true); });
     listaFornitori().then(setFornitori);
   }, []);
   useFocusEffect(ricarica);
@@ -77,10 +78,10 @@ export default function ProdottiScreen() {
             </Text>
           </TouchableOpacity>
         )}
-        {filtrati.length === 0 && (
-          <Text style={S.empty}>
-            Nessun prodotto. Il catalogo si costruisce man mano che ricevi la merce.
-          </Text>
+        {!caricato && <Caricamento />}
+        {caricato && filtrati.length === 0 && (
+          <Vuoto icona="food-apple-outline" titolo={cerca ? 'Nessun prodotto trovato' : 'Catalogo vuoto'}
+            testo={cerca ? 'Prova con un\'altra parola.' : 'I prodotti si creano da soli importando una fattura, oppure aggiungili col pulsante in basso.'} />
         )}
         {filtrati.map((p) => {
           const all = JSON.parse(p.allergeni || '[]');
@@ -89,7 +90,7 @@ export default function ProdottiScreen() {
               onLongPress={() => elimina(p)}>
               <View style={S.row}>
                 <Text style={{ fontSize: 16, fontWeight: '700', flex: 1 }}>{p.denominazione}</Text>
-                {!!p.foto_etichetta && <Text style={{ fontSize: 16 }}>📷</Text>}
+                {!!p.foto_etichetta && <Icona nome="camera" size={20} colore={COLORS.muted} />}
               </View>
               <Text style={S.muted}>
                 {[p.categoria, p.fornitore, p.conservazione].filter(Boolean).join(' · ')}
@@ -162,7 +163,7 @@ export default function ProdottiScreen() {
             </Text>
 
             <AnteprimaFoto uri={form.foto_etichetta} titolo="Foto dell'etichetta" altezza={220} />
-            <Bottone testo={form.foto_etichetta ? "📷 Sostituisci foto dell'etichetta" : "📷 Fotografa l'etichetta"}
+            <Bottone icona="camera" testo={form.foto_etichetta ? "Sostituisci foto dell'etichetta" : "Fotografa l'etichetta"}
               ghost onPress={() => chiediFoto('etichetta', set('foto_etichetta'))} />
             {!!form.foto_etichetta && (
               <Bottone testo="Rimuovi foto" ghost colore={COLORS.danger}

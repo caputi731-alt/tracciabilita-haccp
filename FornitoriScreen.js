@@ -3,7 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, Modal, Alert } from 'react-na
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS } from './theme';
 import {
-  Campo, Bottone, conferma, VistaModale, useErrori,
+  Campo, Bottone, conferma, VistaModale, useErrori, Vuoto,
 } from './UI';
 import { listaFornitori, salvaFornitore, eliminaFornitore } from './database';
 
@@ -44,7 +44,8 @@ export default function FornitoriScreen() {
     <View style={S.screen}>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={S.content}>
         {fornitori.length === 0 && (
-          <Text style={S.empty}>Nessun fornitore. Aggiungine uno con il pulsante in basso.</Text>
+          <Vuoto icona="truck-outline" titolo="Nessun fornitore"
+            testo="Si creano da soli importando una fattura, oppure aggiungili col pulsante in basso." />
         )}
         {fornitori.map((f) => (
           <TouchableOpacity key={f.id} style={S.card} onLongPress={() => elimina(f)}

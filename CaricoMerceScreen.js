@@ -1,16 +1,16 @@
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { S, COLORS } from './theme';
-import { VistaModale } from './UI';
+import { VistaModale, Icona } from './UI';
 
 const SCELTE = [
   {
-    icona: '📄', titolo: 'Da fattura PDF', rotta: 'ImportaFattura',
+    icona: 'file-pdf-box', titolo: 'Da fattura PDF', rotta: 'ImportaFattura',
     desc: 'Scegli il PDF del fornitore: l\'app legge tutte le righe, tu controlli e carichi in un colpo solo.',
     consigliato: true,
   },
   {
-    icona: '✍️', titolo: 'A mano', rotta: 'Ricevimento',
+    icona: 'pencil-box-outline', titolo: 'A mano', rotta: 'Ricevimento',
     desc: 'Un prodotto alla volta, con foto dell\'etichetta e del documento. Per acquisti senza fattura in PDF.',
   },
 ];
@@ -25,7 +25,7 @@ export default function CaricoMerceScreen({ navigation }) {
         <TouchableOpacity key={s.rotta} activeOpacity={0.8} onPress={() => navigation.navigate(s.rotta)}
           style={[S.card, { borderLeftWidth: 5, borderLeftColor: s.consigliato ? COLORS.azione : COLORS.border }]}>
           <View style={S.row}>
-            <Text style={{ fontSize: 30, marginRight: 12 }}>{s.icona}</Text>
+            <Icona nome={s.icona} size={34} colore={s.consigliato ? COLORS.primary : COLORS.accent} style={{ marginRight: 12 }} />
             <View style={{ flex: 1 }}>
               <View style={S.row}>
                 <Text style={{ fontSize: 18, fontWeight: '800', color: COLORS.text }}>{s.titolo}</Text>

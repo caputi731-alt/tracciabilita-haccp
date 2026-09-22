@@ -128,7 +128,7 @@ function docTermica(etichetta, larghezzaMm) {
     <body><div class="wrap">${costruisciEtichetta(etichetta)}</div></body></html>`;
 }
 
-export default function EtichetteScreen() {
+export default function EtichetteScreen({ route }) {
   const [prodotti, setProdotti] = useState([]);
   const [tipo, setTipo] = useState('Produzione');
   const [formato, setFormato] = useState('Foglio A4');
@@ -159,6 +159,29 @@ export default function EtichetteScreen() {
       setScadenza(addGiorni(oggiISO(), p.giorni_dopo_apertura));
     }
   };
+
+  // precompilazione da lotto o produzione ("Stampa etichetta")
+  const precompila = route?.params?.precompila;
+  React.useEffect(() => {
+    if (!precompila) return;
+    const pr = precompila;
+    setTipo(pr.tipo || 'Produzione');
+    setProdottoId(pr.prodotto_id || null);
+    setNome(pr.nome || '');
+    setLotto(pr.lotto || '');
+    setDataRif(oggiISO());
+    setOra(oraNow());
+    const p = prodotti.find((x) => x.id === pr.prodotto_id);
+    let allerg = pr.allergeni;
+    if (!allerg && p) { try { allerg = JSON.parse(p.allergeni || '[]'); } catch (e) { allerg = []; } }
+    setAllergeni(allerg || []);
+    let sc = pr.scadenza || '';
+    if (pr.tipo === 'Apertura' && p && p.giorni_dopo_apertura != null) {
+      const dopoApertura = addGiorni(oggiISO(), p.giorni_dopo_apertura);
+      sc = sc && sc < dopoApertura ? sc : dopoApertura; // vale la data più vicina
+    }
+    setScadenza(sc);
+  }, [precompila, prodotti.length]);
 
   const snapshot = () => ({
     tipo, nome, dataRif, ora, scadenza, lotto, operatore, note,

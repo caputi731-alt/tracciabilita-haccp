@@ -3,7 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, Modal, Alert } from 'react-na
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, CATEGORIE_PRODOTTO, UNITA } from './theme';
 import {
-  Campo, Chips, Selettore, Bottone, conferma, VistaModale, useErrori,
+  Campo, Chips, Selettore, Bottone, conferma, VistaModale, useErrori, Vuoto,
 } from './UI';
 import {
   listaRicette, getRicetta, salvaRicetta, eliminaRicetta, listaProdotti, tabellaAllergeni, getImpostazioni,
@@ -92,7 +92,10 @@ export default function RicetteScreen() {
           Gli allergeni della ricetta si calcolano da soli dagli ingredienti del catalogo.
         </Text>
 
-        {ricette.length === 0 && <Text style={S.empty}>Nessuna ricetta. Creane una qui sotto.</Text>}
+        {ricette.length === 0 && (
+          <Vuoto icona="chef-hat" titolo="Nessuna ricetta"
+            testo="Con le ricette l'app calcola gli allergeni dei piatti e collega i lotti usati in ogni produzione." />
+        )}
         {ricette.map((r) => (
           <TouchableOpacity key={r.id} style={S.card} onPress={() => apri(r)} onLongPress={() => elimina(r)}>
             <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.text }}>{r.nome}</Text>

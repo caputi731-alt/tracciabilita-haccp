@@ -3,19 +3,20 @@ import { View, Text, ScrollView, TextInput, Alert, TouchableOpacity, Modal } fro
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, fmtDataOra } from './theme';
 import {
-  Bottone, useAvviso, Campo, useErrori,
+  Bottone, useAvviso, Campo, useErrori, Vuoto, Icona,
 } from './UI';
 import {
   listaPuntiControllo, registraTemperatura, temperatureDiOggi, query, modificaTemperatura, annullaTemperatura,
 } from './database';
 
-export default function TemperatureScreen() {
+export default function TemperatureScreen({ navigation }) {
   const [punti, setPunti] = useState([]);
   const [valori, setValori] = useState({});
   const [oggi, setOggi] = useState([]);
   const [storico, setStorico] = useState([]);
   const [inModifica, setInModifica] = useState(null);
   const [nuovoValore, setNuovoValore] = useState('');
+  const [sequenza, setSequenza] = useState(null); // { coda: [punti], i, valore, fatte, fuori }
   const { avviso, mostra } = useAvviso();
   const { errori, segnala, azzera } = useErrori();
 
@@ -30,6 +31,38 @@ export default function TemperatureScreen() {
     })();
   }, []);
   useFocusEffect(ricarica);
+
+  /* --- tutte le rilevazioni in sequenza: un numero, Avanti --- */
+  const avviaSequenza = () => {
+    const coda = punti.filter((p) => !fattoOggi(p.id));
+    if (coda.length) setSequenza({ coda, i: 0, valore: '', fatte: 0, fuori: [], errore: null });
+  };
+  const avantiSequenza = async (salta = false) => {
+    const sq = sequenza;
+    const punto = sq.coda[sq.i];
+    let { fatte, fuori } = sq;
+    if (!salta) {
+      const numero = Number(String(sq.valore).replace(',', '.').trim());
+      if (sq.valore === '' || Number.isNaN(numero)) {
+        return setSequenza({ ...sq, errore: 'Inserisci la temperatura, oppure tocca Salta' });
+      }
+      const r = await registraTemperatura(punto.id, numero, null);
+      fatte += 1;
+      if (!r.conforme) fuori = [...fuori, `${punto.nome} ${String(numero).replace('.', ',')}°C`];
+    }
+    if (sq.i + 1 < sq.coda.length) {
+      setSequenza({ ...sq, i: sq.i + 1, valore: '', fatte, fuori, errore: null });
+    } else {
+      setSequenza(null);
+      ricarica();
+      if (fuori.length) {
+        Alert.alert('Temperature fuori limite',
+          `${fuori.join(', ')}.\n\nÈ stata aperta una non conformità per ciascuna: annota l'azione correttiva.`);
+      } else {
+        mostra(`Salvate ${fatte} temperature ✓`);
+      }
+    }
+  };
 
   const registra = async (punto) => {
     const v = valori[punto.id];
@@ -85,9 +118,15 @@ export default function TemperatureScreen() {
       <Text style={[S.muted, { marginBottom: 16 }]}>Rilevazione giornaliera</Text>
 
       {punti.length === 0 && (
-        <Text style={S.empty}>
-          Configura prima i tuoi frigoriferi nella sezione "Frigoriferi".
-        </Text>
+        <Vuoto icona="fridge-outline" titolo="Nessun frigorifero configurato"
+          testo="Aggiungi frigoriferi e congelatori con i loro limiti di temperatura: poi le registrazioni si fanno da qui."
+          azione="Configura i frigoriferi"
+          onAzione={() => navigation.navigate('Anagrafiche', { scheda: 'Frigoriferi' })} />
+      )}
+
+      {punti.filter((p) => !fattoOggi(p.id)).length > 1 && (
+        <Bottone testo={`Registra tutti in sequenza (${punti.filter((p) => !fattoOggi(p.id)).length})`}
+          icona="playlist-check" onPress={avviaSequenza} />
       )}
 
       {punti.map((p) => {
@@ -174,7 +213,42 @@ export default function TemperatureScreen() {
         </View>
       </Modal>
     </ScrollView>
-    {avviso}
+    {sequenza && (() => {
+        const punto = sequenza.coda[sequenza.i];
+        return (
+          <Modal visible transparent animationType="fade" onRequestClose={() => { setSequenza(null); ricarica(); }}>
+            <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 18 }}>
+              <View style={S.card}>
+                <Text style={S.muted}>{sequenza.i + 1} di {sequenza.coda.length}</Text>
+                <Text style={{ fontSize: 22, fontWeight: '800', color: COLORS.text, marginTop: 2 }}>{punto.nome}</Text>
+                <Text style={S.muted}>Limiti {punto.temp_min}°C / {punto.temp_max}°C</Text>
+                <TextInput
+                  key={punto.id}
+                  style={[S.input, { fontSize: 32, textAlign: 'center', paddingVertical: 14, marginTop: 14 },
+                    sequenza.errore && S.inputErrore]}
+                  keyboardType="numbers-and-punctuation" autoFocus value={sequenza.valore}
+                  onChangeText={(v) => setSequenza((sq) => ({ ...sq, valore: v, errore: null }))}
+                  onSubmitEditing={() => avantiSequenza(false)} returnKeyType="next" placeholder="°C"
+                />
+                {(() => {
+                  const n = Number(String(sequenza.valore).replace(',', '.'));
+                  if (sequenza.valore === '' || Number.isNaN(n)) return null;
+                  if (n < punto.temp_min || n > punto.temp_max) {
+                    return <Text style={S.testoErrore}>Fuori dai limiti: verrà aperta una non conformità</Text>;
+                  }
+                  return <Text style={{ color: COLORS.ok, fontWeight: '700', marginTop: 5 }}>Nei limiti ✓</Text>;
+                })()}
+                {!!sequenza.errore && <Text style={S.testoErrore}>{sequenza.errore}</Text>}
+                <Bottone testo={sequenza.i + 1 < sequenza.coda.length ? 'Salva e avanti' : 'Salva e termina'}
+                  icona="check" onPress={() => avantiSequenza(false)} />
+                <Bottone testo="Salta questo" ghost onPress={() => avantiSequenza(true)} />
+                <Bottone testo="Interrompi" ghost onPress={() => { setSequenza(null); ricarica(); }} />
+              </View>
+            </View>
+          </Modal>
+        );
+      })()}
+      {avviso}
     </View>
   );
 }

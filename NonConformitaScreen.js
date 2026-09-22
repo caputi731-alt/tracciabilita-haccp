@@ -16,6 +16,25 @@ const CAMPI_NC = [
 
 const ORIGINI = ['temperatura', 'ricevimento', 'sanificazione', 'infestanti', 'altro'];
 
+/** Azioni correttive più frequenti, da toccare invece di scrivere (restano modificabili). */
+const AZIONI_SUGGERITE = {
+  temperatura: [
+    'Prodotti spostati in altro frigorifero', 'Temperatura ricontrollata dopo 30 minuti: rientrata',
+    'Chiamato il tecnico per la riparazione', 'Prodotti valutati ed eliminati',
+  ],
+  ricevimento: [
+    'Merce respinta al fornitore', 'Merce accettata con riserva e segnalata al fornitore',
+    'Prodotto eliminato', 'Fornitore contattato',
+  ],
+  richiamo: [
+    'Lotto ritirato e restituito al fornitore', 'Lotto distrutto', 'Verificato: lotto non coinvolto',
+    'Clienti informati secondo indicazioni ASL',
+  ],
+  sanificazione: ['Area ripulita e sanificata', 'Prodotto detergente sostituito', 'Personale richiamato alla procedura'],
+  infestanti: ['Chiamata la ditta di disinfestazione', 'Ingressi e aperture chiusi', 'Prodotti esposti eliminati'],
+  altro: ['Problema risolto e verificato', 'Personale informato'],
+};
+
 export default function NonConformitaScreen() {
   const [lista, setLista] = useState([]);
   const [sel, setSel] = useState(null);       // NC da chiudere
@@ -115,6 +134,15 @@ export default function NonConformitaScreen() {
               <Text style={{ fontSize: 15 }}>{sel.descrizione}</Text>
               <Text style={[S.muted, { marginTop: 4 }]}>Origine: {sel.origine}</Text>
               <Text style={[S.muted, { marginTop: 2 }]}>Aperta il {fmtDataOra(sel.data_ora)}</Text>
+            </View>
+            <Text style={S.label}>Azioni frequenti (tocca per inserire)</Text>
+            <View style={S.chipWrap}>
+              {(AZIONI_SUGGERITE[sel.origine] || AZIONI_SUGGERITE.altro).map((a) => (
+                <TouchableOpacity key={a} style={S.chip}
+                  onPress={() => setAzione((t) => (t && !t.includes(a) ? `${t}. ${a}` : a))}>
+                  <Text style={S.chipText}>{a}</Text>
+                </TouchableOpacity>
+              ))}
             </View>
             <Campo label="Azione correttiva adottata *" value={azione} onChange={setAzione} multiline
               errore={errori.azione}

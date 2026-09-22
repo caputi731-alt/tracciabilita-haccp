@@ -4,6 +4,7 @@ import {
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { rendiPermanente } from './foto';
 import { S, COLORS, dataPerCampo, isoDaCampo } from './theme';
 
@@ -225,14 +226,169 @@ export function Scanner({ visibile, onLetto, onChiudi }) {
   );
 }
 
-export function Bottone({ testo, onPress, ghost, colore }) {
+/** Icona vettoriale (set Material Community, incluso in Expo). */
+export function Icona({ nome, size = 22, colore = COLORS.text, style }) {
+  return <MaterialCommunityIcons name={nome} size={size} color={colore} style={style} />;
+}
+
+export function Bottone({ testo, onPress, ghost, colore, icona }) {
+  const coloreTesto = ghost ? (colore || COLORS.azione || COLORS.primary) : '#fff';
   return (
     <TouchableOpacity
-      style={[ghost ? S.btnGhost : S.btn, colore && !ghost && { backgroundColor: colore }]}
+      style={[ghost ? S.btnGhost : S.btn, colore && !ghost && { backgroundColor: colore },
+        colore && ghost && { borderColor: colore },
+        { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' }]}
       onPress={onPress}
     >
-      <Text style={ghost ? S.btnGhostText : S.btnText}>{testo}</Text>
+      {!!icona && <Icona nome={icona} size={20} colore={coloreTesto} style={{ marginRight: 8 }} />}
+      <Text style={[ghost ? S.btnGhostText : S.btnText, ghost && colore && { color: colore }]}>{testo}</Text>
     </TouchableOpacity>
+  );
+}
+
+/** Sezione con titolo che si apre e si chiude con un tocco. */
+export function Sezione({ titolo, icona, aperta = false, riassunto, children, colore }) {
+  const [open, setOpen] = useState(aperta);
+  React.useEffect(() => { if (aperta) setOpen(true); }, [aperta]);
+  return (
+    <View style={[S.card, { paddingVertical: 0 }]}>
+      <TouchableOpacity onPress={() => setOpen((v) => !v)} activeOpacity={0.7}
+        style={{ flexDirection: 'row', alignItems: 'center', minHeight: 56 }}>
+        {!!icona && <Icona nome={icona} colore={colore || COLORS.muted} style={{ marginRight: 10 }} />}
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 17, fontWeight: '800', color: colore || COLORS.text }}>{titolo}</Text>
+          {!open && !!riassunto && <Text style={S.muted} numberOfLines={1}>{riassunto}</Text>}
+        </View>
+        <Icona nome={open ? 'chevron-up' : 'chevron-down'} colore={COLORS.muted} />
+      </TouchableOpacity>
+      {open && <View style={{ paddingBottom: 14 }}>{children}</View>}
+    </View>
+  );
+}
+
+/** Segnaposto grigi mostrati mentre un elenco si carica. */
+export function Caricamento({ righe = 3 }) {
+  const opacita = useRef(new Animated.Value(0.5)).current;
+  React.useEffect(() => {
+    const anim = Animated.loop(Animated.sequence([
+      Animated.timing(opacita, { toValue: 1, duration: 600, useNativeDriver: true }),
+      Animated.timing(opacita, { toValue: 0.5, duration: 600, useNativeDriver: true }),
+    ]));
+    anim.start();
+    return () => anim.stop();
+  }, [opacita]);
+  return (
+    <View>
+      {Array.from({ length: righe }).map((_, i) => (
+        <Animated.View key={i} style={[S.card, { opacity: opacita }]}>
+          <View style={{ height: 18, width: '60%', backgroundColor: COLORS.border, borderRadius: 6 }} />
+          <View style={{ height: 14, width: '85%', backgroundColor: COLORS.border, borderRadius: 6, marginTop: 10 }} />
+          <View style={{ height: 14, width: '40%', backgroundColor: COLORS.border, borderRadius: 6, marginTop: 8 }} />
+        </Animated.View>
+      ))}
+    </View>
+  );
+}
+
+/** Elenco vuoto che spiega cosa fare e offre il pulsante per farlo. */
+export function Vuoto({ icona = 'tray', titolo, testo, azione, onAzione }) {
+  return (
+    <View style={{ alignItems: 'center', paddingVertical: 36, paddingHorizontal: 20 }}>
+      <Icona nome={icona} size={48} colore={COLORS.muted} />
+      <Text style={{ fontSize: 18, fontWeight: '800', color: COLORS.text, marginTop: 12, textAlign: 'center' }}>{titolo}</Text>
+      {!!testo && <Text style={[S.muted, { textAlign: 'center', marginTop: 6 }]}>{testo}</Text>}
+      {!!azione && <View style={{ alignSelf: 'stretch', marginTop: 10 }}><Bottone testo={azione} onPress={onAzione} /></View>}
+    </View>
+  );
+}
+
+const MESI = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto',
+  'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
+const isoDi = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+/**
+ * Campo data con calendario. value/onChange in formato ISO (AAAA-MM-GG) oppure null.
+ * scorciatoie: [{ testo, giorni }] per date rapide (es. +3 giorni).
+ */
+export function CampoData({ label, value, onChange, errore, scorciatoie, facoltativo = true, nota }) {
+  const [aperto, setAperto] = useState(false);
+  const base = value && /^\d{4}-\d{2}-\d{2}/.test(value) ? new Date(`${value.slice(0, 10)}T12:00:00`) : new Date();
+  const [mese, setMese] = useState(new Date(base.getFullYear(), base.getMonth(), 1));
+  const apri = () => { setMese(new Date(base.getFullYear(), base.getMonth(), 1)); setAperto(true); };
+  const scegli = (iso) => { onChange(iso); setAperto(false); };
+  const primo = (mese.getDay() + 6) % 7; // lunedì = 0
+  const giorni = new Date(mese.getFullYear(), mese.getMonth() + 1, 0).getDate();
+  const celle = [...Array(primo).fill(null), ...Array.from({ length: giorni }, (_, i) => i + 1)];
+  const oggi = isoDi(new Date());
+  const piu = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return isoDi(d); };
+  return (
+    <View>
+      <Text style={[S.label, errore && { color: COLORS.danger }]}>{label}</Text>
+      <TouchableOpacity onPress={apri} activeOpacity={0.7}
+        style={[S.input, errore && S.inputErrore, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
+        <Text style={{ fontSize: 16, color: value ? COLORS.text : '#8A958F' }}>
+          {value ? dataPerCampo(value) : 'Tocca per scegliere'}
+        </Text>
+        <Icona nome="calendar-month" colore={COLORS.azione || COLORS.primary} />
+      </TouchableOpacity>
+      {!!nota && !errore && <Text style={[S.muted, { marginTop: 4 }]}>{nota}</Text>}
+      {!!errore && <Text style={S.testoErrore}>{typeof errore === 'string' ? errore : errore.testo}</Text>}
+      <Modal visible={aperto} transparent animationType="fade" onRequestClose={() => setAperto(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', padding: 16 }}>
+          <View style={S.card}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <TouchableOpacity style={{ padding: 10 }}
+                onPress={() => setMese(new Date(mese.getFullYear(), mese.getMonth() - 1, 1))}>
+                <Icona nome="chevron-left" size={28} />
+              </TouchableOpacity>
+              <Text style={{ fontSize: 18, fontWeight: '800', color: COLORS.text }}>
+                {MESI[mese.getMonth()]} {mese.getFullYear()}
+              </Text>
+              <TouchableOpacity style={{ padding: 10 }}
+                onPress={() => setMese(new Date(mese.getFullYear(), mese.getMonth() + 1, 1))}>
+                <Icona nome="chevron-right" size={28} />
+              </TouchableOpacity>
+            </View>
+            <View style={{ flexDirection: 'row', marginTop: 6 }}>
+              {['L', 'M', 'M', 'G', 'V', 'S', 'D'].map((g, i) => (
+                <Text key={i} style={{ flex: 1, textAlign: 'center', color: COLORS.muted, fontWeight: '700' }}>{g}</Text>
+              ))}
+            </View>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 4 }}>
+              {celle.map((g, i) => {
+                if (!g) return <View key={`v${i}`} style={{ width: `${100 / 7}%`, height: 46 }} />;
+                const iso = isoDi(new Date(mese.getFullYear(), mese.getMonth(), g));
+                const sel = value && value.slice(0, 10) === iso;
+                return (
+                  <TouchableOpacity key={iso} onPress={() => scegli(iso)}
+                    style={{ width: `${100 / 7}%`, height: 46, alignItems: 'center', justifyContent: 'center' }}>
+                    <View style={{
+                      width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center',
+                      backgroundColor: sel ? (COLORS.azione || COLORS.primary) : 'transparent',
+                      borderWidth: iso === oggi && !sel ? 1.5 : 0, borderColor: COLORS.azione || COLORS.primary,
+                    }}>
+                      <Text style={{ fontSize: 16, color: sel ? '#fff' : COLORS.text, fontWeight: sel ? '800' : '500' }}>{g}</Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <View style={[S.chipWrap, { marginTop: 8 }]}>
+              <TouchableOpacity style={S.chip} onPress={() => scegli(oggi)}><Text style={S.chipText}>Oggi</Text></TouchableOpacity>
+              {(scorciatoie || []).map((sc) => (
+                <TouchableOpacity key={sc.testo} style={S.chip} onPress={() => scegli(piu(sc.giorni))}>
+                  <Text style={S.chipText}>{sc.testo}</Text>
+                </TouchableOpacity>
+              ))}
+              {facoltativo && !!value && (
+                <TouchableOpacity style={S.chip} onPress={() => scegli(null)}><Text style={S.chipText}>Nessuna data</Text></TouchableOpacity>
+              )}
+            </View>
+            <Bottone testo="Chiudi" ghost onPress={() => setAperto(false)} />
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 }
 
@@ -354,7 +510,7 @@ export function ModaleModifica({ visibile, titolo, sottotitolo, campi, record, o
     const v = {};
     campi.forEach((c) => {
       const x = record[c.chiave];
-      if (c.tipo === 'data') v[c.chiave] = dataPerCampo(x);
+      if (c.tipo === 'data') v[c.chiave] = x ? String(x).slice(0, 10) : '';
       else if (c.tipo === 'numero' || c.tipo === 'intero') v[c.chiave] = x === null || x === undefined ? '' : String(x).replace('.', ',');
       else v[c.chiave] = x || '';
     });
@@ -395,12 +551,18 @@ export function ModaleModifica({ visibile, titolo, sottotitolo, campi, record, o
         {!!sottotitolo && <Text style={[S.muted, { marginBottom: 8 }]}>{sottotitolo}</Text>}
         <View style={S.card}>
           {campi.map((c) => (
+            c.tipo === 'data' ? (
+              <CampoData key={c.chiave} label={c.label} value={valori[c.chiave] || null}
+                errore={errori[c.chiave]}
+                onChange={(iso) => setValori((st) => ({ ...st, [c.chiave]: iso || '' }))} />
+            ) : (
             <Campo key={c.chiave} label={c.label} value={valori[c.chiave]}
               onChange={(v) => setValori((s) => ({ ...s, [c.chiave]: v }))}
               errore={errori[c.chiave]}
               multiline={c.tipo === 'multiline'}
               placeholder={c.tipo === 'data' ? 'gg/mm/aaaa' : c.placeholder}
               keyboardType={c.tipo === 'numero' ? 'decimal-pad' : c.tipo === 'intero' ? 'number-pad' : 'default'} />
+            )
           ))}
           <Text style={[S.muted, { marginTop: 12 }]}>
             La correzione resta annotata nel registro con il valore precedente.

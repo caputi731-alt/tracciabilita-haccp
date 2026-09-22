@@ -3,7 +3,7 @@ import { View, Text, ScrollView, TextInput, TouchableOpacity, Modal, Alert } fro
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, fmtData, fmtDataOra, giorniAllaScadenza } from './theme';
 import {
-  Campo, Bottone, Chips, ModaleModifica, useAvviso, conferma, useFoto, AnteprimaFoto, VistaModale, Segmenti, useErrori,
+  Campo, Bottone, Chips, ModaleModifica, useAvviso, conferma, useFoto, AnteprimaFoto, VistaModale, Segmenti, useErrori, Sezione, Caricamento, Vuoto, Icona,
 } from './UI';
 import {
   listaLotti, registraScarico, query, correggiRecord, correggiUscita, annullaCarico, impostaFotoLotto,
@@ -62,10 +62,12 @@ const fifo = (a, b) => {
   return (a.data_ricevimento || '') < (b.data_ricevimento || '') ? -1 : 1;
 };
 
-export default function MagazzinoScreen({ route }) {
+export default function MagazzinoScreen({ route, navigation }) {
   const [lotti, setLotti] = useState([]);
   const [tutti, setTutti] = useState([]);
   const [modo, setModo] = useState('In giacenza');
+  const [caricato, setCaricato] = useState(false);
+  const [filtro, setFiltro] = useState('Tutti');
   const [bloccati, setBloccati] = useState([]);
   const [produzioni, setProduzioni] = useState([]);
   const [impatto, setImpatto] = useState(null);
@@ -83,9 +85,9 @@ export default function MagazzinoScreen({ route }) {
   const { chiediFoto, fotocamera } = useFoto();
 
   const ricarica = useCallback(() => {
-    listaLotti(cerca).then(setLotti);
-    cercaLotti(cerca).then(setTutti);
-    lottiBloccati().then(setBloccati);
+    Promise.all([listaLotti(cerca), cercaLotti(cerca), lottiBloccati()]).then(([a, b, c]) => {
+      setLotti(a); setTutti(b); setBloccati(c); setCaricato(true);
+    });
   }, [cerca]);
   useFocusEffect(ricarica);
   React.useEffect(() => { ricarica(); }, [cerca]);
@@ -93,7 +95,14 @@ export default function MagazzinoScreen({ route }) {
   // raggruppa i lotti per prodotto (e unità di misura)
   const gruppi = [];
   const mappa = {};
-  for (const l of lotti) {
+  const FILTRI = {
+    Tutti: () => true,
+    Frigo: (l) => l.conservazione === 'refrigerato',
+    Congelati: (l) => l.conservazione === 'congelato',
+    Dispensa: (l) => !l.conservazione || l.conservazione === 'ambiente',
+    'In scadenza': (l) => { const g = giorniAllaScadenza(l.data_scadenza); return g !== null && g <= 3; },
+  };
+  for (const l of lotti.filter(FILTRI[filtro] || FILTRI.Tutti)) {
     const k = `${l.prodotto_id}|${l.unita_misura || ''}`;
     if (!mappa[k]) {
       mappa[k] = { chiave: k, prodotto: l.prodotto, unita: l.unita_misura, lotti: [], totale: 0 };
@@ -253,6 +262,15 @@ export default function MagazzinoScreen({ route }) {
                     onPress={() => setUscita((u) => ({ ...u, qta: String(Number(elenco[0].quantita_residua)).replace('.', ',') }))}>
                     <Text style={S.chipText}>Tutto il primo lotto</Text>
                   </TouchableOpacity>
+                  {elenco[0].colli > 0 && (
+                    <TouchableOpacity style={S.chip}
+                      onPress={() => {
+                        const unCollo = Math.round((elenco[0].quantita_iniziale / elenco[0].colli) * 1000) / 1000;
+                        setUscita((u) => ({ ...u, qta: String(Math.min(unCollo, disp)).replace('.', ',') }));
+                      }}>
+                      <Text style={S.chipText}>1 collo ({fmtQ(elenco[0].quantita_iniziale / elenco[0].colli)})</Text>
+                    </TouchableOpacity>
+                  )}
                   {elenco.length > 1 && (
                     <TouchableOpacity style={S.chip}
                       onPress={() => setUscita((u) => ({ ...u, qta: String(Math.round(disp * 1000) / 1000).replace('.', ',') }))}>
@@ -298,13 +316,24 @@ export default function MagazzinoScreen({ route }) {
         <TextInput style={S.input} placeholder="Cerca prodotto, lotto o fornitore…" value={cerca}
           onChangeText={setCerca} placeholderTextColor="#9CA3AF" />
         <Segmenti opzioni={['In giacenza', 'Tutti i lotti']} valore={modo} onChange={setModo} />
+        {modo === 'In giacenza' && lotti.length > 0 && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}
+            contentContainerStyle={{ gap: 8 }}>
+            {['Tutti', 'Frigo', 'Congelati', 'Dispensa', 'In scadenza'].map((f) => (
+              <TouchableOpacity key={f} onPress={() => setFiltro(f)}
+                style={[S.chip, filtro === f && S.chipOn, { marginRight: 0, marginBottom: 0 }]}>
+                <Text style={[S.chipText, filtro === f && S.chipTextOn]}>{f}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
       </View>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={S.content}>
         {bloccati.length > 0 && (
           <View style={[S.card, { backgroundColor: COLORS.dangerSoft, borderColor: COLORS.danger }]}>
             <Text style={{ color: COLORS.danger, fontWeight: '800', fontSize: 16 }}>
-              🚫 {bloccati.length} lott{bloccati.length > 1 ? 'i bloccati' : 'o bloccato'}: da tenere separat{bloccati.length > 1 ? 'i' : 'o'}
+              <Icona nome="cancel" size={17} colore={COLORS.danger} /> {bloccati.length} lott{bloccati.length > 1 ? 'i bloccati' : 'o bloccato'}: da tenere separat{bloccati.length > 1 ? 'i' : 'o'}
             </Text>
             {bloccati.map((l) => (
               <TouchableOpacity key={l.id} style={{ paddingVertical: 8 }} onPress={() => apriLotto(l)}>
@@ -321,7 +350,9 @@ export default function MagazzinoScreen({ route }) {
             <Text style={[S.muted, { marginBottom: 6 }]}>
               Storico completo, anche lotti esauriti, bloccati o annullati: qui trovi la rintracciabilità di ogni partita.
             </Text>
-            {tutti.length === 0 && <Text style={S.empty}>Nessun lotto trovato.</Text>}
+            {caricato && tutti.length === 0 && (
+              <Vuoto icona="magnify" titolo="Nessun lotto trovato" testo={cerca ? 'Prova a cercare con un\'altra parola.' : 'Qui compariranno tutti i lotti ricevuti.'} />
+            )}
             {tutti.map((l) => (
               <TouchableOpacity key={l.id} style={[S.card, { borderLeftWidth: 4, borderLeftColor: coloreStato(l.stato) }]}
                 onPress={() => apriLotto(l)} activeOpacity={0.7}>
@@ -337,7 +368,7 @@ export default function MagazzinoScreen({ route }) {
                   Lotto {l.numero_lotto || '—'} · {l.fornitore} · ricevuto {fmtData(l.data_ricevimento)}
                 </Text>
                 <Text style={{ color: coloreStato(l.stato), fontWeight: l.stato === 'bloccato' ? '800' : '600' }}>
-                  {l.stato === 'bloccato' ? '🚫 BLOCCATO' : l.stato} · {testoScadenza(l.data_scadenza)}
+                  {l.stato === 'bloccato' ? 'BLOCCATO' : l.stato} · {testoScadenza(l.data_scadenza)}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -345,7 +376,14 @@ export default function MagazzinoScreen({ route }) {
         )}
 
         {modo === 'In giacenza' && gruppi.length === 0 && (
-          <Text style={S.empty}>Nessun prodotto in magazzino.</Text>
+          !caricato ? <Caricamento /> : lotti.length === 0 ? (
+            <Vuoto icona="package-variant" titolo={cerca ? 'Nessun prodotto trovato' : 'Il magazzino è vuoto'}
+              testo={cerca ? 'Prova a cercare con un\'altra parola.' : 'Registra la merce arrivata: da fattura PDF ci vuole un minuto.'}
+              azione={cerca ? null : 'Registra un carico'} onAzione={() => navigation.navigate('CaricoMerce')} />
+          ) : (
+            <Vuoto icona="filter-variant" titolo="Nessun prodotto con questo filtro"
+              azione="Mostra tutti" onAzione={() => setFiltro('Tutti')} />
+          )
         )}
 
         {modo === 'In giacenza' && gruppi.map((g) => {
@@ -406,44 +444,59 @@ export default function MagazzinoScreen({ route }) {
             <VistaModale>
               <Text style={S.h1}>{sel.prodotto}</Text>
               <Riquadro>
-                <Text style={{ fontSize: 20, fontWeight: '800', color: COLORS.text }}>
-                  Giacenza: {fmtQ(sel.quantita_residua)} {sel.unita_misura}
+                <Text style={{ fontSize: 24, fontWeight: '800', color: COLORS.text }}>
+                  {fmtQ(sel.quantita_residua)} {sel.unita_misura}
                 </Text>
-                <Text style={[S.muted, { marginTop: 6 }]}>Lotto: {sel.numero_lotto || '—'}</Text>
-                <Text style={{ color: coloreScadenza(sel.data_scadenza), fontWeight: '700' }}>
+                <Text style={{ color: coloreScadenza(sel.data_scadenza), fontWeight: '800', fontSize: 16, marginTop: 2 }}>
                   {testoScadenza(sel.data_scadenza)}
                 </Text>
+                <Text style={[S.muted, { marginTop: 4 }]}>Lotto {sel.numero_lotto || '—'} · {sel.fornitore}</Text>
+                {sel.stato === 'disponibile' && (
+                  <Bottone testo="Scarica da questo lotto" icona="tray-arrow-up"
+                    onPress={() => setUscita({ lotto: sel, qta: '', causale: 'consumo' })} />
+                )}
+                <Bottone testo="Stampa etichetta" icona="label-outline" ghost
+                  onPress={() => {
+                    const l = sel;
+                    setSel(null);
+                    navigation.navigate('Etichette', {
+                      precompila: {
+                        tipo: 'Apertura', prodotto_id: l.prodotto_id, nome: l.prodotto,
+                        lotto: l.numero_lotto || '', scadenza: l.data_scadenza || '',
+                      },
+                    });
+                  }} />
+              </Riquadro>
+
+              <Sezione titolo="Dati del carico" icona="truck-delivery-outline"
+                riassunto={`Ricevuti ${fmtQ(sel.quantita_iniziale)} ${sel.unita_misura} il ${fmtData(sel.data_ricevimento)}`}>
                 <Text style={S.muted}>
                   Ricevuti {fmtQ(sel.quantita_iniziale)} {sel.unita_misura}
                   {sel.colli ? ` in ${sel.colli} ${sel.colli === 1 ? 'collo' : 'colli'}` : ''} il {fmtData(sel.data_ricevimento)}
                 </Text>
-                <Text style={S.muted}>{sel.fornitore} · DDT/fattura {sel.ddt_numero || '—'} del {fmtData(sel.ddt_data)}</Text>
+                <Text style={S.muted}>DDT/fattura {sel.ddt_numero || '—'} del {fmtData(sel.ddt_data)}</Text>
                 <Text style={S.muted}>Temperatura al ricevimento: {sel.temperatura_rilevata ?? '—'}°C</Text>
                 {!!sel.note && <Text style={[S.muted, { fontStyle: 'italic', marginTop: 4 }]}>{sel.note}</Text>}
-                <TouchableOpacity onPress={() => setModCarico(true)}>
-                  <Text style={{ color: COLORS.azione, fontWeight: '800', marginTop: 10, fontSize: 15 }}>✎ Modifica dati del carico</Text>
-                </TouchableOpacity>
-              </Riquadro>
+                <Bottone testo="Modifica dati del carico" icona="pencil-outline" ghost onPress={() => setModCarico(true)} />
+              </Sezione>
 
-              <Riquadro titolo="Foto">
+              <Sezione titolo="Foto" icona="camera-outline" aperta={!!sel.foto_etichetta}
+                riassunto={sel.foto_etichetta ? 'Etichetta presente' : 'Nessuna foto'}>
                 {sel.foto_etichetta ? (
                   <AnteprimaFoto uri={sel.foto_etichetta} titolo="Etichetta" altezza={220} />
                 ) : (
                   <Text style={S.muted}>Nessuna foto dell'etichetta.</Text>
                 )}
-                <Bottone testo={sel.foto_etichetta ? '📷 Sostituisci foto etichetta' : "📷 Fotografa l'etichetta"}
-                  ghost onPress={() => cambiaFoto('foto_etichetta')} />
+                <Bottone testo={sel.foto_etichetta ? 'Sostituisci foto etichetta' : "Fotografa l'etichetta"}
+                  icona="camera" ghost onPress={() => cambiaFoto('foto_etichetta')} />
                 {sel.foto_ddt ? <AnteprimaFoto uri={sel.foto_ddt} titolo="Documento di trasporto" /> : null}
-                <Bottone testo={sel.foto_ddt ? '📷 Sostituisci foto documento' : '📷 Fotografa DDT / fattura'}
-                  ghost onPress={() => cambiaFoto('foto_ddt')} />
-              </Riquadro>
-
-              <Bottone testo="Scarica da questo lotto"
-                onPress={() => setUscita({ lotto: sel, qta: '', causale: 'consumo' })} />
+                <Bottone testo={sel.foto_ddt ? 'Sostituisci foto documento' : 'Fotografa DDT / fattura'}
+                  icona="file-document-outline" ghost onPress={() => cambiaFoto('foto_ddt')} />
+              </Sezione>
 
               {sel.stato === 'bloccato' && (
                 <View style={[S.card, { backgroundColor: COLORS.dangerSoft, borderColor: COLORS.danger }]}>
-                  <Text style={{ color: COLORS.danger, fontWeight: '800', fontSize: 17 }}>🚫 Lotto bloccato</Text>
+                  <Text style={{ color: COLORS.danger, fontWeight: '800', fontSize: 17 }}>Lotto bloccato</Text>
                   <Text style={{ color: COLORS.text, marginTop: 4 }}>
                     Non è utilizzabile né nelle produzioni. Tienilo separato e identificato finché il
                     fornitore o l'autorità non indicano cosa fare.
@@ -451,8 +504,9 @@ export default function MagazzinoScreen({ route }) {
                 </View>
               )}
 
-              <Text style={[S.h2, { marginTop: 16 }]}>Impiego e richiamo</Text>
-              <Riquadro>
+              <Sezione titolo="Impiego e richiamo" icona="shield-alert-outline" aperta={sel.stato === 'bloccato'}
+                colore={sel.stato === 'bloccato' ? COLORS.danger : undefined}
+                riassunto={impatto ? `${produzioni.length} produzion${produzioni.length === 1 ? 'e' : 'i'} · PDF per ASL` : ''}>
                 {impatto && (
                   <>
                     <Text style={{ color: COLORS.text }}>
@@ -480,7 +534,7 @@ export default function MagazzinoScreen({ route }) {
                         onPress={() => setAzione({ tipo: 'sblocca', lotti: [sel.id], testo: '' })} />
                     ) : sel.stato !== 'annullato' && (
                       <Bottone testo={impatto.stessaPartita.some((x) => x.stato !== 'bloccato')
-                        ? '🚫 Blocca questo lotto e gli altri con lo stesso numero' : '🚫 Blocca lotto (richiamo)'}
+                        ? 'Blocca questo lotto e gli altri con lo stesso numero' : 'Blocca lotto (richiamo)'}
                         colore={COLORS.danger}
                         onPress={() => setAzione({
                           tipo: 'blocca', testo: '',
@@ -491,10 +545,9 @@ export default function MagazzinoScreen({ route }) {
                 )}
                 <Bottone testo={sel.stato === 'bloccato' ? 'Rapporto di richiamo PDF' : 'Scheda PDF per ASL'}
                   ghost onPress={schedaPdf} />
-              </Riquadro>
+              </Sezione>
 
-              <Text style={[S.h2, { marginTop: 20 }]}>Movimenti</Text>
-              <Riquadro>
+              <Sezione titolo="Movimenti" icona="swap-vertical" riassunto={`${storico.length} moviment${storico.length === 1 ? 'o' : 'i'}`}>
                 {storico.map((m, i) => (
                   <TouchableOpacity key={m.id} disabled={m.tipo === 'carico'}
                     onPress={() => { setModUscita(m); setQtaUscita(String(m.quantita).replace('.', ',')); }}
@@ -512,7 +565,7 @@ export default function MagazzinoScreen({ route }) {
                     </Text>
                   </TouchableOpacity>
                 ))}
-              </Riquadro>
+              </Sezione>
 
               <Bottone testo="Chiudi" ghost onPress={() => setSel(null)} />
             </VistaModale>

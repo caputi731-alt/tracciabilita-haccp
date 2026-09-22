@@ -384,7 +384,8 @@ export async function registraCarico(l) {
 
 export const listaLotti = (filtro = '') =>
   query(
-    `SELECT l.*, p.denominazione AS prodotto, f.ragione_sociale AS fornitore
+    `SELECT l.*, p.denominazione AS prodotto, p.categoria, p.conservazione, p.allergeni,
+            f.ragione_sociale AS fornitore
      FROM lotti l
      JOIN prodotti p ON p.id = l.prodotto_id
      JOIN fornitori f ON f.id = l.fornitore_id
@@ -890,7 +891,8 @@ export async function importaFattura(imp) {
         prodotto_id: prodottoId, fornitore_id: fornitoreId,
         numero_lotto: riga.numero_lotto, ddt_numero: imp.numero, ddt_data: imp.data,
         data_ricevimento: adesso, quantita: riga.quantita, unita_misura: riga.unita_misura, colli: riga.colli,
-        data_scadenza: riga.data_scadenza || null, temperatura_rilevata: imp.temperatura,
+        data_scadenza: riga.data_scadenza || null,
+        temperatura_rilevata: riga.temperatura ?? imp.temperatura,
         esito_controllo: imp.non_conforme ? 'non conforme' : 'conforme',
         integrita_imballo: imp.integrita_imballo, conformita_etichettatura: imp.conformita_etichettatura,
         prezzo_unitario: riga.prezzo_unitario, foto_ddt: null, foto_etichetta: riga.foto_etichetta || null,
