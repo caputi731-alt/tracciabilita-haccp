@@ -7,7 +7,7 @@ export const COLORS = {
   primaryDark: '#0C5A43',
   primarySoft: '#E3F1EC',
   text: '#13211C',
-  muted: '#6A7772',
+  muted: '#4E5A55',
   border: '#E1E7E4',
   danger: '#C63A2F',
   dangerSoft: '#FBE9E7',
@@ -15,6 +15,10 @@ export const COLORS = {
   warningSoft: '#FBF0DC',
   ok: '#12795A',
   accent: '#1E9E76',
+  // colore delle azioni (pulsanti, collegamenti, scelte attive): distinto dal verde degli stati "ok"
+  azione: '#1B5E9E',
+  azioneDark: '#144A7D',
+  azioneSoft: '#E5EEF8',
 };
 
 export const ALLERGENI = [
@@ -90,7 +94,7 @@ export const S = StyleSheet.create({
   h2: { fontSize: 18, fontWeight: '800', color: COLORS.text, marginBottom: 10, letterSpacing: -0.2 },
 
   label: {
-    fontSize: 12, fontWeight: '700', color: COLORS.muted, marginBottom: 6, marginTop: 12,
+    fontSize: 13, fontWeight: '700', color: COLORS.muted, marginBottom: 6, marginTop: 14,
     textTransform: 'uppercase', letterSpacing: 0.4,
   },
   input: {
@@ -101,28 +105,32 @@ export const S = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
 
   btn: {
-    backgroundColor: COLORS.primary, borderRadius: 14, paddingVertical: 16,
-    alignItems: 'center', marginTop: 14,
-    shadowColor: COLORS.primaryDark, shadowOpacity: 0.25, shadowRadius: 8,
+    backgroundColor: COLORS.azione, borderRadius: 14, paddingVertical: 16, minHeight: 52,
+    alignItems: 'center', justifyContent: 'center', marginTop: 14,
+    shadowColor: COLORS.azioneDark, shadowOpacity: 0.25, shadowRadius: 8,
     shadowOffset: { width: 0, height: 3 }, elevation: 3,
   },
   btnText: { color: '#fff', fontSize: 16, fontWeight: '800', letterSpacing: 0.3 },
   btnGhost: {
-    borderWidth: 1.5, borderColor: COLORS.primary, borderRadius: 14,
-    paddingVertical: 14, alignItems: 'center', marginTop: 10, backgroundColor: '#fff',
+    borderWidth: 1.5, borderColor: COLORS.azione, borderRadius: 14, minHeight: 50,
+    paddingVertical: 14, alignItems: 'center', justifyContent: 'center', marginTop: 10, backgroundColor: '#fff',
   },
-  btnGhostText: { color: COLORS.primary, fontSize: 15, fontWeight: '800' },
+  btnGhostText: { color: COLORS.azione, fontSize: 15, fontWeight: '800' },
 
   chip: {
-    paddingHorizontal: 14, paddingVertical: 9, borderRadius: 22, borderWidth: 1,
+    paddingHorizontal: 16, paddingVertical: 12, minHeight: 46, justifyContent: 'center',
+    borderRadius: 23, borderWidth: 1,
     borderColor: COLORS.border, marginRight: 8, marginBottom: 8, backgroundColor: '#fff',
   },
-  chipOn: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  chipText: { color: COLORS.text, fontSize: 14 },
+  chipOn: { backgroundColor: COLORS.azione, borderColor: COLORS.azione },
+  chipText: { color: COLORS.text, fontSize: 15 },
   chipTextOn: { color: '#fff', fontWeight: '700' },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 6 },
 
-  muted: { color: COLORS.muted, fontSize: 13, lineHeight: 18 },
+  muted: { color: COLORS.muted, fontSize: 15, lineHeight: 21 },
+  link: { color: COLORS.azione, fontWeight: '800', fontSize: 15 },
+  inputErrore: { borderColor: COLORS.danger, borderWidth: 2, backgroundColor: '#FFF8F7' },
+  testoErrore: { color: COLORS.danger, fontSize: 14, fontWeight: '700', marginTop: 5 },
   empty: { textAlign: 'center', color: COLORS.muted, marginTop: 44, fontSize: 15 },
 
   // elementi per la nuova Home
@@ -143,6 +151,6 @@ export const S = StyleSheet.create({
   },
   tileAccent: { width: 4, borderRadius: 4, alignSelf: 'stretch', marginRight: 12, backgroundColor: COLORS.primary },
   tileTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text },
-  tileDesc: { fontSize: 13, color: COLORS.muted, marginTop: 2 },
+  tileDesc: { fontSize: 14, color: COLORS.muted, marginTop: 2 },
   chevron: { fontSize: 22, color: COLORS.muted, marginLeft: 8 },
 });

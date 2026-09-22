@@ -3,11 +3,11 @@ import { View, Text, ScrollView, TouchableOpacity, Modal, Alert } from 'react-na
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, fmtDataOra } from './theme';
 import {
-  Campo, Chips, Bottone, conferma, ModaleModifica, useAvviso, VistaModale,
+  Campo, Chips, Bottone, conferma, ModaleModifica, useAvviso, VistaModale, useErrori,
 } from './UI';
 import {
   listaAree, salvaArea, eliminaArea,
-  registraSanificazione, sanificazioniOggi, sanificazioniRecenti, correggiRecord,
+  registraSanificazione, annullaSanificazione, sanificazioniOggi, sanificazioniRecenti, correggiRecord,
 } from './database';
 
 const CAMPI_PULIZIA = [
@@ -27,6 +27,7 @@ export default function SanificazioneScreen() {
   const [reg, setReg] = useState(null); // area su cui registrare la pulizia
   const [inModifica, setInModifica] = useState(null);
   const { avviso, mostra } = useAvviso();
+  const { errori, segnala, azzera, riepilogo } = useErrori();
 
   const ricarica = useCallback(() => {
     listaAree().then(setAree);
@@ -38,7 +39,8 @@ export default function SanificazioneScreen() {
   /* --- gestione aree --- */
   const setA = (k) => (v) => setFormArea((f) => ({ ...f, [k]: v }));
   const salvaLArea = async () => {
-    if (!formArea.nome.trim()) return Alert.alert('Dato mancante', 'Dai un nome all\'area.');
+    azzera();
+    if (!formArea.nome.trim()) return segnala('nome', 'Dai un nome all\'area');
     await salvaArea(formArea);
     setFormArea(null);
     ricarica();
@@ -58,12 +60,15 @@ export default function SanificazioneScreen() {
     setNote('');
   };
   const salvaReg = async () => {
-    await registraSanificazione({
+    const id = await registraSanificazione({
       area_id: reg.id, prodotto_utilizzato: prodotto, operatore, note, esito: 'conforme',
     });
     setReg(null);
     ricarica();
-    mostra(`Salvato ✓ Pulizia: ${reg.nome}`);
+    mostra(`Salvato ✓ Pulizia: ${reg.nome}`, {
+      testo: 'Annulla',
+      onPress: async () => { await annullaSanificazione(id); ricarica(); mostra('Pulizia annullata'); },
+    });
   };
 
   const salvaCorrezione = async (cambi) => {
@@ -133,7 +138,7 @@ export default function SanificazioneScreen() {
                     {!!r.note && <Text style={[S.muted, { fontStyle: 'italic' }]}>{r.note}</Text>}
                   </View>
                   <Text style={S.muted}>
-                    {r.prodotto_utilizzato || ''}  <Text style={{ color: COLORS.primary, fontWeight: '700' }}>✎</Text>
+                    {r.prodotto_utilizzato || ''}  <Text style={{ color: COLORS.azione, fontWeight: '700' }}>✎</Text>
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -151,13 +156,14 @@ export default function SanificazioneScreen() {
         {formArea && (
           <VistaModale>
             <Text style={S.h1}>{formArea.id ? 'Modifica area' : 'Nuova area'}</Text>
-            <Campo label="Nome area *" value={formArea.nome} onChange={setA('nome')}
+            <Campo label="Nome area *" value={formArea.nome} onChange={setA('nome')} errore={errori.nome}
               placeholder="es. Piano di lavoro, Cappa, Bagno" />
             <Chips label="Frequenza" opzioni={FREQUENZE} valore={formArea.frequenza}
               onChange={setA('frequenza')} />
             <Campo label="Prodotto previsto" value={formArea.prodotto_previsto}
               onChange={setA('prodotto_previsto')} placeholder="es. sgrassatore, sanificante" />
             <Campo label="Procedura" value={formArea.procedura} onChange={setA('procedura')} multiline />
+            {riepilogo}
             <Bottone testo="Salva" onPress={salvaLArea} />
             {formArea.id && (
               <Bottone testo="Elimina area" ghost colore={COLORS.danger}

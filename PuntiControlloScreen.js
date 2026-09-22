@@ -3,7 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, Modal, Alert } from 'react-na
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, TIPI_PUNTO } from './theme';
 import {
-  Campo, Chips, Bottone, conferma, VistaModale,
+  Campo, Chips, Bottone, conferma, VistaModale, useErrori,
 } from './UI';
 import {
   listaPuntiControllo, salvaPuntoControllo, eliminaPuntoControllo,
@@ -33,8 +33,11 @@ export default function PuntiControlloScreen() {
   const cambiaTipo = (tipo) =>
     setForm((f) => ({ ...f, tipo, ...(f.id ? {} : PRESET[tipo]) }));
 
+  const { errori, segnala, azzera, riepilogo } = useErrori();
+
   const salva = async () => {
-    if (!form.nome.trim()) return Alert.alert('Dato mancante', 'Dai un nome al punto di controllo.');
+    azzera();
+    if (!form.nome.trim()) return segnala('nome', 'Dai un nome al punto di controllo');
     const min = Number(form.temp_min), max = Number(form.temp_max);
     if (Number.isNaN(min) || Number.isNaN(max)) {
       return Alert.alert('Temperature non valide', 'Inserisci due numeri.');
@@ -69,7 +72,7 @@ export default function PuntiControlloScreen() {
             onLongPress={() => elimina(p)}>
             <Text style={{ fontSize: 16, fontWeight: '700' }}>{p.nome}</Text>
             <Text style={S.muted}>{p.tipo}{p.posizione ? ` · ${p.posizione}` : ''}</Text>
-            <Text style={{ color: COLORS.primary, fontWeight: '600', marginTop: 4 }}>
+            <Text style={{ color: COLORS.azione, fontWeight: '600', marginTop: 4 }}>
               Limiti: da {p.temp_min}°C a {p.temp_max}°C
             </Text>
           </TouchableOpacity>
@@ -91,7 +94,7 @@ export default function PuntiControlloScreen() {
         {form && (
           <VistaModale>
             <Text style={S.h1}>{form.id ? 'Modifica punto' : 'Nuovo punto di controllo'}</Text>
-            <Campo label="Nome *" value={form.nome} onChange={set('nome')}
+            <Campo label="Nome *" value={form.nome} onChange={set('nome')} errore={errori.nome}
               placeholder="es. Frigo cucina 1" />
             <Chips label="Tipo" opzioni={TIPI_PUNTO} valore={form.tipo} onChange={cambiaTipo} />
             <Campo label="Posizione" value={form.posizione} onChange={set('posizione')}
@@ -104,6 +107,7 @@ export default function PuntiControlloScreen() {
               I valori proposti sono quelli abituali per il tipo scelto: correggili secondo il
               tuo piano di autocontrollo.
             </Text>
+            {riepilogo}
             <Bottone testo="Salva" onPress={salva} />
             <Bottone testo="Annulla" ghost onPress={() => setForm(null)} />
           </VistaModale>

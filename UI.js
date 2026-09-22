@@ -7,17 +7,77 @@ import * as ImagePicker from 'expo-image-picker';
 import { rendiPermanente } from './foto';
 import { S, COLORS, dataPerCampo, isoDaCampo } from './theme';
 
-export function Campo({ label, value, onChange, ...props }) {
+/** L'errore resta visibile finché il valore è quello che l'ha causato: appena si corregge, sparisce. */
+const testoErrore = (e) => (e && typeof e === 'object' ? e.testo : e) || null;
+
+function useErroreVisibile(errore, valore) {
+  const [valoreErrato, setValoreErrato] = useState(undefined);
+  // errore è un oggetto nuovo a ogni tentativo di salvataggio: l'effetto riparte anche con lo stesso testo
+  React.useEffect(() => { setValoreErrato(errore ? valore : undefined); }, [errore]);
+  return errore && valore === valoreErrato ? testoErrore(errore) : null;
+}
+
+export function Campo({ label, value, onChange, errore, style, ...props }) {
+  const visibile = useErroreVisibile(errore, value);
   return (
     <View>
-      <Text style={S.label}>{label}</Text>
+      <Text style={[S.label, visibile && { color: COLORS.danger }]}>{label}</Text>
       <TextInput
-        style={S.input}
+        style={[S.input, visibile && S.inputErrore, style]}
         value={value === null || value === undefined ? '' : String(value)}
         onChangeText={onChange}
-        placeholderTextColor="#9CA3AF"
+        placeholderTextColor="#8A958F"
         {...props}
       />
+      {!!visibile && <Text style={S.testoErrore}>{visibile}</Text>}
+    </View>
+  );
+}
+
+/**
+ * Errori di compilazione mostrati sui campi invece che in finestre da chiudere.
+ * const { errori, segnala, azzera, riepilogo } = useErrori();
+ * azzera() all'inizio del salvataggio, segnala('campo', 'messaggio') e return; {riepilogo} sopra il pulsante.
+ */
+export function useErrori() {
+  const [errori, setErrori] = useState({});
+  const azzera = useCallback(() => setErrori({}), []);
+  const segnala = useCallback((campo, messaggio) => {
+    setErrori((e) => ({ ...e, [campo]: { testo: messaggio, id: Math.random() } }));
+    return false;
+  }, []);
+  const n = Object.keys(errori).length;
+  const riepilogo = n ? (
+    <View style={{ backgroundColor: COLORS.dangerSoft, borderRadius: 12, padding: 12, marginTop: 14 }}>
+      <Text style={{ color: COLORS.danger, fontWeight: '800', fontSize: 15 }}>
+        {n === 1 ? Object.values(errori)[0].testo : `Controlla i ${n} campi evidenziati in rosso`}
+      </Text>
+    </View>
+  ) : null;
+  return { errori, segnala, azzera, riepilogo };
+}
+
+/** Linguette per cambiare vista: una barra unica con la parte attiva evidenziata. */
+export function Segmenti({ opzioni, valore, onChange }) {
+  return (
+    <View style={{
+      flexDirection: 'row', backgroundColor: '#DCE3E0', borderRadius: 14, padding: 4, marginTop: 10,
+    }}>
+      {opzioni.map((o) => {
+        const attivo = o === valore;
+        return (
+          <TouchableOpacity key={o} onPress={() => onChange(o)} activeOpacity={0.8}
+            style={{
+              flex: 1, minHeight: 44, borderRadius: 11, alignItems: 'center', justifyContent: 'center',
+              paddingHorizontal: 4, backgroundColor: attivo ? '#fff' : 'transparent',
+              elevation: attivo ? 2 : 0,
+            }}>
+            <Text numberOfLines={1} style={{
+              fontSize: 14, fontWeight: attivo ? '800' : '600', color: attivo ? COLORS.azione : COLORS.muted,
+            }}>{o}</Text>
+          </TouchableOpacity>
+        );
+      })}
     </View>
   );
 }
@@ -76,7 +136,7 @@ export function VistaModale({ children, contentContainerStyle, ...resto }) {
 }
 
 /** Selettore da elenco (fornitori, prodotti...) con ricerca */
-export function Selettore({ label, elementi, valore, etichetta, onChange, placeholder }) {
+export function Selettore({ label, elementi, valore, etichetta, onChange, placeholder, errore }) {
   const [aperto, setAperto] = useState(false);
   const [cerca, setCerca] = useState('');
   const sel = elementi.find((e) => e.id === valore);
@@ -85,12 +145,13 @@ export function Selettore({ label, elementi, valore, etichetta, onChange, placeh
   );
   return (
     <View>
-      <Text style={S.label}>{label}</Text>
-      <TouchableOpacity style={S.input} onPress={() => setAperto(true)}>
-        <Text style={{ fontSize: 16, color: sel ? COLORS.text : '#9CA3AF' }}>
+      <Text style={[S.label, !!errore && !sel && { color: COLORS.danger }]}>{label}</Text>
+      <TouchableOpacity style={[S.input, !!errore && !sel && S.inputErrore]} onPress={() => setAperto(true)}>
+        <Text style={{ fontSize: 16, color: sel ? COLORS.text : '#8A958F' }}>
           {sel ? etichetta(sel) : placeholder || 'Seleziona…'}
         </Text>
       </TouchableOpacity>
+      {!!errore && !sel && <Text style={S.testoErrore}>{testoErrore(errore)}</Text>}
 
       <Modal visible={aperto} animationType="slide" onRequestClose={() => setAperto(false)}>
         <View style={[S.screen, { padding: 16, paddingTop: 50 }]}>
@@ -225,7 +286,7 @@ export function CameraCapture({ visibile, onScattata, onChiudi }) {
             </Text>
           </TouchableOpacity>
           {permesso?.granted && (
-            <TouchableOpacity style={{ flex: 1, padding: 20, backgroundColor: COLORS.primary }} onPress={scatta}>
+            <TouchableOpacity style={{ flex: 1, padding: 20, backgroundColor: COLORS.azione }} onPress={scatta}>
               <Text style={{ color: '#fff', textAlign: 'center', fontSize: 16, fontWeight: '700' }}>
                 {inCorso ? 'Scatto…' : 'Scatta'}
               </Text>
@@ -243,23 +304,38 @@ export function CameraCapture({ visibile, onScattata, onChiudi }) {
  */
 export function useAvviso() {
   const [testo, setTesto] = useState('');
+  const [azione, setAzione] = useState(null); // { testo, onPress } per "Annulla"
+  const [attivo, setAttivo] = useState(false);
   const opacita = useRef(new Animated.Value(0)).current;
   const timer = useRef(null);
-  const mostra = useCallback((t) => {
+  const nascondi = useCallback(() => {
+    setAttivo(false);
+    Animated.timing(opacita, { toValue: 0, duration: 250, useNativeDriver: true }).start(() => setAzione(null));
+  }, [opacita]);
+  /** mostra('Salvato ✓') oppure mostra('Salvato ✓', { testo: 'Annulla', onPress: annulla }) */
+  const mostra = useCallback((t, az = null) => {
     setTesto(t);
+    setAzione(az);
+    setAttivo(true);
     if (timer.current) clearTimeout(timer.current);
     Animated.timing(opacita, { toValue: 1, duration: 150, useNativeDriver: true }).start();
-    timer.current = setTimeout(() => {
-      Animated.timing(opacita, { toValue: 0, duration: 300, useNativeDriver: true }).start();
-    }, 2200);
-  }, [opacita]);
+    timer.current = setTimeout(nascondi, az ? 6000 : 2200);
+  }, [opacita, nascondi]);
   const avviso = (
-    <Animated.View pointerEvents="none" style={{
-      position: 'absolute', left: 24, right: 24, bottom: 90, opacity: opacita,
-      backgroundColor: COLORS.primaryDark, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 18,
-      elevation: 6,
+    <Animated.View pointerEvents={attivo && azione ? 'box-none' : 'none'} style={{
+      position: 'absolute', left: 16, right: 16, bottom: 80, opacity: opacita,
+      backgroundColor: '#1F2A26', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 16,
+      elevation: 8, flexDirection: 'row', alignItems: 'center', minHeight: 56,
     }}>
-      <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700', textAlign: 'center' }}>{testo}</Text>
+      <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700', flex: 1, textAlign: azione ? 'left' : 'center' }}>
+        {testo}
+      </Text>
+      {!!azione && (
+        <TouchableOpacity onPress={() => { if (timer.current) clearTimeout(timer.current); nascondi(); azione.onPress(); }}
+          style={{ paddingHorizontal: 14, paddingVertical: 10, marginLeft: 8, borderRadius: 10, backgroundColor: '#ffffff22' }}>
+          <Text style={{ color: '#9CC8FF', fontSize: 16, fontWeight: '800' }}>{azione.testo}</Text>
+        </TouchableOpacity>
+      )}
     </Animated.View>
   );
   return { avviso, mostra };
@@ -272,6 +348,7 @@ export function useAvviso() {
  */
 export function ModaleModifica({ visibile, titolo, sottotitolo, campi, record, onSalva, onChiudi, azioni }) {
   const [valori, setValori] = useState({});
+  const { errori, segnala, azzera, riepilogo } = useErrori();
   React.useEffect(() => {
     if (!visibile || !record) return;
     const v = {};
@@ -285,28 +362,30 @@ export function ModaleModifica({ visibile, titolo, sottotitolo, campi, record, o
   }, [visibile, record]);
 
   const salva = () => {
+    azzera();
     const out = {};
+    let ok = true;
     for (const c of campi) {
       const t = String(valori[c.chiave] ?? '').trim();
       if (c.tipo === 'data') {
         const iso = isoDaCampo(t);
-        if (iso === undefined) return Alert.alert('Data non valida', `${c.label}: scrivi la data come gg/mm/aaaa.`);
+        if (iso === undefined) { ok = segnala(c.chiave, 'Scrivi la data come gg/mm/aaaa'); continue; }
         out[c.chiave] = iso;
       } else if (c.tipo === 'numero' || c.tipo === 'intero') {
         if (t === '') { out[c.chiave] = null; continue; }
         const n = Number(t.replace(',', '.'));
         if (!Number.isFinite(n) || (c.tipo === 'intero' && !Number.isInteger(n))) {
-          return Alert.alert('Valore non valido', `${c.label}: inserisci un numero.`);
+          ok = segnala(c.chiave, 'Inserisci un numero'); continue;
         }
         out[c.chiave] = n;
       } else {
         out[c.chiave] = t === '' ? null : t;
       }
       if (c.obbligatorio && (out[c.chiave] === null || out[c.chiave] === '')) {
-        return Alert.alert('Dato mancante', `${c.label} è obbligatorio.`);
+        ok = segnala(c.chiave, 'Campo obbligatorio');
       }
     }
-    onSalva(out);
+    if (ok) onSalva(out);
   };
 
   return (
@@ -318,6 +397,7 @@ export function ModaleModifica({ visibile, titolo, sottotitolo, campi, record, o
           {campi.map((c) => (
             <Campo key={c.chiave} label={c.label} value={valori[c.chiave]}
               onChange={(v) => setValori((s) => ({ ...s, [c.chiave]: v }))}
+              errore={errori[c.chiave]}
               multiline={c.tipo === 'multiline'}
               placeholder={c.tipo === 'data' ? 'gg/mm/aaaa' : c.placeholder}
               keyboardType={c.tipo === 'numero' ? 'decimal-pad' : c.tipo === 'intero' ? 'number-pad' : 'default'} />
@@ -325,6 +405,7 @@ export function ModaleModifica({ visibile, titolo, sottotitolo, campi, record, o
           <Text style={[S.muted, { marginTop: 12 }]}>
             La correzione resta annotata nel registro con il valore precedente.
           </Text>
+          {riepilogo}
           <Bottone testo="Salva correzione" onPress={salva} />
           {azioni}
           <Bottone testo="Annulla" ghost onPress={onChiudi} />

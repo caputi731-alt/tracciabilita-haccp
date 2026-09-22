@@ -6,7 +6,9 @@ import { useFocusEffect } from '@react-navigation/native';
 import * as FileSystem from 'expo-file-system';
 import * as DocumentPicker from 'expo-document-picker';
 import { S, COLORS, UNITA } from './theme';
-import { Campo, Selettore, Bottone, Chips, useFoto, AnteprimaFoto } from './UI';
+import {
+  Campo, Selettore, Bottone, Chips, useFoto, AnteprimaFoto, useErrori,
+} from './UI';
 import { base64ToBytes, estraiTestoPdf } from './letturaPdf';
 import { analizzaFattura, chiaveArticolo, nomeProdottoProposto } from './fattura';
 import {
@@ -41,6 +43,7 @@ export default function ImportaFatturaScreen({ navigation }) {
   const [righe, setRighe] = useState([]);    // righe modificabili
   const [aperta, setAperta] = useState(null);
   const { chiediFoto, fotocamera } = useFoto();
+  const { errori, segnala, azzera, riepilogo } = useErrori();
   const [controlli, setControlli] = useState({
     temperatura: '', integrita_imballo: true, conformita_etichettatura: true, nota_nc: '',
   });
@@ -124,26 +127,38 @@ export default function ImportaFatturaScreen({ navigation }) {
     ? Math.abs(sommaRighe - doc.totaleImponibile) < 0.05 : null;
 
   const carica = async () => {
+    azzera();
     const data = isoDaTesto(doc.dataTesto);
-    if (!doc.fornitore_id && !doc.nuovo_nome.trim()) {
-      return Alert.alert('Dato mancante', 'Scegli il fornitore oppure indica il nome del nuovo fornitore.');
+    let ok = true;
+    if (!doc.fornitore_id && !doc.nuovo_nome.trim()) ok = segnala('nuovo_nome', 'Scegli il fornitore oppure indica il nome del nuovo fornitore');
+    if (data === undefined) ok = segnala('data', 'Scrivi la data come gg/mm/aaaa');
+    if (incluse.length === 0) ok = segnala('righe', 'Seleziona almeno una riga da caricare');
+
+    // errori delle righe: segnati sulla riga stessa, la prima viene aperta
+    const erroriRighe = {};
+    for (const r of incluse) {
+      const e = {};
+      const q = aNumero(r.quantitaTesto);
+      if (!q || q <= 0) e.quantita = 'Quantità non valida';
+      if (isoDaTesto(r.scadenzaTesto) === undefined) e.scadenza = 'Scrivi la data come gg/mm/aaaa';
+      const c = r.colliTesto === '' ? null : aNumero(r.colliTesto);
+      if (c !== null && (!Number.isInteger(c) || c <= 0)) e.colli = 'Numero intero';
+      if (!r.prodotto_id && !r.nuovo_prodotto.trim()) e.prodotto = 'Abbina o dai un nome al prodotto';
+      if (Object.keys(e).length) erroriRighe[r.key] = e;
     }
-    if (data === undefined) return Alert.alert('Data non valida', 'Scrivi la data della fattura come gg/mm/aaaa.');
-    if (incluse.length === 0) return Alert.alert('Nessuna riga', 'Seleziona almeno una riga da caricare.');
+    const nErr = Object.keys(erroriRighe).length;
+    setRighe((rr) => rr.map((r) => ({ ...r, errori: erroriRighe[r.key] || null })));
+    if (nErr) {
+      setAperta(Object.keys(erroriRighe)[0]);
+      ok = segnala('righe', nErr === 1 ? '1 riga da correggere (aperta qui sotto)' : `${nErr} righe da correggere (segnate in rosso)`);
+    }
+    if (!ok) return;
 
     const righeFinali = [];
     for (const r of incluse) {
       const q = aNumero(r.quantitaTesto);
-      if (!q || q <= 0) return Alert.alert('Quantità non valida', `Controlla la quantità di: ${r.descrizione}`);
       const sc = isoDaTesto(r.scadenzaTesto);
-      if (sc === undefined) return Alert.alert('Scadenza non valida', `Scrivi la scadenza di "${r.descrizione}" come gg/mm/aaaa.`);
       const colli = r.colliTesto === '' ? null : aNumero(r.colliTesto);
-      if (colli !== null && (!Number.isInteger(colli) || colli <= 0)) {
-        return Alert.alert('Colli non validi', `Controlla il numero di colli di: ${r.descrizione}`);
-      }
-      if (!r.prodotto_id && !r.nuovo_prodotto.trim()) {
-        return Alert.alert('Prodotto mancante', `Abbina o dai un nome al prodotto: ${r.descrizione}`);
-      }
       righeFinali.push({
         chiave: r.chiave, descrizione: r.descrizione, prodotto_id: r.prodotto_id,
         nuovo_prodotto: r.nuovo_prodotto.trim(), quantita: q, unita_misura: r.unita_misura, colli,
@@ -230,7 +245,7 @@ export default function ImportaFatturaScreen({ navigation }) {
             <Campo label="Numero" value={doc.numero} onChange={(v) => setDoc((d) => ({ ...d, numero: v }))} />
           </View>
           <View style={{ flex: 1 }}>
-            <Campo label="Data" value={doc.dataTesto} placeholder="gg/mm/aaaa"
+            <Campo label="Data" value={doc.dataTesto} placeholder="gg/mm/aaaa" errore={errori.data}
               onChange={(v) => setDoc((d) => ({ ...d, dataTesto: v }))} />
           </View>
         </View>
@@ -243,7 +258,7 @@ export default function ImportaFatturaScreen({ navigation }) {
             <Text style={{ color: COLORS.warning, fontWeight: '700', marginBottom: 4 }}>
               Fornitore non in anagrafica: verrà creato
             </Text>
-            <Campo label="Ragione sociale" value={doc.nuovo_nome}
+            <Campo label="Ragione sociale" value={doc.nuovo_nome} errore={errori.nuovo_nome}
               onChange={(v) => setDoc((d) => ({ ...d, nuovo_nome: v }))} />
             <Campo label="Partita IVA" value={doc.nuova_piva} keyboardType="number-pad"
               onChange={(v) => setDoc((d) => ({ ...d, nuova_piva: v }))} />
@@ -304,7 +319,8 @@ export default function ImportaFatturaScreen({ navigation }) {
         return (
           <View key={r.key} style={[S.card, {
             opacity: r.includi ? 1 : 0.5, borderLeftWidth: 4,
-            borderLeftColor: !r.includi ? COLORS.border : r.prodotto_id ? COLORS.ok : COLORS.warning,
+            borderLeftColor: r.errori && r.includi ? COLORS.danger : !r.includi ? COLORS.border : r.prodotto_id ? COLORS.ok : COLORS.warning,
+            borderLeftWidth: r.errori && r.includi ? 6 : 4,
           }]}>
             <TouchableOpacity onPress={() => setAperta(espansa ? null : r.key)} activeOpacity={0.7}>
               <View style={S.row}>
@@ -324,7 +340,7 @@ export default function ImportaFatturaScreen({ navigation }) {
                 </View>
                 <Switch value={r.includi} onValueChange={aggiorna(r.key, 'includi')} />
               </View>
-              <Text style={{ color: COLORS.primary, fontWeight: '700', marginTop: 4 }}>
+              <Text style={{ color: COLORS.azione, fontWeight: '700', marginTop: 4 }}>
                 {espansa ? '▲ Chiudi' : '✎ Dettagli'}
               </Text>
             </TouchableOpacity>
@@ -338,19 +354,20 @@ export default function ImportaFatturaScreen({ navigation }) {
                   placeholder="Crea nuovo prodotto (tocca per abbinarne uno)" />
                 {r.prodotto_id ? (
                   <TouchableOpacity onPress={() => aggiorna(r.key, 'prodotto_id')(null)}>
-                    <Text style={{ color: COLORS.primary, fontWeight: '700', marginTop: 6 }}>
+                    <Text style={{ color: COLORS.azione, fontWeight: '700', marginTop: 6 }}>
                       Crea invece un nuovo prodotto
                     </Text>
                   </TouchableOpacity>
                 ) : (
-                  <Campo label="Nome del nuovo prodotto" value={r.nuovo_prodotto}
+                  <Campo label="Nome del nuovo prodotto" value={r.nuovo_prodotto} errore={r.errori?.prodotto}
                     onChange={aggiorna(r.key, 'nuovo_prodotto')} />
                 )}
                 <View style={{ flexDirection: 'row', gap: 10 }}>
                   <View style={{ flex: 1.4 }}>
                     <Text style={S.label}>Quantità</Text>
                     <View style={{ flexDirection: 'row', alignItems: 'stretch' }}>
-                      <TextInput style={[S.input, { flex: 1, borderTopRightRadius: 0, borderBottomRightRadius: 0 }]}
+                      <TextInput style={[S.input, { flex: 1, borderTopRightRadius: 0, borderBottomRightRadius: 0 },
+                        r.errori?.quantita && S.inputErrore]}
                         value={r.quantitaTesto} keyboardType="decimal-pad"
                         onChangeText={aggiorna(r.key, 'quantitaTesto')} />
                       <View style={{
@@ -363,13 +380,13 @@ export default function ImportaFatturaScreen({ navigation }) {
                     </View>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Campo label="Colli" value={r.colliTesto}
+                    <Campo label="Colli" value={r.colliTesto} errore={r.errori?.colli}
                       keyboardType="number-pad" onChange={aggiorna(r.key, 'colliTesto')} />
                   </View>
                 </View>
                 <Chips label="Unità di misura" opzioni={UNITA} valore={r.unita_misura}
                   onChange={aggiorna(r.key, 'unita_misura')} />
-                <Campo label="Scadenza / TMC" value={r.scadenzaTesto} placeholder="gg/mm/aaaa"
+                <Campo label="Scadenza / TMC" value={r.scadenzaTesto} placeholder="gg/mm/aaaa" errore={r.errori?.scadenza}
                   onChange={aggiorna(r.key, 'scadenzaTesto')} />
                 <AnteprimaFoto uri={r.foto_etichetta} titolo="Foto etichetta" altezza={150} />
                 <Bottone testo={r.foto_etichetta ? '📷 Rifai foto etichetta' : "📷 Fotografa l'etichetta"} ghost
@@ -388,6 +405,7 @@ export default function ImportaFatturaScreen({ navigation }) {
           <ActivityIndicator size="large" color={COLORS.primary} />
         ) : (
           <>
+            {riepilogo}
             <Bottone testo={`Carica ${incluse.length} righe in magazzino`} onPress={carica} />
             <Bottone testo="Scegli un altro PDF" ghost onPress={() => { setDoc(null); setRighe([]); }} />
           </>

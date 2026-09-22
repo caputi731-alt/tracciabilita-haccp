@@ -23,14 +23,14 @@ export default function CaricoMerceScreen({ navigation }) {
 
       {SCELTE.map((s) => (
         <TouchableOpacity key={s.rotta} activeOpacity={0.8} onPress={() => navigation.navigate(s.rotta)}
-          style={[S.card, { borderLeftWidth: 5, borderLeftColor: s.consigliato ? COLORS.primary : COLORS.accent }]}>
+          style={[S.card, { borderLeftWidth: 5, borderLeftColor: s.consigliato ? COLORS.azione : COLORS.border }]}>
           <View style={S.row}>
             <Text style={{ fontSize: 30, marginRight: 12 }}>{s.icona}</Text>
             <View style={{ flex: 1 }}>
               <View style={S.row}>
                 <Text style={{ fontSize: 18, fontWeight: '800', color: COLORS.text }}>{s.titolo}</Text>
                 {s.consigliato && (
-                  <Text style={{ color: COLORS.primary, fontWeight: '700', fontSize: 12 }}>PIÙ VELOCE</Text>
+                  <Text style={{ color: COLORS.azione, fontWeight: '700', fontSize: 12 }}>PIÙ VELOCE</Text>
                 )}
               </View>
               <Text style={S.muted}>{s.desc}</Text>

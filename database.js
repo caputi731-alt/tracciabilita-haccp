@@ -402,11 +402,12 @@ export async function registraScarico(lottoId, quantita, causale) {
     'UPDATE lotti SET quantita_residua = ?, stato = ? WHERE id = ?',
     [residua, statoDopo(lotto.stato, residua), lottoId]
   );
-  await exec(
+  const r = await exec(
     'INSERT INTO movimenti (lotto_id, tipo, quantita, data_ora, causale) VALUES (?,?,?,?,?)',
     [lottoId, causale === 'scarto' ? 'scarto' : 'scarico', quantita,
      new Date().toISOString(), causale]
   );
+  return r.lastInsertRowId;
 }
 
 export const lottiInScadenza = (giorni = 3) => {
@@ -424,18 +425,20 @@ export const lottiInScadenza = (giorni = 3) => {
 export async function registraTemperatura(puntoId, temperatura, note) {
   const punto = await queryOne('SELECT * FROM punti_controllo WHERE id = ?', [puntoId]);
   const conforme = temperatura >= punto.temp_min && temperatura <= punto.temp_max;
-  await exec(
+  const r = await exec(
     'INSERT INTO registro_temperature (punto_controllo_id, data_ora, temperatura, esito, note) VALUES (?,?,?,?,?)',
     [puntoId, new Date().toISOString(), temperatura, conforme ? 'conforme' : 'non conforme', note]
   );
+  let ncId = null;
   if (!conforme) {
-    await exec(
+    const nc = await exec(
       'INSERT INTO non_conformita (data_ora, origine, descrizione) VALUES (?,?,?)',
       [new Date().toISOString(), 'temperatura',
        `${punto.nome}: rilevati ${temperatura}°C (limiti ${punto.temp_min}/${punto.temp_max}°C)`]
     );
+    ncId = nc.lastInsertRowId;
   }
-  return conforme;
+  return { conforme, id: r.lastInsertRowId, ncId };
 }
 
 export const temperatureDiOggi = () => {
@@ -664,11 +667,12 @@ export const eliminaArea = (id) =>
   exec('UPDATE aree_pulizia SET attivo = 0 WHERE id = ?', [id]);
 
 export async function registraSanificazione(s) {
-  await exec(
+  const r = await exec(
     `INSERT INTO registro_sanificazione (area_id, data_ora, prodotto_utilizzato, esito, operatore, note)
      VALUES (?,?,?,?,?,?)`,
     [s.area_id, new Date().toISOString(), s.prodotto_utilizzato, s.esito || 'conforme', s.operatore, s.note]
   );
+  return r.lastInsertRowId;
 }
 
 export const sanificazioniOggi = () => {
@@ -1172,5 +1176,46 @@ export async function impostaFotoProdotto(prodottoId, uri, soloSeMancante = fals
   if (!p || (soloSeMancante && p.foto_etichetta)) return false;
   await exec('UPDATE prodotti SET foto_etichetta = ? WHERE id = ?', [uri, prodottoId]);
   return true;
+}
+
+/* ---------- "Annulla" subito dopo una registrazione ---------- */
+
+const traccia = (tabella, id, campo, prima, dopo) => exec(
+  `INSERT INTO registro_modifiche (tabella, record_id, data_ora, campo, valore_precedente, valore_nuovo)
+   VALUES (?,?,?,?,?,?)`, [tabella, id, new Date().toISOString(), campo, prima, dopo]);
+
+/** Annulla un'uscita appena registrata: la quantità torna nel lotto. */
+export async function annullaUscita(movimentoId) {
+  const d = await getDb();
+  await d.withTransactionAsync(async () => {
+    const m = await queryOne('SELECT * FROM movimenti WHERE id = ?', [movimentoId]);
+    if (!m || m.tipo === 'carico') throw new Error('Movimento non annullabile');
+    const l = await queryOne('SELECT * FROM lotti WHERE id = ?', [m.lotto_id]);
+    const residua = Math.round((l.quantita_residua + m.quantita) * 1000) / 1000;
+    await exec('UPDATE lotti SET quantita_residua = ?, stato = ? WHERE id = ?',
+      [residua, statoDopo(l.stato, residua), l.id]);
+    await exec('DELETE FROM movimenti WHERE id = ?', [movimentoId]);
+    await traccia('movimenti', movimentoId, 'annullato', `${m.causale || m.tipo} ${m.quantita}`, 'annullato subito dopo la registrazione');
+  });
+}
+
+/** Annulla una rilevazione di temperatura appena registrata (e la non conformità aperta in automatico). */
+export async function annullaTemperatura(id, ncId) {
+  const d = await getDb();
+  await d.withTransactionAsync(async () => {
+    const t = await queryOne('SELECT * FROM registro_temperature WHERE id = ?', [id]);
+    if (!t) return;
+    await exec('DELETE FROM registro_temperature WHERE id = ?', [id]);
+    if (ncId) await exec("DELETE FROM non_conformita WHERE id = ? AND stato = 'aperta'", [ncId]);
+    await traccia('registro_temperature', id, 'annullato', String(t.temperatura), 'annullato subito dopo la registrazione');
+  });
+}
+
+/** Annulla una pulizia appena registrata. */
+export async function annullaSanificazione(id) {
+  const r = await queryOne('SELECT * FROM registro_sanificazione WHERE id = ?', [id]);
+  if (!r) return;
+  await exec('DELETE FROM registro_sanificazione WHERE id = ?', [id]);
+  await traccia('registro_sanificazione', id, 'annullato', r.data_ora, 'annullato subito dopo la registrazione');
 }
 

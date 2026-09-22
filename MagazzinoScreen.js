@@ -3,11 +3,11 @@ import { View, Text, ScrollView, TextInput, TouchableOpacity, Modal, Alert } fro
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, fmtData, fmtDataOra, giorniAllaScadenza } from './theme';
 import {
-  Campo, Bottone, Chips, ModaleModifica, useAvviso, conferma, useFoto, AnteprimaFoto, VistaModale,
+  Campo, Bottone, Chips, ModaleModifica, useAvviso, conferma, useFoto, AnteprimaFoto, VistaModale, Segmenti,
 } from './UI';
 import {
   listaLotti, registraScarico, query, correggiRecord, correggiUscita, annullaCarico, impostaFotoLotto,
-  lottiBloccati, cercaLotti, movimentiDiLotto, produzioniDaLotto, impattoLotto, bloccaLotto, sbloccaLotto,
+  lottiBloccati, annullaUscita, cercaLotti, movimentiDiLotto, produzioniDaLotto, impattoLotto, bloccaLotto, sbloccaLotto,
   getImpostazioni,
 } from './database';
 import { stampaSchedaLotto } from './schedaLotto';
@@ -164,18 +164,26 @@ export default function MagazzinoScreen({ route }) {
     }
     let resto = q;
     const usati = [];
+    const movimenti = [];
     for (const l of elenco) {
       if (resto <= 1e-9) break;
       const parte = Math.min(resto, Number(l.quantita_residua));
       if (parte <= 0) continue;
-      await registraScarico(l.id, Math.round(parte * 1000) / 1000, uscita.causale);
+      movimenti.push(await registraScarico(l.id, Math.round(parte * 1000) / 1000, uscita.causale));
       usati.push(l.numero_lotto || `#${l.id}`);
       resto -= parte;
     }
     const idLotto = uscita.lotto ? uscita.lotto.id : null;
     setUscita(null);
     if (idLotto) await ricaricaLotto(idLotto); else ricarica();
-    mostra(`Salvato ✓ ${fmtQ(q)} ${elenco[0].unita_misura || ''} (${usati.length > 1 ? `lotti ${usati.join(', ')}` : `lotto ${usati[0]}`})`);
+    mostra(`Scaricati ${fmtQ(q)} ${elenco[0].unita_misura || ''} (${usati.length > 1 ? `lotti ${usati.join(', ')}` : `lotto ${usati[0]}`})`, {
+      testo: 'Annulla',
+      onPress: async () => {
+        for (const m of movimenti) await annullaUscita(m);
+        if (idLotto) await ricaricaLotto(idLotto); else ricarica();
+        mostra('Scarico annullato');
+      },
+    });
   };
 
   const salvaCarico = async (cambi) => {
@@ -287,7 +295,7 @@ export default function MagazzinoScreen({ route }) {
       <View style={{ padding: 16, paddingBottom: 0 }}>
         <TextInput style={S.input} placeholder="Cerca prodotto, lotto o fornitore…" value={cerca}
           onChangeText={setCerca} placeholderTextColor="#9CA3AF" />
-        <Chips opzioni={['In giacenza', 'Tutti i lotti']} valore={modo} onChange={setModo} />
+        <Segmenti opzioni={['In giacenza', 'Tutti i lotti']} valore={modo} onChange={setModo} />
       </View>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={S.content}>
@@ -378,7 +386,7 @@ export default function MagazzinoScreen({ route }) {
                     {l.colli ? ` · ${l.colli} ${l.colli === 1 ? 'collo' : 'colli'}` : ''}
                   </Text>
                   <Text style={{ color: coloreScadenza(l.data_scadenza), fontWeight: '600' }}>
-                    {testoScadenza(l.data_scadenza)}  <Text style={{ color: COLORS.primary }}>› dettagli</Text>
+                    {testoScadenza(l.data_scadenza)}  <Text style={{ color: COLORS.azione }}>› dettagli</Text>
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -411,7 +419,7 @@ export default function MagazzinoScreen({ route }) {
                 <Text style={S.muted}>Temperatura al ricevimento: {sel.temperatura_rilevata ?? '—'}°C</Text>
                 {!!sel.note && <Text style={[S.muted, { fontStyle: 'italic', marginTop: 4 }]}>{sel.note}</Text>}
                 <TouchableOpacity onPress={() => setModCarico(true)}>
-                  <Text style={{ color: COLORS.primary, fontWeight: '800', marginTop: 10, fontSize: 15 }}>✎ Modifica dati del carico</Text>
+                  <Text style={{ color: COLORS.azione, fontWeight: '800', marginTop: 10, fontSize: 15 }}>✎ Modifica dati del carico</Text>
                 </TouchableOpacity>
               </Riquadro>
 
@@ -498,7 +506,7 @@ export default function MagazzinoScreen({ route }) {
                     </View>
                     <Text style={{ fontWeight: '700', color: m.tipo === 'carico' ? COLORS.ok : COLORS.text }}>
                       {m.tipo === 'carico' ? '+' : '−'}{fmtQ(m.quantita)} {sel.unita_misura}
-                      {m.tipo !== 'carico' && <Text style={{ color: COLORS.primary }}>  ✎</Text>}
+                      {m.tipo !== 'carico' && <Text style={{ color: COLORS.azione }}>  ✎</Text>}
                     </Text>
                   </TouchableOpacity>
                 ))}

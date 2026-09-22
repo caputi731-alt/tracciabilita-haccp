@@ -56,3 +56,10 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
 - Contenuto di una modale: sempre dentro `VistaModale` (UI.js), non uno `ScrollView` figlio diretto di `<Modal>` (su Android non scorrerebbe fino al primo nuovo layout).
 - Struttura schermate: Magazzino contiene anche la rintracciabilità (modalità "In giacenza" / "Tutti i lotti"); la rotta `Rintracciabilita` punta a MagazzinoScreen per compatibilità. `CaricoMerce` è l'ingresso unico verso ImportaFattura e Ricevimento. PDF del lotto in `schedaLotto.js`.
 - Anagrafiche (Prodotti/Fornitori/Ricette/Frigoriferi) e Documenti e dati (Registri PDF/Backup) sono contenitori a linguette: le schermate interne restano file separati e si aprono anche da rotta diretta con `{ scheda: '...' }`.
+
+## Linee guida UX (pacchetto build 60)
+- Colori: `COLORS.azione` (blu) per pulsanti, collegamenti e scelte attive; il verde (`primary`/`ok`) solo per intestazione e stati positivi.
+- Testi: `S.muted` 15pt, etichette 13pt; pulsanti ≥ 50px, chip ≥ 46px.
+- Errori di compilazione: `useErrori()` + prop `errore` su `Campo`/`Selettore` + `{riepilogo}` sopra il pulsante. Niente `Alert` per dati mancanti.
+- Registrazioni frequenti (scarico, temperatura, pulizia): nessuna conferma preventiva, avviso con "Annulla" (`mostra(testo, { testo: 'Annulla', onPress })`) e funzioni `annullaUscita` / `annullaTemperatura` / `annullaSanificazione`.
+- Cambi di vista: `Segmenti`, non `Chips`.

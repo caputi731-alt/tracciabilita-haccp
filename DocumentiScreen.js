@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View } from 'react-native';
 import { S } from './theme';
-import { Chips } from './UI';
+import { Segmenti } from './UI';
 import ReportScreen from './ReportScreen';
 import BackupScreen from './BackupScreen';
 
@@ -13,7 +13,7 @@ export default function DocumentiScreen({ route }) {
   return (
     <View style={S.screen}>
       <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
-        <Chips opzioni={Object.keys(SCHEDE)} valore={scheda} onChange={setScheda} />
+        <Segmenti opzioni={Object.keys(SCHEDE)} valore={scheda} onChange={setScheda} />
       </View>
       <View style={{ flex: 1 }}>
         <Corrente />

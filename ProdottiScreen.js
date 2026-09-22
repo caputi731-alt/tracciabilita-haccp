@@ -3,7 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, Modal, Alert, TextInput } fro
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, ALLERGENI, CATEGORIE_PRODOTTO, CONSERVAZIONE, UNITA } from './theme';
 import {
-  Campo, Chips, Selettore, Scanner, Bottone, conferma, useFoto, AnteprimaFoto, VistaModale,
+  Campo, Chips, Selettore, Scanner, Bottone, conferma, useFoto, AnteprimaFoto, VistaModale, useErrori,
 } from './UI';
 import {
   listaProdotti, salvaProdotto, eliminaProdotto, listaFornitori,
@@ -34,9 +34,12 @@ export default function ProdottiScreen() {
   const apri = (p) =>
     setForm(p ? { ...p, allergeni: JSON.parse(p.allergeni || '[]') } : { ...VUOTO });
 
+  const { errori, segnala, azzera, riepilogo } = useErrori();
+
   const salva = async () => {
+    azzera();
     if (!form.denominazione.trim()) {
-      return Alert.alert('Dato mancante', 'La denominazione è obbligatoria.');
+      return segnala('denominazione', 'La denominazione è obbligatoria');
     }
     await salvaProdotto(form);
     setForm(null);
@@ -116,7 +119,8 @@ export default function ProdottiScreen() {
           <VistaModale>
             <Text style={S.h1}>{form.id ? 'Modifica prodotto' : 'Nuovo prodotto'}</Text>
 
-            <Campo label="Denominazione *" value={form.denominazione} onChange={set('denominazione')} />
+            <Campo label="Denominazione *" value={form.denominazione} onChange={set('denominazione')}
+              errore={errori.denominazione} />
             <Chips label="Categoria" opzioni={CATEGORIE_PRODOTTO} valore={form.categoria}
               onChange={set('categoria')} />
 
@@ -167,6 +171,7 @@ export default function ProdottiScreen() {
 
             <Campo label="Note" value={form.note} onChange={set('note')} multiline />
 
+            {riepilogo}
             <Bottone testo="Salva" onPress={salva} />
             <Bottone testo="Annulla" ghost onPress={() => setForm(null)} />
           </VistaModale>

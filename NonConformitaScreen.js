@@ -3,7 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, Modal, Alert } from 'react-na
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, fmtDataOra } from './theme';
 import {
-  Campo, Chips, Bottone, ModaleModifica, useAvviso, VistaModale,
+  Campo, Chips, Bottone, ModaleModifica, useAvviso, VistaModale, useErrori,
 } from './UI';
 import {
   tutteNonConformita, chiudiNonConformita, aggiungiNonConformita, correggiRecord,
@@ -23,6 +23,7 @@ export default function NonConformitaScreen() {
   const [nuova, setNuova] = useState(null);    // form nuova NC
   const [inModifica, setInModifica] = useState(null);
   const { avviso, mostra } = useAvviso();
+  const { errori, segnala, azzera, riepilogo } = useErrori();
 
   const ricarica = useCallback(() => { tutteNonConformita().then(setLista); }, []);
   useFocusEffect(ricarica);
@@ -31,7 +32,8 @@ export default function NonConformitaScreen() {
   const chiuse = lista.filter((n) => n.stato !== 'aperta');
 
   const chiudi = async () => {
-    if (!azione.trim()) return Alert.alert('Azione mancante', 'Descrivi l\'azione correttiva.');
+    azzera();
+    if (!azione.trim()) return segnala('azione', 'Descrivi l\'azione correttiva');
     await chiudiNonConformita(sel.id, azione);
     setSel(null); setAzione('');
     ricarica();
@@ -39,9 +41,6 @@ export default function NonConformitaScreen() {
   };
 
   const salvaCorrezione = async (cambi) => {
-    if (inModifica.stato !== 'aperta' && !cambi.azione_correttiva) {
-      return Alert.alert('Dato mancante', 'Una non conformità chiusa deve avere l\'azione correttiva.');
-    }
     try {
       const n = await correggiRecord('non_conformita', inModifica.id, cambi);
       setInModifica(null);
@@ -54,7 +53,8 @@ export default function NonConformitaScreen() {
 
   const setN = (k) => (v) => setNuova((f) => ({ ...f, [k]: v }));
   const salvaNuova = async () => {
-    if (!nuova.descrizione?.trim()) return Alert.alert('Dato mancante', 'Descrivi la non conformità.');
+    azzera();
+    if (!nuova.descrizione?.trim()) return segnala('descrizione', 'Descrivi la non conformità');
     await aggiungiNonConformita(nuova);
     setNuova(null);
     ricarica();
@@ -77,7 +77,7 @@ export default function NonConformitaScreen() {
       {!!n.azione_correttiva && (
         <Text style={[S.muted, { marginTop: 4 }]}>Azione: {n.azione_correttiva}</Text>
       )}
-      <Text style={{ color: COLORS.primary, fontWeight: '600', marginTop: 6 }}>
+      <Text style={{ color: COLORS.azione, fontWeight: '600', marginTop: 6 }}>
         {n.stato === 'aperta' ? 'Tocca per chiudere con azione correttiva' : '✎ Tocca per correggere'}
       </Text>
     </TouchableOpacity>
@@ -117,7 +117,9 @@ export default function NonConformitaScreen() {
               <Text style={[S.muted, { marginTop: 2 }]}>Aperta il {fmtDataOra(sel.data_ora)}</Text>
             </View>
             <Campo label="Azione correttiva adottata *" value={azione} onChange={setAzione} multiline
+              errore={errori.azione}
               placeholder="Cosa hai fatto per risolvere e prevenire" />
+            {riepilogo}
             <Bottone testo="Chiudi la non conformità" onPress={chiudi} />
             <Bottone testo="✎ Correggi la descrizione" ghost
               onPress={() => { const n = sel; setSel(null); setAzione(''); setInModifica(n); }} />
@@ -128,7 +130,10 @@ export default function NonConformitaScreen() {
 
       <ModaleModifica visibile={!!inModifica} titolo="Correggi non conformità"
         sottotitolo={inModifica ? `${inModifica.origine || ''} · aperta il ${fmtDataOra(inModifica.data_ora)}` : ''}
-        campi={CAMPI_NC} record={inModifica} onSalva={salvaCorrezione}
+        campi={inModifica && inModifica.stato !== 'aperta'
+          ? CAMPI_NC.map((c) => (c.chiave === 'azione_correttiva' ? { ...c, obbligatorio: true } : c))
+          : CAMPI_NC}
+        record={inModifica} onSalva={salvaCorrezione}
         onChiudi={() => setInModifica(null)} />
       {avviso}
 
@@ -140,10 +145,12 @@ export default function NonConformitaScreen() {
             <View style={S.card}>
               <Chips label="Origine" opzioni={ORIGINI} valore={nuova.origine} onChange={setN('origine')} />
               <Campo label="Descrizione *" value={nuova.descrizione} onChange={setN('descrizione')} multiline
+                errore={errori.descrizione}
                 placeholder="Cosa è successo" />
               <Campo label="Azione correttiva (se già risolta)" value={nuova.azione_correttiva}
                 onChange={setN('azione_correttiva')} multiline
                 placeholder="Lascia vuoto per tenerla aperta" />
+              {riepilogo}
               <Bottone testo="Salva" onPress={salvaNuova} />
               <Bottone testo="Annulla" ghost onPress={() => setNuova(null)} />
             </View>

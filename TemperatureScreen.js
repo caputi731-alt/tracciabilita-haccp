@@ -2,9 +2,11 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, TextInput, Alert, TouchableOpacity, Modal } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, fmtDataOra } from './theme';
-import { Bottone } from './UI';
 import {
-  listaPuntiControllo, registraTemperatura, temperatureDiOggi, query, modificaTemperatura,
+  Bottone, useAvviso,
+} from './UI';
+import {
+  listaPuntiControllo, registraTemperatura, temperatureDiOggi, query, modificaTemperatura, annullaTemperatura,
 } from './database';
 
 export default function TemperatureScreen() {
@@ -14,6 +16,7 @@ export default function TemperatureScreen() {
   const [storico, setStorico] = useState([]);
   const [inModifica, setInModifica] = useState(null);
   const [nuovoValore, setNuovoValore] = useState('');
+  const { avviso, mostra } = useAvviso();
 
   const ricarica = useCallback(() => {
     (async () => {
@@ -29,12 +32,19 @@ export default function TemperatureScreen() {
 
   const registra = async (punto) => {
     const v = valori[punto.id];
-    if (v === undefined || v === '' || Number.isNaN(Number(v))) {
+    const numero = Number(String(v ?? '').replace(',', '.'));
+    if (v === undefined || v === '' || Number.isNaN(numero)) {
       return Alert.alert('Valore mancante', `Inserisci la temperatura di ${punto.nome}.`);
     }
-    const conforme = await registraTemperatura(punto.id, Number(v), null);
+    const { conforme, id, ncId } = await registraTemperatura(punto.id, numero, null);
     setValori((s) => ({ ...s, [punto.id]: '' }));
     ricarica();
+    if (conforme) {
+      mostra(`Salvato ✓ ${punto.nome}: ${String(numero).replace('.', ',')}°C`, {
+        testo: 'Annulla',
+        onPress: async () => { await annullaTemperatura(id, ncId); ricarica(); mostra('Rilevazione annullata'); },
+      });
+    }
     if (!conforme) {
       Alert.alert(
         'Temperatura fuori limite',
@@ -69,7 +79,8 @@ export default function TemperatureScreen() {
   const fattoOggi = (id) => oggi.find((o) => o.punto_controllo_id === id);
 
   return (
-    <ScrollView style={S.screen} contentContainerStyle={S.content}>
+    <View style={S.screen}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={S.content}>
       <Text style={S.h1}>Registro temperature</Text>
       <Text style={[S.muted, { marginBottom: 16 }]}>Rilevazione giornaliera</Text>
 
@@ -97,7 +108,7 @@ export default function TemperatureScreen() {
               }}>
                 Rilevato oggi: {fatto.temperatura}°C ({fatto.esito})
               </Text>
-              <Text style={{ color: COLORS.primary, fontWeight: '700', marginTop: 4 }}>✎ Modifica</Text>
+              <Text style={{ color: COLORS.azione, fontWeight: '700', marginTop: 4 }}>✎ Modifica</Text>
               </TouchableOpacity>
             ) : (
               <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 10 }}>
@@ -134,7 +145,7 @@ export default function TemperatureScreen() {
                   fontWeight: '700',
                   color: r.esito === 'conforme' ? COLORS.ok : COLORS.danger,
                 }}>
-                  {r.temperatura}°C  <Text style={{ color: COLORS.primary }}>✎</Text>
+                  {r.temperatura}°C  <Text style={{ color: COLORS.azione }}>✎</Text>
                 </Text>
               </TouchableOpacity>
             ))}
@@ -168,5 +179,7 @@ export default function TemperatureScreen() {
         </View>
       </Modal>
     </ScrollView>
+    {avviso}
+    </View>
   );
 }

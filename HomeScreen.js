@@ -159,7 +159,7 @@ export default function HomeScreen({ navigation }) {
         {AZIONI.map((a) => (
           <TouchableOpacity key={a.rotta} activeOpacity={0.75} onPress={() => navigation.navigate(a.rotta)}
             style={{
-              width: '48.5%', backgroundColor: COLORS.primary, borderRadius: 16, paddingVertical: 18,
+              width: '48.5%', backgroundColor: COLORS.azione, borderRadius: 16, paddingVertical: 18,
               paddingHorizontal: 14, marginBottom: 10, minHeight: 104, justifyContent: 'space-between', elevation: 3,
             }}>
             <Text style={{ fontSize: 26 }}>{a.icona}</Text>

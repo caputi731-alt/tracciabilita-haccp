@@ -2,7 +2,9 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, Alert, Switch, Image, TouchableOpacity } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, UNITA, isoDaCampo } from './theme';
-import { Campo, Chips, Selettore, Scanner, Bottone, useFoto, AnteprimaFoto } from './UI';
+import {
+  Campo, Chips, Selettore, Scanner, Bottone, useFoto, AnteprimaFoto, useErrori,
+} from './UI';
 import {
   listaFornitori, listaProdotti, prodottoDaBarcode, registraCarico, impostaFotoProdotto,
 } from './database';
@@ -43,13 +45,16 @@ export default function RicevimentoScreen({ navigation }) {
     }
   };
 
+  const { errori, segnala, azzera, riepilogo } = useErrori();
+
   const salva = async () => {
-    if (!f.fornitore_id) return Alert.alert('Dato mancante', 'Seleziona il fornitore.');
-    if (!f.prodotto_id) return Alert.alert('Dato mancante', 'Seleziona il prodotto.');
-    if (!f.quantita) return Alert.alert('Dato mancante', 'Indica la quantità ricevuta.');
-    if (isoDaCampo(f.data_scadenza) === undefined) {
-      return Alert.alert('Data non valida', 'Scrivi la scadenza come gg/mm/aaaa.');
-    }
+    azzera();
+    let ok = true;
+    if (!f.fornitore_id) ok = segnala('fornitore_id', 'Seleziona il fornitore');
+    if (!f.prodotto_id) ok = segnala('prodotto_id', 'Seleziona il prodotto');
+    if (!f.quantita || !(Number(String(f.quantita).replace(',', '.')) > 0)) ok = segnala('quantita', 'Indica la quantità ricevuta');
+    if (isoDaCampo(f.data_scadenza) === undefined) ok = segnala('data_scadenza', 'Scrivi la scadenza come gg/mm/aaaa');
+    if (!ok) return;
 
     const nonConforme = !f.integrita_imballo || !f.conformita_etichettatura;
 
@@ -78,14 +83,14 @@ export default function RicevimentoScreen({ navigation }) {
 
   return (
     <ScrollView style={S.screen} contentContainerStyle={S.content}>
-      <TouchableOpacity style={[S.card, { borderLeftWidth: 4, borderLeftColor: COLORS.primary }]}
+      <TouchableOpacity style={[S.card, { borderLeftWidth: 4, borderLeftColor: COLORS.azione }]}
         onPress={() => navigation.navigate('ImportaFattura')} activeOpacity={0.7}>
-        <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.primary }}>Hai la fattura in PDF? →</Text>
+        <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.azione }}>Hai la fattura in PDF? →</Text>
         <Text style={S.muted}>Importala e carica tutte le righe insieme, senza compilare prodotto per prodotto.</Text>
       </TouchableOpacity>
       <Text style={S.h2}>1. Documento di trasporto</Text>
       <View style={S.card}>
-        <Selettore label="Fornitore *" elementi={fornitori} valore={f.fornitore_id}
+        <Selettore label="Fornitore *" elementi={fornitori} valore={f.fornitore_id} errore={errori.fornitore_id}
           etichetta={(x) => x.ragione_sociale} onChange={set('fornitore_id')} />
         <Campo label="Numero DDT / fattura" value={f.ddt_numero} onChange={set('ddt_numero')} />
         <Campo label="Data documento" value={f.ddt_data} onChange={set('ddt_data')}
@@ -97,18 +102,18 @@ export default function RicevimentoScreen({ navigation }) {
 
       <Text style={S.h2}>2. Prodotto e lotto</Text>
       <View style={S.card}>
-        <Selettore label="Prodotto *" elementi={prodotti} valore={f.prodotto_id}
+        <Selettore label="Prodotto *" elementi={prodotti} valore={f.prodotto_id} errore={errori.prodotto_id}
           etichetta={(x) => x.denominazione} onChange={set('prodotto_id')} />
         <Bottone testo="Scansiona codice prodotto" ghost onPress={() => setScanner(true)} />
 
         <Campo label="Numero di lotto" value={f.numero_lotto} onChange={set('numero_lotto')}
           placeholder="come riportato sull'etichetta" />
-        <Campo label="Quantità *" value={f.quantita} onChange={set('quantita')}
+        <Campo label="Quantità *" value={f.quantita} onChange={set('quantita')} errore={errori.quantita}
           keyboardType="numeric" />
         <Chips label="Unità" opzioni={UNITA} valore={f.unita_misura} onChange={set('unita_misura')} />
         <Campo label="Colli (facoltativo)" value={f.colli} onChange={set('colli')}
           keyboardType="number-pad" placeholder="numero di confezioni/casse ricevute" />
-        <Campo label="Data di scadenza / TMC" value={f.data_scadenza}
+        <Campo label="Data di scadenza / TMC" value={f.data_scadenza} errore={errori.data_scadenza}
           onChange={set('data_scadenza')} placeholder="gg/mm/aaaa" />
         <Campo label="Prezzo unitario (€)" value={f.prezzo_unitario}
           onChange={set('prezzo_unitario')} keyboardType="numeric" />
@@ -143,6 +148,7 @@ export default function RicevimentoScreen({ navigation }) {
         <Campo label="Note / rilievi" value={f.note} onChange={set('note')} multiline />
       </View>
 
+      {riepilogo}
       <Bottone testo="Registra carico" onPress={salva} />
 
       <TouchableOpacity onPress={() => setF({ ...VUOTO })} style={{ padding: 16 }}>

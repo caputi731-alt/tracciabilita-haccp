@@ -3,7 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, Modal, Alert } from 'react-na
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, CATEGORIE_PRODOTTO, UNITA } from './theme';
 import {
-  Campo, Chips, Selettore, Bottone, conferma, VistaModale,
+  Campo, Chips, Selettore, Bottone, conferma, VistaModale, useErrori,
 } from './UI';
 import {
   listaRicette, getRicetta, salvaRicetta, eliminaRicetta, listaProdotti, tabellaAllergeni, getImpostazioni,
@@ -62,8 +62,11 @@ export default function RicetteScreen() {
     return [...set0];
   };
 
+  const { errori, segnala, azzera, riepilogo } = useErrori();
+
   const salva = async () => {
-    if (!form.nome.trim()) return Alert.alert('Dato mancante', 'Dai un nome alla ricetta.');
+    azzera();
+    if (!form.nome.trim()) return segnala('nome', 'Dai un nome alla ricetta');
     await salvaRicetta({
       ...form,
       porzioni: form.porzioni === '' ? null : Number(form.porzioni),
@@ -117,7 +120,7 @@ export default function RicetteScreen() {
         {form && (
           <VistaModale>
             <Text style={S.h1}>{form.id ? 'Modifica ricetta' : 'Nuova ricetta'}</Text>
-            <Campo label="Nome *" value={form.nome} onChange={set('nome')} />
+            <Campo label="Nome *" value={form.nome} onChange={set('nome')} errore={errori.nome} />
             <Chips label="Categoria" opzioni={CATEGORIE_PRODOTTO} valore={form.categoria} onChange={set('categoria')} />
             <Campo label="Porzioni" value={form.porzioni} onChange={set('porzioni')} keyboardType="numeric" />
 
@@ -149,6 +152,7 @@ export default function RicetteScreen() {
 
             <Campo label="Procedura" value={form.procedura} onChange={set('procedura')} multiline />
 
+            {riepilogo}
             <Bottone testo="Salva ricetta" onPress={salva} />
             <Bottone testo="Annulla" ghost onPress={() => setForm(null)} />
           </VistaModale>

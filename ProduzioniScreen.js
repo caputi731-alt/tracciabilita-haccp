@@ -3,7 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, Modal, Alert } from 'react-na
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, fmtData, fmtDataOra } from './theme';
 import {
-  Campo, Selettore, Bottone, ModaleModifica, useAvviso, VistaModale,
+  Campo, Selettore, Bottone, ModaleModifica, useAvviso, VistaModale, useErrori,
 } from './UI';
 import {
   listaRicette, getRicetta, listaProduzioni, getProduzione,
@@ -32,6 +32,7 @@ export default function ProduzioniScreen() {
   const [dettaglio, setDettaglio] = useState(null);
   const [modifica, setModifica] = useState(false);
   const { avviso, mostra } = useAvviso();
+  const { errori, segnala, azzera, riepilogo } = useErrori();
 
   // form nuova produzione
   const [ricettaId, setRicettaId] = useState(null);
@@ -78,7 +79,8 @@ export default function ProduzioniScreen() {
     setRighe((rs) => rs.map((r, i) => (i === idx ? { ...r, [k]: v } : r)));
 
   const salva = async () => {
-    if (!nome.trim()) return Alert.alert('Dato mancante', 'Serve il nome del piatto.');
+    azzera();
+    if (!nome.trim()) return segnala('nome', 'Serve il nome del piatto');
     const usi = righe
       .filter((r) => r.lotto_id && r.quantita !== '')
       .map((r) => ({ lotto_id: r.lotto_id, quantita: Number(r.quantita) }));
@@ -142,7 +144,7 @@ export default function ProduzioniScreen() {
             <Selettore label="Ricetta" elementi={ricette} valore={ricettaId}
               etichetta={(x) => x.nome} onChange={scegliRicetta}
               placeholder="Scegli una ricetta" />
-            <Campo label="Nome del piatto" value={nome} onChange={setNome} />
+            <Campo label="Nome del piatto *" value={nome} onChange={setNome} errore={errori.nome} />
             <Campo label="Quantità prodotta" value={quantita} onChange={setQuantita} keyboardType="numeric" />
             <Campo label="Scadenza interna" value={scadenza} onChange={setScadenza} placeholder="AAAA-MM-GG" />
             <Campo label="Operatore" value={operatore} onChange={setOperatore} />
@@ -172,6 +174,7 @@ export default function ProduzioniScreen() {
             </View>
           ))}
 
+          {riepilogo}
           <Bottone testo="Registra produzione" onPress={salva} />
           <Bottone testo="Annulla" ghost onPress={() => setNuova(false)} />
         </VistaModale>
@@ -191,7 +194,7 @@ export default function ProduzioniScreen() {
               <Text style={S.muted}>Operatore: {dettaglio.operatore || '—'}</Text>
               {!!dettaglio.note && <Text style={[S.muted, { fontStyle: 'italic', marginTop: 4 }]}>{dettaglio.note}</Text>}
               <TouchableOpacity onPress={() => setModifica(true)}>
-                <Text style={{ color: COLORS.primary, fontWeight: '800', marginTop: 10, fontSize: 15 }}>✎ Modifica dati</Text>
+                <Text style={{ color: COLORS.azione, fontWeight: '800', marginTop: 10, fontSize: 15 }}>✎ Modifica dati</Text>
               </TouchableOpacity>
               <Text style={[S.muted, { marginTop: 4 }]}>I lotti impiegati non si modificano da qui: sono già stati scaricati.</Text>
             </View>

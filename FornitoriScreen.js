@@ -3,7 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, Modal, Alert } from 'react-na
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS } from './theme';
 import {
-  Campo, Bottone, conferma, VistaModale,
+  Campo, Bottone, conferma, VistaModale, useErrori,
 } from './UI';
 import { listaFornitori, salvaFornitore, eliminaFornitore } from './database';
 
@@ -21,9 +21,12 @@ export default function FornitoriScreen() {
   }, []);
   useFocusEffect(ricarica);
 
+  const { errori, segnala, azzera, riepilogo } = useErrori();
+
   const salva = async () => {
+    azzera();
     if (!form.ragione_sociale.trim()) {
-      return Alert.alert('Dato mancante', 'La ragione sociale è obbligatoria.');
+      return segnala('ragione_sociale', 'La ragione sociale è obbligatoria');
     }
     await salvaFornitore(form);
     setForm(null);
@@ -67,7 +70,8 @@ export default function FornitoriScreen() {
         {form && (
           <VistaModale>
             <Text style={S.h1}>{form.id ? 'Modifica fornitore' : 'Nuovo fornitore'}</Text>
-            <Campo label="Ragione sociale *" value={form.ragione_sociale} onChange={set('ragione_sociale')} />
+            <Campo label="Ragione sociale *" value={form.ragione_sociale} onChange={set('ragione_sociale')}
+              errore={errori.ragione_sociale} />
             <Campo label="Categoria merceologica" value={form.categoria} onChange={set('categoria')}
               placeholder="es. Ortofrutta, Carni" />
             <Campo label="Partita IVA" value={form.partita_iva} onChange={set('partita_iva')}
@@ -79,6 +83,7 @@ export default function FornitoriScreen() {
             <Campo label="Email" value={form.email} onChange={set('email')} keyboardType="email-address"
               autoCapitalize="none" />
             <Campo label="Note" value={form.note} onChange={set('note')} multiline />
+            {riepilogo}
             <Bottone testo="Salva" onPress={salva} />
             <Bottone testo="Annulla" ghost onPress={() => setForm(null)} />
           </VistaModale>

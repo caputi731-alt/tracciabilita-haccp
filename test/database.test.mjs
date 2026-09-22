@@ -159,3 +159,28 @@ test('foto etichetta sulla scheda prodotto: dal ricevimento, dalle fatture e a m
   assert.ok(salvato);
   assert.equal((await db.queryOne("SELECT foto_etichetta f FROM prodotti WHERE denominazione = 'Con foto'")).f, 'file:///foto/d.jpg');
 });
+
+test('annulla subito: scarico, temperatura (con la sua non conformità) e pulizia', async () => {
+  const id = await carico({ quantita: 5 });
+  const mov = await db.registraScarico(id, 5, 'consumo');
+  assert.equal((await db.queryOne('SELECT stato FROM lotti WHERE id = ?', [id])).stato, 'esaurito');
+  await db.annullaUscita(mov);
+  const l = await db.queryOne('SELECT stato, quantita_residua q FROM lotti WHERE id = ?', [id]);
+  assert.deepEqual([l.stato, l.q], ['disponibile', 5]);
+  assert.equal((await db.queryOne('SELECT COUNT(*) n FROM movimenti WHERE id = ?', [mov])).n, 0);
+
+  const pc = (await db.exec("INSERT INTO punti_controllo (nome, tipo, temp_min, temp_max) VALUES ('Frigo 1', 'frigorifero', 0, 4)")).lastInsertRowId;
+  const ok = await db.registraTemperatura(pc, 3, null);
+  assert.equal(ok.conforme, true);
+  const ko = await db.registraTemperatura(pc, 9, null);
+  assert.equal(ko.conforme, false);
+  assert.ok(ko.ncId);
+  await db.annullaTemperatura(ko.id, ko.ncId);
+  assert.equal((await db.queryOne('SELECT COUNT(*) n FROM non_conformita WHERE id = ?', [ko.ncId])).n, 0);
+  assert.equal((await db.queryOne('SELECT COUNT(*) n FROM registro_temperature WHERE id = ?', [ko.id])).n, 0);
+
+  const s = await db.registraSanificazione({ area_id: null, prodotto_utilizzato: 'x', operatore: 'L', note: null });
+  await db.annullaSanificazione(s);
+  assert.equal((await db.queryOne('SELECT COUNT(*) n FROM registro_sanificazione WHERE id = ?', [s])).n, 0);
+  assert.ok((await db.query("SELECT * FROM registro_modifiche WHERE campo = 'annullato'")).length >= 3);
+});
