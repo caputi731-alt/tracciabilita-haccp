@@ -3,7 +3,7 @@ import { View, Text, ScrollView, TextInput, Alert, TouchableOpacity, Modal } fro
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, fmtDataOra } from './theme';
 import {
-  Bottone, useAvviso,
+  Bottone, useAvviso, Campo, useErrori,
 } from './UI';
 import {
   listaPuntiControllo, registraTemperatura, temperatureDiOggi, query, modificaTemperatura, annullaTemperatura,
@@ -17,6 +17,7 @@ export default function TemperatureScreen() {
   const [inModifica, setInModifica] = useState(null);
   const [nuovoValore, setNuovoValore] = useState('');
   const { avviso, mostra } = useAvviso();
+  const { errori, segnala, azzera } = useErrori();
 
   const ricarica = useCallback(() => {
     (async () => {
@@ -60,10 +61,9 @@ export default function TemperatureScreen() {
   };
 
   const salvaModifica = async () => {
-    const v = nuovoValore.replace(',', '.');
-    if (v === '' || Number.isNaN(Number(v))) {
-      return Alert.alert('Valore non valido', 'Inserisci una temperatura numerica.');
-    }
+    azzera();
+    const v = nuovoValore.replace(',', '.').trim();
+    if (v === '' || Number.isNaN(Number(v))) return segnala('valore', 'Inserisci una temperatura in numeri, es. 3,5');
     const esito = await modificaTemperatura(inModifica.id, Number(v));
     setInModifica(null);
     ricarica();
@@ -72,7 +72,7 @@ export default function TemperatureScreen() {
         `${esito.nome}: ${v}°C, fuori dall'intervallo ${esito.temp_min}/${esito.temp_max}°C.\n\n` +
         'La non conformità è aperta: annota l\'azione correttiva.');
     } else {
-      Alert.alert('Salvato ✓', 'Rilevazione corretta. Il valore originale resta annotato nel registro.');
+      mostra('Rilevazione corretta ✓ Il valore originale resta nel registro');
     }
   };
 
@@ -163,17 +163,12 @@ export default function TemperatureScreen() {
                 {inModifica.nome} · {fmtDataOra(inModifica.data_ora)}
               </Text>
             )}
-            <TextInput
-              style={S.input}
-              keyboardType="numbers-and-punctuation"
-              value={nuovoValore}
-              onChangeText={setNuovoValore}
-              autoFocus
-              selectTextOnFocus
-            />
+            <Campo label="Temperatura (°C)" keyboardType="numbers-and-punctuation"
+              value={nuovoValore} onChange={setNuovoValore} errore={errori.valore}
+              autoFocus selectTextOnFocus />
             <View style={{ marginTop: 12 }}>
               <Bottone testo="Salva correzione" onPress={salvaModifica} />
-              <Bottone testo="Annulla" ghost onPress={() => setInModifica(null)} />
+              <Bottone testo="Annulla" ghost onPress={() => { azzera(); setInModifica(null); }} />
             </View>
           </View>
         </View>

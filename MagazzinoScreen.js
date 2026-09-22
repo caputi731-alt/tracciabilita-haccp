@@ -3,7 +3,7 @@ import { View, Text, ScrollView, TextInput, TouchableOpacity, Modal, Alert } fro
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, fmtData, fmtDataOra, giorniAllaScadenza } from './theme';
 import {
-  Campo, Bottone, Chips, ModaleModifica, useAvviso, conferma, useFoto, AnteprimaFoto, VistaModale, Segmenti,
+  Campo, Bottone, Chips, ModaleModifica, useAvviso, conferma, useFoto, AnteprimaFoto, VistaModale, Segmenti, useErrori,
 } from './UI';
 import {
   listaLotti, registraScarico, query, correggiRecord, correggiUscita, annullaCarico, impostaFotoLotto,
@@ -79,6 +79,7 @@ export default function MagazzinoScreen({ route }) {
   const [modUscita, setModUscita] = useState(null);
   const [qtaUscita, setQtaUscita] = useState('');
   const { avviso, mostra } = useAvviso();
+  const { errori, segnala, azzera } = useErrori();
   const { chiediFoto, fotocamera } = useFoto();
 
   const ricarica = useCallback(() => {
@@ -155,12 +156,13 @@ export default function MagazzinoScreen({ route }) {
 
   /* --- uscite: su un gruppo si scarica in ordine FIFO, anche su più lotti --- */
   const confermaUscita = async () => {
+    azzera();
     const q = aNumero(uscita.qta);
-    if (!q || q <= 0) return Alert.alert('Quantità non valida', 'Inserisci un numero maggiore di zero.');
+    if (!q || q <= 0) return segnala('qta', 'Inserisci una quantità maggiore di zero');
     const elenco = uscita.lotto ? [uscita.lotto] : uscita.gruppo.lotti;
     const disponibile = elenco.reduce((s, l) => s + Number(l.quantita_residua), 0);
     if (q > disponibile + 1e-9) {
-      return Alert.alert('Quantità eccessiva', `Disponibili ${fmtQ(disponibile)} ${elenco[0].unita_misura || ''}.`);
+      return segnala('qta', `Ne sono disponibili solo ${fmtQ(disponibile)} ${elenco[0].unita_misura || ''}`);
     }
     let resto = q;
     const usati = [];
@@ -225,7 +227,7 @@ export default function MagazzinoScreen({ route }) {
 
   /* Uscita (da gruppo in FIFO o da singolo lotto) */
   const modaleUscita = (
-      <Modal visible={!!uscita} transparent animationType="fade" onRequestClose={() => setUscita(null)}>
+      <Modal visible={!!uscita} transparent animationType="fade" onRequestClose={() => { azzera(); setUscita(null); }}>
         {uscita && (() => {
           const elenco = uscita.lotto ? [uscita.lotto] : uscita.gruppo.lotti;
           const um = elenco[0].unita_misura || '';
@@ -245,7 +247,7 @@ export default function MagazzinoScreen({ route }) {
                 <Text style={S.h2}>Scarica {uscita.lotto ? uscita.lotto.prodotto : uscita.gruppo.prodotto}</Text>
                 <Text style={S.muted}>Disponibili {fmtQ(disp)} {um}{uscita.lotto ? ` nel lotto ${uscita.lotto.numero_lotto || '—'}` : ''}</Text>
                 <Campo label={`Quantità (${um})`} value={uscita.qta} keyboardType="decimal-pad" autoFocus
-                  onChange={(v) => setUscita((u) => ({ ...u, qta: v }))} />
+                  errore={errori.qta} onChange={(v) => setUscita((u) => ({ ...u, qta: v }))} />
                 <View style={[S.chipWrap, { marginTop: 10 }]}>
                   <TouchableOpacity style={S.chip}
                     onPress={() => setUscita((u) => ({ ...u, qta: String(Number(elenco[0].quantita_residua)).replace('.', ',') }))}>
@@ -265,7 +267,7 @@ export default function MagazzinoScreen({ route }) {
                 )}
                 <Bottone testo="Conferma uscita" onPress={confermaUscita}
                   colore={uscita.causale === 'consumo' ? undefined : COLORS.danger} />
-                <Bottone testo="Annulla" ghost onPress={() => setUscita(null)} />
+                <Bottone testo="Annulla" ghost onPress={() => { azzera(); setUscita(null); }} />
               </View>
             </View>
           );
