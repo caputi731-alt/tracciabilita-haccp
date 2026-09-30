@@ -66,3 +66,5 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
 - Componenti UI comuni: `Icona` (MaterialCommunityIcons da @expo/vector-icons, niente emoji), `Bottone icona=`, `Sezione` (blocchi apribili),
   `Caricamento` (segnaposto), `Vuoto` (elenco vuoto con azione), `CampoData` (calendario, valori ISO). Le date si scelgono sempre con `CampoData`.
 - Registri PDF: i corpi HTML stanno in report.js (`corpoTemperature`, `corpoCarichi`, ...) e sono riusati da `htmlPacchettoASL`.
+- Dipendenze: mai versioni con "^" per pacchetti che contengono codice nativo. Devono restare quelle di Expo SDK 52
+  (es. expo-font ~13.0.4, @expo/vector-icons ~14.0.4): la 14.1 di vector-icons trascina expo-font 57 e rompe la compilazione Android.
