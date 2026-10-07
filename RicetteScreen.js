@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Modal, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { S, COLORS, CATEGORIE_PRODOTTO, UNITA } from './theme';
+import { S, COLORS, CATEGORIE_PRODOTTO, UNITA, aNumero, numeroPerCampo } from './theme';
 import {
   Campo, Chips, Selettore, Bottone, conferma, VistaModale, useErrori, Vuoto,
 } from './UI';
@@ -30,7 +30,7 @@ export default function RicetteScreen() {
         ...piena,
         porzioni: piena.porzioni != null ? String(piena.porzioni) : '',
         ingredienti: piena.ingredienti.map((i) => ({
-          prodotto_id: i.prodotto_id, quantita: String(i.quantita ?? ''), unita_misura: i.unita_misura || '',
+          prodotto_id: i.prodotto_id, quantita: i.quantita ? numeroPerCampo(i.quantita) : '', unita_misura: i.unita_misura || '',
         })),
       });
     } else {
@@ -66,14 +66,20 @@ export default function RicetteScreen() {
 
   const salva = async () => {
     azzera();
-    if (!form.nome.trim()) return segnala('nome', 'Dai un nome alla ricetta');
-    await salvaRicetta({
-      ...form,
-      porzioni: form.porzioni === '' ? null : Number(form.porzioni),
-      ingredienti: form.ingredienti
-        .filter((i) => i.prodotto_id)
-        .map((i) => ({ ...i, quantita: i.quantita === '' ? 0 : Number(i.quantita) })),
+    let ok = true;
+    if (!form.nome.trim()) ok = segnala('nome', 'Dai un nome alla ricetta');
+    const porzioni = String(form.porzioni).trim() === '' ? null : aNumero(form.porzioni);
+    if (String(form.porzioni).trim() !== '' && (porzioni === null || porzioni <= 0)) ok = segnala('porzioni', 'Inserisci un numero');
+    const ingredienti = [];
+    form.ingredienti.forEach((i, idx) => {
+      if (!i.prodotto_id) return;
+      const testo = String(i.quantita).trim();
+      const q = testo === '' ? 0 : aNumero(testo);
+      if (q === null || q < 0) { ok = segnala(`ing${idx}`, 'Inserisci un numero, es. 0,5'); return; }
+      ingredienti.push({ ...i, quantita: q });
     });
+    if (!ok) return;
+    await salvaRicetta({ ...form, nome: form.nome.trim(), porzioni, ingredienti });
     setForm(null);
     ricarica();
   };
@@ -97,14 +103,14 @@ export default function RicetteScreen() {
             testo="Con le ricette l'app calcola gli allergeni dei piatti e collega i lotti usati in ogni produzione." />
         )}
         {ricette.map((r) => (
-          <TouchableOpacity key={r.id} style={S.card} onPress={() => apri(r)} onLongPress={() => elimina(r)}>
+          <TouchableOpacity key={r.id} style={S.card} onPress={() => apri(r)} accessibilityRole="button">
             <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.text }}>{r.nome}</Text>
             <Text style={S.muted}>{[r.categoria, r.porzioni ? `${r.porzioni} porzioni` : ''].filter(Boolean).join(' · ')}</Text>
           </TouchableOpacity>
         ))}
         {ricette.length > 0 && (
           <Text style={[S.muted, { textAlign: 'center', marginTop: 4 }]}>
-            Tocca per modificare · tieni premuto per eliminare
+            Tocca una ricetta per modificarla o eliminarla
           </Text>
         )}
       </ScrollView>
@@ -125,7 +131,7 @@ export default function RicetteScreen() {
             <Text style={S.h1}>{form.id ? 'Modifica ricetta' : 'Nuova ricetta'}</Text>
             <Campo label="Nome *" value={form.nome} onChange={set('nome')} errore={errori.nome} />
             <Chips label="Categoria" opzioni={CATEGORIE_PRODOTTO} valore={form.categoria} onChange={set('categoria')} />
-            <Campo label="Porzioni" value={form.porzioni} onChange={set('porzioni')} keyboardType="numeric" />
+            <Campo label="Porzioni" value={form.porzioni} onChange={set('porzioni')} keyboardType="number-pad" errore={errori.porzioni} />
 
             <Text style={[S.h2, { marginTop: 18 }]}>Ingredienti</Text>
             {form.ingredienti.map((ing, idx) => (
@@ -135,8 +141,8 @@ export default function RicetteScreen() {
                   placeholder="Scegli dal catalogo" />
                 <View style={[S.row, { marginTop: 6 }]}>
                   <View style={{ flex: 1, marginRight: 10 }}>
-                    <Campo label="Quantità" value={ing.quantita}
-                      onChange={(v) => setIng(idx, 'quantita', v)} keyboardType="numeric" />
+                    <Campo label="Quantità" value={ing.quantita} errore={errori[`ing${idx}`]}
+                      onChange={(v) => setIng(idx, 'quantita', v)} keyboardType="decimal-pad" />
                   </View>
                 </View>
                 <Chips label="Unità" opzioni={UNITA} valore={ing.unita_misura}
@@ -157,6 +163,10 @@ export default function RicetteScreen() {
 
             {riepilogo}
             <Bottone testo="Salva ricetta" onPress={salva} />
+            {!!form.id && (
+              <Bottone testo="Elimina ricetta" ghost colore={COLORS.danger}
+                onPress={() => { const x = form; setForm(null); elimina(x); }} />
+            )}
             <Bottone testo="Annulla" ghost onPress={() => setForm(null)} />
           </VistaModale>
         )}

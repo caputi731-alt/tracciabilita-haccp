@@ -5,8 +5,9 @@ import { S, COLORS, giorniAllaScadenza } from './theme';
 import { Icona } from './UI';
 import {
   lottiInScadenza, temperatureDiOggi, listaPuntiControllo, nonConformitaAperte,
-  listaAree, sanificazioniOggi, prodottiDaCompletare, lottiBloccati,
+  areeConStato, prodottiDaCompletare, lottiBloccati, leggiPreferenza,
 } from './database';
+import { BUILD } from './build';
 import { statoBackup } from './backupAutomatico';
 
 const SEZIONI = [
@@ -45,8 +46,9 @@ const AZIONI = [
 
 function RigaStato({ colore, titolo, testo, onPress }) {
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.7}
-      style={[S.row, { paddingVertical: 12, borderTopWidth: 1, borderTopColor: COLORS.border }]}>
+    <TouchableOpacity onPress={onPress} activeOpacity={0.7} accessibilityRole="button"
+      accessibilityLabel={`${titolo}. ${testo}`}
+      style={[S.row, { paddingVertical: 12, minHeight: 56, borderTopWidth: 1, borderTopColor: COLORS.border }]}>
       <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: colore, marginRight: 12 }} />
       <View style={{ flex: 1 }}>
         <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.text }}>{titolo}</Text>
@@ -68,20 +70,28 @@ export default function HomeScreen({ navigation }) {
   const [daCompletare, setDaCompletare] = useState(0);
   const [bloccati, setBloccati] = useState(0);
 
+  const [esterno, setEsterno] = useState(undefined); // giorni dall'ultima copia fuori dal telefono (null = mai)
+
   useFocusEffect(
     useCallback(() => {
       (async () => {
-        setScadenze(await lottiInScadenza(3));
-        const t = await temperatureDiOggi();
-        setTempFatte(new Set(t.map((x) => x.punto_controllo_id)).size);
-        setPuntiTot((await listaPuntiControllo()).length);
-        setNcAperte((await nonConformitaAperte()).length);
-        const giornaliere = (await listaAree()).filter((a) => a.frequenza === 'giornaliera');
-        const fatteOggi = new Set((await sanificazioniOggi()).map((x) => x.area_id));
-        setBackup(await statoBackup());
-        setDaCompletare((await prodottiDaCompletare()).length);
-        setBloccati((await lottiBloccati()).length);
-        setPulizie({ fatte: giornaliere.filter((a) => fatteOggi.has(a.id)).length, totali: giornaliere.length });
+        try {
+          setScadenze(await lottiInScadenza(3));
+          const t = await temperatureDiOggi();
+          const punti = await listaPuntiControllo();
+          const attivi = new Set(punti.map((p) => p.id));
+          setTempFatte(new Set(t.map((x) => x.punto_controllo_id).filter((id) => attivi.has(id))).size);
+          setPuntiTot(punti.length);
+          setNcAperte((await nonConformitaAperte()).length);
+          // pulizie di ogni frequenza: giornaliere, settimanali e mensili scadute
+          const aree = await areeConStato();
+          setPulizie({ fatte: aree.filter((a) => !a.daFare).length, totali: aree.length });
+          setBackup(await statoBackup());
+          const ultimaEsterna = await leggiPreferenza('backup_esterno_ultimo');
+          setEsterno(ultimaEsterna ? Math.floor((Date.now() - new Date(ultimaEsterna).getTime()) / 86400000) : null);
+          setDaCompletare((await prodottiDaCompletare()).length);
+          setBloccati((await lottiBloccati()).length);
+        } catch (e) { /* la Home resta utilizzabile anche se una lettura fallisce */ }
       })();
     }, [])
   );
@@ -90,7 +100,8 @@ export default function HomeScreen({ navigation }) {
   const pulizieOk = pulizie.totali > 0 && pulizie.fatte >= pulizie.totali;
   const scaduti = scadenze.filter((l) => giorniAllaScadenza(l.data_scadenza) < 0).length;
   const backupOk = backup && backup.cartella && backup.giorni !== null && backup.giorni <= 2 && !backup.errore;
-  const tuttoOk = backupOk && (puntiTot === 0 || tempOk) && (pulizie.totali === 0 || pulizieOk) && ncAperte === 0 && scadenze.length === 0 && daCompletare === 0 && bloccati === 0;
+  const esternoOk = esterno !== undefined && esterno !== null && esterno <= 7;
+  const tuttoOk = backupOk && esternoOk && (puntiTot === 0 || tempOk) && (pulizie.totali === 0 || pulizieOk) && ncAperte === 0 && scadenze.length === 0 && daCompletare === 0 && bloccati === 0;
 
   return (
     <ScrollView style={S.screen} contentContainerStyle={S.content}>
@@ -116,10 +127,10 @@ export default function HomeScreen({ navigation }) {
             : navigation.navigate('Temperature'))} />
         <RigaStato
           colore={pulizie.totali === 0 ? COLORS.muted : pulizieOk ? COLORS.ok : COLORS.warning}
-          titolo="Pulizie giornaliere"
-          testo={pulizie.totali === 0 ? 'Nessuna area giornaliera configurata'
-            : pulizieOk ? `Fatte tutte (${pulizie.fatte}/${pulizie.totali})`
-            : `Mancano ${pulizie.totali - pulizie.fatte} su ${pulizie.totali}`}
+          titolo="Pulizie"
+          testo={pulizie.totali === 0 ? 'Nessuna area di pulizia configurata'
+            : pulizieOk ? `Tutte a posto (${pulizie.fatte}/${pulizie.totali})`
+            : `${pulizie.totali - pulizie.fatte} da fare su ${pulizie.totali}`}
           onPress={() => navigation.navigate('Sanificazione')} />
         <RigaStato
           colore={scaduti ? COLORS.danger : scadenze.length ? COLORS.warning : COLORS.ok}
@@ -133,6 +144,13 @@ export default function HomeScreen({ navigation }) {
             testo={!backup.cartella ? 'Attivalo: se il telefono si rompe perdi tutti i registri'
               : backup.errore ? 'Controlla la cartella dei backup'
               : backup.giorni === null ? 'Nessun backup ancora eseguito' : `Ultimo backup ${backup.giorni} giorni fa`}
+            onPress={() => navigation.navigate('Documenti', { scheda: 'Backup e dati' })} />
+        )}
+        {backup && backupOk && esterno !== undefined && !esternoOk && (
+          <RigaStato colore={COLORS.warning}
+            titolo="Copia fuori dal telefono"
+            testo={esterno === null ? 'Mai fatta: se il telefono si rompe o si perde, i registri vanno persi'
+              : `L'ultima è di ${esterno} giorni fa: inviala a Drive o per email`}
             onPress={() => navigation.navigate('Documenti', { scheda: 'Backup e dati' })} />
         )}
         {bloccati > 0 && (
@@ -159,6 +177,7 @@ export default function HomeScreen({ navigation }) {
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
         {AZIONI.map((a) => (
           <TouchableOpacity key={a.rotta} activeOpacity={0.75} onPress={() => navigation.navigate(a.rotta)}
+            accessibilityRole="button" accessibilityLabel={`${a.titolo}. ${a.sotto}`}
             style={{
               width: '48.5%', backgroundColor: COLORS.azione, borderRadius: 16, paddingVertical: 18,
               paddingHorizontal: 14, marginBottom: 10, minHeight: 104, justifyContent: 'space-between', elevation: 3,
@@ -198,7 +217,8 @@ export default function HomeScreen({ navigation }) {
 
       {/* Tutte le funzioni */}
       <TouchableOpacity onPress={() => setMenuAperto((v) => !v)} activeOpacity={0.7}
-        style={[S.tile, { marginTop: 8, justifyContent: 'space-between' }]}>
+        accessibilityRole="button" accessibilityState={{ expanded: menuAperto }}
+        style={[S.tile, { marginTop: 8, justifyContent: 'space-between', minHeight: 56 }]}>
         <Text style={S.tileTitle}>Tutte le funzioni</Text>
         <Text style={[S.chevron, { transform: [{ rotate: menuAperto ? '90deg' : '0deg' }] }]}>›</Text>
       </TouchableOpacity>
@@ -208,7 +228,7 @@ export default function HomeScreen({ navigation }) {
           <Text style={S.sectionTitle}>{sez.titolo}</Text>
           {sez.voci.map((v) => (
             <TouchableOpacity key={v.rotta} style={S.tile} onPress={() => navigation.navigate(v.rotta)}
-              activeOpacity={0.7}>
+              activeOpacity={0.7} accessibilityRole="button" accessibilityLabel={`${v.titolo}. ${v.desc}`}>
               <View style={[S.tileAccent, { backgroundColor: v.c }]} />
               <View style={{ flex: 1 }}>
                 <Text style={S.tileTitle}>{v.titolo}</Text>
@@ -219,6 +239,7 @@ export default function HomeScreen({ navigation }) {
           ))}
         </View>
       ))}
+      <Text style={[S.muted, { textAlign: 'center', marginTop: 18, fontSize: 13 }]}>Versione: build {BUILD}</Text>
     </ScrollView>
   );
 }

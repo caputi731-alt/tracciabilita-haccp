@@ -29,6 +29,26 @@ export async function rendiPermanente(uri, prefisso = 'foto') {
   return destinazione;
 }
 
+/**
+ * Elimina le foto non più collegate a nessun record (sostituite, o scattate in moduli poi abbandonati).
+ * usate: nomi dei file ancora in uso. Le foto recenti (meno di giorniMinimi) non si toccano:
+ * potrebbero appartenere a un modulo ancora aperto. Restituisce quante ne ha eliminate.
+ */
+export async function eliminaFotoOrfane(usate, giorniMinimi = 3) {
+  const limite = Date.now() / 1000 - giorniMinimi * 86400;
+  let eliminate = 0;
+  for (const nome of await elencoFotoPermanenti()) {
+    if (usate.has(nome)) continue;
+    try {
+      const info = await FileSystem.getInfoAsync(`${CARTELLA_FOTO}${nome}`);
+      if (!info.exists || !info.modificationTime || info.modificationTime > limite) continue;
+      await FileSystem.deleteAsync(`${CARTELLA_FOTO}${nome}`, { idempotent: true });
+      eliminate++;
+    } catch (e) { /* si riprova al prossimo avvio */ }
+  }
+  return eliminate;
+}
+
 export async function elencoFotoPermanenti() {
   await preparaCartella();
   return FileSystem.readDirectoryAsync(CARTELLA_FOTO);

@@ -2,21 +2,19 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Print from 'expo-print';
-import { S, COLORS, ALLERGENI, fmtData } from './theme';
-import { Campo, Chips, Selettore, Bottone } from './UI';
-import { listaProdotti } from './database';
+import { S, COLORS, ALLERGENI, fmtData, oggiLocale, piuGiorni, escHtml as h } from './theme';
+import { Campo, Chips, Selettore, Bottone, CampoData } from './UI';
+import { listaProdotti, leggiAllergeni } from './database';
 
-const oggiISO = () => new Date().toISOString().slice(0, 10);
+const oggiISO = oggiLocale;
 const oraNow = () => {
   const d = new Date();
   const p = (n) => String(n).padStart(2, '0');
   return `${p(d.getHours())}:${p(d.getMinutes())}`;
 };
 const addGiorni = (iso, giorni) => {
-  if (!iso || giorni == null || giorni === '') return '';
-  const d = new Date(iso + 'T00:00:00');
-  d.setDate(d.getDate() + Number(giorni));
-  return d.toISOString().slice(0, 10);
+  if (!iso || giorni == null || giorni === '' || !Number.isFinite(Number(giorni))) return '';
+  return piuGiorni(iso, giorni);
 };
 const lottoAuto = () => {
   const d = new Date();
@@ -32,8 +30,8 @@ const cb = (on) => `<span class="cb ${on ? 'on' : ''}"></span>`;
 
 /* Costruisce l'HTML interno di UNA etichetta a partire da uno snapshot dati */
 function costruisciEtichetta(d) {
-  const all = (d.allergeni || []).join(', ');
-  const allNote = [all, d.note].filter(Boolean).join(' — ') || '&nbsp;';
+  const all = h((d.allergeni || []).join(', '));
+  const allNote = [all, h(d.note)].filter(Boolean).join(' — ') || '&nbsp;';
 
   if (d.tipo === 'Produzione') {
     const st = d.stato || [];
@@ -43,15 +41,15 @@ function costruisciEtichetta(d) {
           <div class="sub">SCHEDA DI TRACCIABILITÀ E CONSERVAZIONE</div>
         </div>
         <div class="bd">
-          <div class="prod">PRODOTTO: <b>${d.nome || ''}</b></div>
+          <div class="prod">PRODOTTO: <b>${h(d.nome)}</b></div>
           <div class="chk">
             <div>${cb(st.includes('Cotto'))}Cotto &nbsp;&nbsp; ${cb(st.includes('Abbattuto +3°C'))}Abbattuto (+3°C)</div>
             <div>${cb(st.includes('Scongelato'))}Scongelato &nbsp; ${cb(st.includes('Abbattuto -18°C'))}Abbattuto (-18°C)</div>
           </div>
-          <div class="r"><b>PREPARATO:</b> ${fmtData(d.dataRif)} &nbsp;&nbsp; <b>ORA:</b> ${d.ora || ''}</div>
+          <div class="r"><b>PREPARATO:</b> ${fmtData(d.dataRif)} &nbsp;&nbsp; <b>ORA:</b> ${h(d.ora)}</div>
           <div class="r"><b>SCADENZA INTERNA:</b> ${d.scadenza ? fmtData(d.scadenza) : ''}</div>
-          ${d.lotto ? `<div class="r"><b>LOTTO:</b> ${d.lotto}</div>` : ''}
-          <div class="r"><b>OPERATORE:</b> ${d.operatore || ''}</div>
+          ${d.lotto ? `<div class="r"><b>LOTTO:</b> ${h(d.lotto)}</div>` : ''}
+          <div class="r"><b>OPERATORE:</b> ${h(d.operatore)}</div>
           <div class="note"><b>ALLERGENI / NOTE:</b> ${allNote}</div>
         </div>
       </div>`;
@@ -64,10 +62,10 @@ function costruisciEtichetta(d) {
           <div class="sub">SCHEDA DI TRACCIABILITÀ E CONSERVAZIONE</div>
         </div>
         <div class="bd">
-          <div class="prod">PRODOTTO: <b>${d.nome || ''}</b></div>
+          <div class="prod">PRODOTTO: <b>${h(d.nome)}</b></div>
           <div class="big">${tag}: ${fmtData(d.dataRif)}</div>
           <div class="r"><b>${d.tipo === 'Apertura' ? 'CONSUMARE ENTRO' : 'SCADENZA'}:</b> ${d.scadenza ? fmtData(d.scadenza) : ''}</div>
-          <div class="r"><b>OPERATORE:</b> ${d.operatore || ''}</div>
+          <div class="r"><b>OPERATORE:</b> ${h(d.operatore)}</div>
           <div class="note"><b>ALLERGENI / NOTE:</b> ${allNote}</div>
         </div>
       </div>`;
@@ -78,8 +76,8 @@ function costruisciEtichetta(d) {
         <div class="sub">Reg. UE 1169/2011</div>
       </div>
       <div class="bd">
-        <div class="prod">PIATTO: <b>${d.nome || ''}</b></div>
-        <div class="allg">${(d.allergeni || []).length ? d.allergeni.join(' · ') : 'Nessuno dichiarato'}</div>
+        <div class="prod">PIATTO: <b>${h(d.nome)}</b></div>
+        <div class="allg">${(d.allergeni || []).length ? h(d.allergeni.join(' · ')) : 'Nessuno dichiarato'}</div>
       </div>
     </div>`;
 }
@@ -154,7 +152,7 @@ export default function EtichetteScreen({ route }) {
     const p = prodotti.find((x) => x.id === id);
     if (!p) return;
     setNome(p.denominazione);
-    setAllergeni(JSON.parse(p.allergeni || '[]'));
+    setAllergeni(leggiAllergeni(p.allergeni));
     if (tipo === 'Apertura' && p.giorni_dopo_apertura != null) {
       setScadenza(addGiorni(oggiISO(), p.giorni_dopo_apertura));
     }
@@ -173,7 +171,7 @@ export default function EtichetteScreen({ route }) {
     setOra(oraNow());
     const p = prodotti.find((x) => x.id === pr.prodotto_id);
     let allerg = pr.allergeni;
-    if (!allerg && p) { try { allerg = JSON.parse(p.allergeni || '[]'); } catch (e) { allerg = []; } }
+    if (!allerg && p) allerg = leggiAllergeni(p.allergeni);
     setAllergeni(allerg || []);
     let sc = pr.scadenza || '';
     if (pr.tipo === 'Apertura' && p && p.giorni_dopo_apertura != null) {
@@ -229,7 +227,7 @@ export default function EtichetteScreen({ route }) {
       <Chips label="Formato di stampa" opzioni={FORMATI} valore={formato} onChange={setFormato} />
       {formato === 'Termica' && (
         <Campo label="Larghezza rotolo (mm)" value={larghezzaMm} onChange={setLarghezzaMm}
-          keyboardType="numeric" />
+          keyboardType="number-pad" />
       )}
 
       <View style={[S.card, { marginTop: 12 }]}>
@@ -243,9 +241,9 @@ export default function EtichetteScreen({ route }) {
           <Chips label="Stato" opzioni={STATI} valore={stato} onChange={setStato} multiplo />
         )}
         {tipo !== 'Allergeni' && (
-          <Campo
+          <CampoData facoltativo={false} massimo={oggiLocale()}
             label={tipo === 'Congelamento' ? 'Data di congelamento' : tipo === 'Apertura' ? 'Data di apertura' : 'Data di preparazione'}
-            value={dataRif} onChange={setDataRif} placeholder="AAAA-MM-GG" />
+            value={dataRif} onChange={(iso) => setDataRif(iso || oggiLocale())} />
         )}
         {tipo === 'Produzione' && (
           <Campo label="Ora" value={ora} onChange={setOra} placeholder="HH:MM" />
@@ -258,8 +256,9 @@ export default function EtichetteScreen({ route }) {
           </>
         )}
         {tipo !== 'Allergeni' && (
-          <Campo label={tipo === 'Apertura' ? 'Consumare entro' : tipo === 'Congelamento' ? 'Scadenza' : 'Scadenza interna'}
-            value={scadenza} onChange={setScadenza} placeholder="AAAA-MM-GG" />
+          <CampoData label={tipo === 'Apertura' ? 'Consumare entro' : tipo === 'Congelamento' ? 'Scadenza' : 'Scadenza interna'}
+            value={scadenza || null} onChange={(iso) => setScadenza(iso || '')}
+            scorciatoie={[{ testo: '+1 gg', giorni: 1 }, { testo: '+3 gg', giorni: 3 }, { testo: '+5 gg', giorni: 5 }]} />
         )}
         {tipo !== 'Allergeni' && (
           <Campo label="Operatore" value={operatore} onChange={setOperatore} />

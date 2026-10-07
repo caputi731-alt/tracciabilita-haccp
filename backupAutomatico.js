@@ -8,7 +8,7 @@ import {
   esportaTutto, leggiPreferenza, salvaPreferenza, fotoDeiLotti, aggiornaIndirizzoFoto,
 } from './database';
 import {
-  CARTELLA_FOTO, nomeFoto, esisteFoto, rendiPermanente, elencoFotoPermanenti,
+  CARTELLA_FOTO, nomeFoto, esisteFoto, rendiPermanente, elencoFotoPermanenti, eliminaFotoOrfane,
 } from './foto';
 
 const SAF = FileSystem.StorageAccessFramework;
@@ -121,6 +121,35 @@ export async function mettiAlSicuroFoto() {
       await aggiornaIndirizzoFoto(f.uri, nuovo);
     }
   } catch (e) { /* non bloccante */ }
+}
+
+/** Libera spazio: elimina le foto non più collegate a lotti, prodotti o alla fattura lasciata in bozza. */
+export async function pulisciFotoInutili() {
+  try {
+    const usate = new Set((await fotoDeiLotti()).map((f) => nomeFoto(f.uri)));
+    const bozza = (await leggiPreferenza('bozza_fattura')) || '';
+    (bozza.match(/[A-Za-z0-9_-]+\.jpg/g) || []).forEach((n) => usate.add(n));
+    return await eliminaFotoOrfane(usate);
+  } catch (e) { return 0; }
+}
+
+/** File con i dati di prima dell'ultimo ripristino: permette di tornare indietro se si è scelto il backup sbagliato. */
+export const FILE_PRIMA_DEL_RIPRISTINO = `${FileSystem.documentDirectory}prima-del-ripristino.json`;
+
+export async function salvaCopiaDiSicurezza() {
+  await FileSystem.writeAsStringAsync(FILE_PRIMA_DEL_RIPRISTINO, JSON.stringify(await esportaTutto()),
+    { encoding: FileSystem.EncodingType.UTF8 });
+}
+
+export async function copiaDiSicurezza() {
+  try {
+    const info = await FileSystem.getInfoAsync(FILE_PRIMA_DEL_RIPRISTINO);
+    return info.exists ? { quando: info.modificationTime ? new Date(info.modificationTime * 1000) : null } : null;
+  } catch (e) { return null; }
+}
+
+export async function leggiCopiaDiSicurezza() {
+  return JSON.parse(await FileSystem.readAsStringAsync(FILE_PRIMA_DEL_RIPRISTINO));
 }
 
 /** Dopo un ripristino o una reinstallazione: recupera dalla cartella dei backup le foto mancanti. */

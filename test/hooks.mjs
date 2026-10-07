@@ -9,6 +9,7 @@ const mock = pathToFileURL(path.join(radice, 'test', 'expo-sqlite-finto.mjs')).h
 const finti = {
   'react-native': 'data:text/javascript,export const StyleSheet = { create: (s) => s };',
   'expo-print': 'data:text/javascript,export const printAsync = async () => {};',
+  'expo-notifications': 'data:text/javascript,export const setNotificationHandler = () => {}; export const getPermissionsAsync = async () => ({ granted: false });',
 };
 
 export async function resolve(specifier, context, nextResolve) {

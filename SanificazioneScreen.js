@@ -6,7 +6,7 @@ import {
   Campo, Chips, Bottone, conferma, ModaleModifica, useAvviso, VistaModale, useErrori, Vuoto, Icona,
 } from './UI';
 import {
-  listaAree, salvaArea, eliminaArea,
+  areeConStato, salvaArea, eliminaArea,
   registraSanificazione, annullaSanificazione, sanificazioniOggi, sanificazioniRecenti, correggiRecord,
 } from './database';
 
@@ -31,9 +31,9 @@ export default function SanificazioneScreen() {
   const { errori, segnala, azzera, riepilogo } = useErrori();
 
   const ricarica = useCallback(() => {
-    listaAree().then(setAree);
-    sanificazioniOggi().then(setOggi);
-    sanificazioniRecenti().then(setRecenti);
+    Promise.all([areeConStato(), sanificazioniOggi(), sanificazioniRecenti()])
+      .then(([a, o, r]) => { setAree(a); setOggi(o); setRecenti(r); })
+      .catch((e) => Alert.alert('Lettura non riuscita', String(e?.message || e)));
   }, []);
   useFocusEffect(ricarica);
 
@@ -130,7 +130,7 @@ export default function SanificazioneScreen() {
               </Text>
               <View style={[S.chipWrap, { marginTop: 8 }]}>
                 <TouchableOpacity style={S.chip}
-                  onPress={() => setSelezione(aree.filter((a) => !fattaOggi(a.id)).map((a) => a.id))}>
+                  onPress={() => setSelezione(aree.filter((a) => a.daFare).map((a) => a.id))}>
                   <Text style={S.chipText}>Tutte quelle da fare</Text>
                 </TouchableOpacity>
               </View>
@@ -145,27 +145,41 @@ export default function SanificazioneScreen() {
 
         {aree.map((a) => {
           const fatta = fattaOggi(a.id);
+          const quando = a.giorniFa === null ? 'mai registrata' : a.giorniFa === 0 ? 'oggi' : a.giorniFa === 1 ? 'ieri' : `${a.giorniFa} giorni fa`;
           return (
-            <TouchableOpacity key={a.id} style={[S.card, fatta && {
+            <TouchableOpacity key={a.id} style={[S.card, !a.daFare && {
               borderLeftWidth: 4, borderLeftColor: COLORS.ok,
             }, selezione && selezione.includes(a.id) && {
-              borderWidth: 2, borderColor: COLORS.azione || COLORS.primary,
-            }]} onPress={() => toccaArea(a)} onLongPress={() => !selezione && setFormArea({ ...a })}>
+              borderWidth: 2, borderColor: COLORS.azione,
+            }]} onPress={() => toccaArea(a)} onLongPress={() => !selezione && setFormArea({ ...a })}
+              accessibilityRole="button"
+              accessibilityLabel={`${a.nome}, ${a.daFare ? 'da fare' : 'a posto'}. Tocca per registrare la pulizia`}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 {!!selezione && (
                   <Icona nome={selezione.includes(a.id) ? 'checkbox-marked' : 'checkbox-blank-outline'}
-                    colore={COLORS.azione || COLORS.primary} size={26} style={{ marginRight: 10 }} />
+                    colore={COLORS.azione} size={26} style={{ marginRight: 10 }} />
                 )}
-                <Text style={{ fontSize: 16, fontWeight: '700', flex: 1 }}>{a.nome}</Text>
+                <Text style={{ fontSize: 16, fontWeight: '700', flex: 1, color: COLORS.text }}>{a.nome}</Text>
+                {!selezione && (
+                  <TouchableOpacity onPress={() => setFormArea({ ...a })} accessibilityRole="button"
+                    accessibilityLabel={`Modifica l'area ${a.nome}`}
+                    style={{ minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center', marginRight: -8, marginTop: -8 }}>
+                    <Icona nome="pencil-outline" colore={COLORS.azione} />
+                  </TouchableOpacity>
+                )}
               </View>
               <Text style={S.muted}>Frequenza: {a.frequenza}{a.prodotto_previsto ? ` · ${a.prodotto_previsto}` : ''}</Text>
               {fatta ? (
                 <Text style={{ color: COLORS.ok, fontWeight: '600', marginTop: 4 }}>
                   Pulita oggi alle {fmtDataOra(fatta.data_ora).split(' ').pop()}
                 </Text>
+              ) : a.daFare ? (
+                <Text style={{ color: COLORS.warning, fontWeight: '700', marginTop: 4 }}>
+                  Da fare (ultima: {quando}) — tocca per registrare
+                </Text>
               ) : (
-                <Text style={{ color: COLORS.warning, fontWeight: '600', marginTop: 4 }}>
-                  Da fare — tocca per registrare
+                <Text style={{ color: COLORS.ok, fontWeight: '600', marginTop: 4 }}>
+                  A posto: ultima pulizia {quando}, prossima fra {Math.max(1, a.intervallo - a.giorniFa)} {a.intervallo - a.giorniFa === 1 ? 'giorno' : 'giorni'}
                 </Text>
               )}
             </TouchableOpacity>
@@ -174,7 +188,7 @@ export default function SanificazioneScreen() {
 
         {aree.length > 0 && (
           <Text style={[S.muted, { textAlign: 'center', marginTop: 4 }]}>
-            Tocca per registrare · tieni premuto per modificare l'area · tocca un'ultima registrazione per correggerla
+            Tocca un'area per registrare la pulizia · tocca un'ultima registrazione per correggerla
           </Text>
         )}
 

@@ -8,6 +8,7 @@ const esc = (v) => {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 };
+const num = (n) => (n === null || n === undefined ? '' : String(Math.round(Number(n) * 1000) / 1000).replace('.', ','));
 
 const CSS = `
   @page { size: A4; margin: 14mm; }
@@ -27,6 +28,7 @@ const CSS = `
   .firma { margin-top: 34px; font-size: 12px; }
   .kv { font-size: 12px; margin: 3px 0; }
   .kv b { display: inline-block; min-width: 150px; }
+  .avvisoGiorni { margin-top: 10px; border: 2px solid #9A5B00; padding: 6px 10px; font-size: 11px; }
 `;
 
 export function wrapDoc(titolo, corpo, imp = {}, periodo = '') {
@@ -87,14 +89,42 @@ export function htmlTabellaAllergeni(piatti, imp = {}) {
 
 /* ---------- registri (corpo HTML, riusati nei singoli PDF e nel pacchetto ASL) ---------- */
 
-export const corpoTemperature = (righe) => `<table><thead><tr>
-  <th>Data e ora</th><th>Punto</th><th>Limiti</th><th>Rilevata</th><th>Esito</th></tr></thead><tbody>
+/**
+ * Registro temperature. Le note riportano correzioni e inserimenti in ritardo;
+ * giorniMancanti ([{ giorno, mancanti, totali }]) elenca i giorni senza rilevazioni complete.
+ */
+export const corpoTemperature = (righe, giorniMancanti = []) => `<table><thead><tr>
+  <th>Data e ora</th><th>Punto</th><th>Limiti</th><th>Rilevata</th><th>Esito</th><th>Note</th></tr></thead><tbody>
   ${righe.map((r) => `<tr>
-    <td>${fmtDataOra(r.data_ora)}</td><td>${esc(r.nome)}</td>
+    <td>${r.note && String(r.note).includes('in ritardo') ? fmtData(String(r.data_ora).length > 10 ? isoGiorno(r.data_ora) : r.data_ora) : fmtDataOra(r.data_ora)}</td><td>${esc(r.nome)}</td>
     <td>${esc(r.temp_min)}/${esc(r.temp_max)} °C</td>
-    <td>${esc(r.temperatura)} °C</td>
-    <td class="${r.esito === 'conforme' ? 'ok' : 'nc'}">${esc(r.esito)}</td></tr>`).join('')
-  || '<tr><td colspan="5">Nessuna rilevazione nel periodo</td></tr>'}
+    <td>${num(r.temperatura)} °C</td>
+    <td class="${r.esito === 'conforme' ? 'ok' : 'nc'}">${esc(r.esito)}</td>
+    <td>${esc(r.note)}</td></tr>`).join('')
+  || '<tr><td colspan="6">Nessuna rilevazione nel periodo</td></tr>'}
+  </tbody></table>
+  ${giorniMancanti.length ? `<div class="avvisoGiorni"><b>Giorni senza rilevazioni complete (${giorniMancanti.length}):</b>
+    ${giorniMancanti.map((g) => `${fmtData(g.giorno)}${g.mancanti < g.totali ? ` (${g.mancanti} su ${g.totali} mancanti)` : ''}`).join(', ')}</div>` : ''}`;
+
+const isoGiorno = (istante) => {
+  const d = new Date(istante);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+/** Registro produzioni: per ogni piatto i lotti di materia prima impiegati (rintracciabilità a valle). */
+export const corpoProduzioni = (righe) => `<table><thead><tr>
+  <th>Data e ora</th><th>Piatto</th><th>Lotto prod.</th><th>Q.tà</th><th>Scad.</th><th>Allergeni</th><th>Ingredienti e lotti impiegati</th></tr></thead><tbody>
+  ${righe.map((r) => {
+    let allergeni = [];
+    try { allergeni = JSON.parse(r.allergeni || '[]'); } catch (e) { allergeni = []; }
+    return `<tr>
+    <td>${fmtDataOra(r.data_ora)}</td><td>${esc(r.nome)}</td>
+    <td>${esc(r.lotto_produzione) || '—'}</td><td>${num(r.quantita_prodotta) || '—'}</td>
+    <td>${r.data_scadenza ? fmtData(r.data_scadenza) : '—'}</td>
+    <td>${esc(allergeni.join(', ')) || '—'}</td>
+    <td>${(r.lotti || []).map((l) => `${esc(l.prodotto)}: ${num(l.quantita_usata)} ${esc(l.unita_misura)}, lotto ${esc(l.numero_lotto) || '—'} (${esc(l.fornitore)})`).join('<br>') || '—'}</td></tr>`;
+  }).join('')
+  || '<tr><td colspan="7">Nessuna produzione nel periodo</td></tr>'}
   </tbody></table>`;
 
 export const corpoCarichi = (righe) => `<table><thead><tr>
@@ -132,11 +162,12 @@ export const corpoNonConformita = (righe) => `<table><thead><tr>
  * Pacchetto per il controllo: tutti i registri del periodo in un unico PDF,
  * ogni registro su una pagina nuova, con un indice in apertura.
  */
-export function htmlPacchettoASL({ temperature, carichi, sanificazioni, nonConformita, piatti }, imp = {}, periodoTxt = '') {
+export function htmlPacchettoASL({ temperature, carichi, sanificazioni, nonConformita, piatti, produzioni = [], giorniMancanti = [] }, imp = {}, periodoTxt = '') {
   const nc = nonConformita.filter((r) => r.stato === 'aperta').length;
   const sezioni = [
-    ['Registro temperature', corpoTemperature(temperature), `${temperature.length} rilevazioni`],
+    ['Registro temperature', corpoTemperature(temperature, giorniMancanti), `${temperature.length} rilevazioni${giorniMancanti.length ? `, ${giorniMancanti.length} giorni incompleti` : ''}`],
     ['Registro carichi merce', corpoCarichi(carichi), `${carichi.length} carichi`],
+    ['Registro produzioni e lotti impiegati', corpoProduzioni(produzioni), `${produzioni.length} produzioni`],
     ['Registro sanificazione', corpoSanificazione(sanificazioni), `${sanificazioni.length} pulizie`],
     ['Registro non conformità', corpoNonConformita(nonConformita), `${nonConformita.length} registrate, ${nc} aperte`],
     ['Allergeni dei piatti', piatti.length ? corpoTabellaAllergeni(piatti) : '<p>Nessuna ricetta registrata.</p>', `${piatti.length} piatti`],

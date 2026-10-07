@@ -1,12 +1,12 @@
 import React, { useState, useRef, useCallback } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, Modal, ScrollView, Alert, Animated, Image,
+  View, Text, TextInput, TouchableOpacity, Modal, ScrollView, Alert, Animated, Image, FlatList, useWindowDimensions,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { rendiPermanente } from './foto';
-import { S, COLORS, dataPerCampo, isoDaCampo } from './theme';
+import { S, COLORS, dataPerCampo, isoDaCampo, aNumero } from './theme';
 
 /** L'errore resta visibile finché il valore è quello che l'ha causato: appena si corregge, sparisce. */
 const testoErrore = (e) => (e && typeof e === 'object' ? e.testo : e) || null;
@@ -27,10 +27,11 @@ export function Campo({ label, value, onChange, errore, style, ...props }) {
         style={[S.input, visibile && S.inputErrore, style]}
         value={value === null || value === undefined ? '' : String(value)}
         onChangeText={onChange}
-        placeholderTextColor="#8A958F"
+        placeholderTextColor={COLORS.segnaposto}
+        accessibilityLabel={visibile ? `${label}. Errore: ${visibile}` : label}
         {...props}
       />
-      {!!visibile && <Text style={S.testoErrore}>{visibile}</Text>}
+      {!!visibile && <Text style={S.testoErrore} accessibilityLiveRegion="polite">{visibile}</Text>}
     </View>
   );
 }
@@ -68,8 +69,9 @@ export function Segmenti({ opzioni, valore, onChange }) {
         const attivo = o === valore;
         return (
           <TouchableOpacity key={o} onPress={() => onChange(o)} activeOpacity={0.8}
+            accessibilityRole="tab" accessibilityState={{ selected: attivo }}
             style={{
-              flex: 1, minHeight: 44, borderRadius: 11, alignItems: 'center', justifyContent: 'center',
+              flex: 1, minHeight: 48, borderRadius: 11, alignItems: 'center', justifyContent: 'center',
               paddingHorizontal: 4, backgroundColor: attivo ? '#fff' : 'transparent',
               elevation: attivo ? 2 : 0,
             }}>
@@ -99,6 +101,8 @@ export function Chips({ label, opzioni, valore, onChange, multiplo = false }) {
             key={o}
             style={[S.chip, attivo(o) && S.chipOn]}
             onPress={() => tocca(o)}
+            accessibilityRole={multiplo ? 'checkbox' : 'radio'}
+            accessibilityState={multiplo ? { checked: attivo(o) } : { selected: attivo(o) }}
           >
             <Text style={[S.chipText, attivo(o) && S.chipTextOn]}>{o}</Text>
           </TouchableOpacity>
@@ -147,8 +151,9 @@ export function Selettore({ label, elementi, valore, etichetta, onChange, placeh
   return (
     <View>
       <Text style={[S.label, !!errore && !sel && { color: COLORS.danger }]}>{label}</Text>
-      <TouchableOpacity style={[S.input, !!errore && !sel && S.inputErrore]} onPress={() => setAperto(true)}>
-        <Text style={{ fontSize: 16, color: sel ? COLORS.text : '#8A958F' }}>
+      <TouchableOpacity style={[S.input, !!errore && !sel && S.inputErrore]} onPress={() => setAperto(true)}
+        accessibilityRole="button" accessibilityLabel={`${label}: ${sel ? etichetta(sel) : 'nessuna scelta'}`}>
+        <Text style={{ fontSize: 16, color: sel ? COLORS.text : COLORS.segnaposto }}>
           {sel ? etichetta(sel) : placeholder || 'Seleziona…'}
         </Text>
       </TouchableOpacity>
@@ -164,18 +169,23 @@ export function Selettore({ label, elementi, valore, etichetta, onChange, placeh
             onChangeText={setCerca}
             autoFocus
           />
-          <ScrollView style={{ marginTop: 12 }}>
-            {filtrati.map((e) => (
+          <FlatList
+            style={{ marginTop: 12, flex: 1 }}
+            data={filtrati}
+            keyExtractor={(e) => String(e.id)}
+            keyboardShouldPersistTaps="handled"
+            initialNumToRender={15}
+            ListEmptyComponent={<Text style={S.empty}>Nessun risultato</Text>}
+            renderItem={({ item: e }) => (
               <TouchableOpacity
-                key={e.id}
-                style={[S.card, { padding: 14 }]}
+                style={[S.card, { padding: 14, minHeight: 50, justifyContent: 'center' }]}
+                accessibilityRole="button"
                 onPress={() => { onChange(e.id); setAperto(false); setCerca(''); }}
               >
-                <Text style={{ fontSize: 16 }}>{etichetta(e)}</Text>
+                <Text style={{ fontSize: 16, color: COLORS.text }}>{etichetta(e)}</Text>
               </TouchableOpacity>
-            ))}
-            {filtrati.length === 0 && <Text style={S.empty}>Nessun risultato</Text>}
-          </ScrollView>
+            )}
+          />
           <TouchableOpacity style={S.btnGhost} onPress={() => setAperto(false)}>
             <Text style={S.btnGhostText}>Annulla</Text>
           </TouchableOpacity>
@@ -188,8 +198,10 @@ export function Selettore({ label, elementi, valore, etichetta, onChange, placeh
 /** Scanner codici a barre / QR */
 export function Scanner({ visibile, onLetto, onChiudi }) {
   const [permesso, chiediPermesso] = useCameraPermissions();
+  const letto = useRef(false);
 
   React.useEffect(() => {
+    if (visibile) letto.current = false;
     if (visibile && permesso && !permesso.granted) chiediPermesso();
   }, [visibile, permesso]);
 
@@ -204,7 +216,7 @@ export function Scanner({ visibile, onLetto, onChiudi }) {
             barcodeScannerSettings={{
               barcodeTypes: ['ean13', 'ean8', 'code128', 'code39', 'qr', 'upc_a'],
             }}
-            onBarcodeScanned={({ data }) => onLetto(data)}
+            onBarcodeScanned={({ data }) => { if (letto.current) return; letto.current = true; onLetto(data); }}
           />
         ) : (
           <View style={{ flex: 1, justifyContent: 'center', padding: 24 }}>
@@ -231,14 +243,39 @@ export function Icona({ nome, size = 22, colore = COLORS.text, style }) {
   return <MaterialCommunityIcons name={nome} size={size} color={colore} style={style} />;
 }
 
-export function Bottone({ testo, onPress, ghost, colore, icona }) {
-  const coloreTesto = ghost ? (colore || COLORS.azione || COLORS.primary) : '#fff';
+/**
+ * Pulsante. Se onPress è asincrono, il pulsante resta bloccato finché l'operazione non finisce:
+ * un doppio tocco non salva due volte.
+ */
+export function Bottone({ testo, onPress, ghost, colore, icona, disabilitato = false }) {
+  const [occupato, setOccupato] = useState(false);
+  const inCorso = useRef(false);
+  const montato = useRef(true);
+  React.useEffect(() => () => { montato.current = false; }, []);
+  const coloreTesto = ghost ? (colore || COLORS.azione) : '#fff';
+  const premi = () => {
+    if (inCorso.current || disabilitato || !onPress) return;
+    let esito;
+    try { esito = onPress(); } catch (e) { Alert.alert('Operazione non riuscita', String(e?.message || e)); return; }
+    if (esito && typeof esito.then === 'function') {
+      inCorso.current = true;
+      setOccupato(true);
+      esito
+        .catch((e) => Alert.alert('Operazione non riuscita', String(e?.message || e)))
+        .finally(() => { inCorso.current = false; if (montato.current) setOccupato(false); });
+    }
+  };
+  const spento = occupato || disabilitato;
   return (
     <TouchableOpacity
       style={[ghost ? S.btnGhost : S.btn, colore && !ghost && { backgroundColor: colore },
         colore && ghost && { borderColor: colore },
-        { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' }]}
-      onPress={onPress}
+        { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' }, spento && { opacity: 0.55 }]}
+      onPress={premi}
+      disabled={spento}
+      accessibilityRole="button"
+      accessibilityLabel={testo}
+      accessibilityState={{ disabled: spento, busy: occupato }}
     >
       {!!icona && <Icona nome={icona} size={20} colore={coloreTesto} style={{ marginRight: 8 }} />}
       <Text style={[ghost ? S.btnGhostText : S.btnText, ghost && colore && { color: colore }]}>{testo}</Text>
@@ -253,6 +290,7 @@ export function Sezione({ titolo, icona, aperta = false, riassunto, children, co
   return (
     <View style={[S.card, { paddingVertical: 0 }]}>
       <TouchableOpacity onPress={() => setOpen((v) => !v)} activeOpacity={0.7}
+        accessibilityRole="button" accessibilityState={{ expanded: open }}
         style={{ flexDirection: 'row', alignItems: 'center', minHeight: 56 }}>
         {!!icona && <Icona nome={icona} colore={colore || COLORS.muted} style={{ marginRight: 10 }} />}
         <View style={{ flex: 1 }}>
@@ -310,7 +348,7 @@ const isoDi = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, 
  * Campo data con calendario. value/onChange in formato ISO (AAAA-MM-GG) oppure null.
  * scorciatoie: [{ testo, giorni }] per date rapide (es. +3 giorni).
  */
-export function CampoData({ label, value, onChange, errore, scorciatoie, facoltativo = true, nota }) {
+export function CampoData({ label, value, onChange, errore, scorciatoie, facoltativo = true, nota, massimo = null }) {
   const [aperto, setAperto] = useState(false);
   const base = value && /^\d{4}-\d{2}-\d{2}/.test(value) ? new Date(`${value.slice(0, 10)}T12:00:00`) : new Date();
   const [mese, setMese] = useState(new Date(base.getFullYear(), base.getMonth(), 1));
@@ -325,8 +363,9 @@ export function CampoData({ label, value, onChange, errore, scorciatoie, facolta
     <View>
       <Text style={[S.label, errore && { color: COLORS.danger }]}>{label}</Text>
       <TouchableOpacity onPress={apri} activeOpacity={0.7}
+        accessibilityRole="button" accessibilityLabel={`${label}: ${value ? dataPerCampo(value) : 'nessuna data'}. Tocca per scegliere`}
         style={[S.input, errore && S.inputErrore, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
-        <Text style={{ fontSize: 16, color: value ? COLORS.text : '#8A958F' }}>
+        <Text style={{ fontSize: 16, color: value ? COLORS.text : COLORS.segnaposto }}>
           {value ? dataPerCampo(value) : 'Tocca per scegliere'}
         </Text>
         <Icona nome="calendar-month" colore={COLORS.azione || COLORS.primary} />
@@ -337,14 +376,14 @@ export function CampoData({ label, value, onChange, errore, scorciatoie, facolta
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', padding: 16 }}>
           <View style={S.card}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <TouchableOpacity style={{ padding: 10 }}
+              <TouchableOpacity style={{ padding: 10 }} accessibilityRole="button" accessibilityLabel="Mese precedente"
                 onPress={() => setMese(new Date(mese.getFullYear(), mese.getMonth() - 1, 1))}>
                 <Icona nome="chevron-left" size={28} />
               </TouchableOpacity>
               <Text style={{ fontSize: 18, fontWeight: '800', color: COLORS.text }}>
                 {MESI[mese.getMonth()]} {mese.getFullYear()}
               </Text>
-              <TouchableOpacity style={{ padding: 10 }}
+              <TouchableOpacity style={{ padding: 10 }} accessibilityRole="button" accessibilityLabel="Mese successivo"
                 onPress={() => setMese(new Date(mese.getFullYear(), mese.getMonth() + 1, 1))}>
                 <Icona nome="chevron-right" size={28} />
               </TouchableOpacity>
@@ -359,9 +398,12 @@ export function CampoData({ label, value, onChange, errore, scorciatoie, facolta
                 if (!g) return <View key={`v${i}`} style={{ width: `${100 / 7}%`, height: 46 }} />;
                 const iso = isoDi(new Date(mese.getFullYear(), mese.getMonth(), g));
                 const sel = value && value.slice(0, 10) === iso;
+                const vietato = !!massimo && iso > massimo;
                 return (
-                  <TouchableOpacity key={iso} onPress={() => scegli(iso)}
-                    style={{ width: `${100 / 7}%`, height: 46, alignItems: 'center', justifyContent: 'center' }}>
+                  <TouchableOpacity key={iso} onPress={() => scegli(iso)} disabled={vietato}
+                    accessibilityRole="button" accessibilityLabel={`${g} ${MESI[mese.getMonth()]}`}
+                    accessibilityState={{ selected: !!sel, disabled: vietato }}
+                    style={{ width: `${100 / 7}%`, height: 48, alignItems: 'center', justifyContent: 'center', opacity: vietato ? 0.3 : 1 }}>
                     <View style={{
                       width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center',
                       backgroundColor: sel ? (COLORS.azione || COLORS.primary) : 'transparent',
@@ -375,7 +417,7 @@ export function CampoData({ label, value, onChange, errore, scorciatoie, facolta
             </View>
             <View style={[S.chipWrap, { marginTop: 8 }]}>
               <TouchableOpacity style={S.chip} onPress={() => scegli(oggi)}><Text style={S.chipText}>Oggi</Text></TouchableOpacity>
-              {(scorciatoie || []).map((sc) => (
+              {(scorciatoie || []).filter((sc) => !massimo || piu(sc.giorni) <= massimo).map((sc) => (
                 <TouchableOpacity key={sc.testo} style={S.chip} onPress={() => scegli(piu(sc.giorni))}>
                   <Text style={S.chipText}>{sc.testo}</Text>
                 </TouchableOpacity>
@@ -529,8 +571,8 @@ export function ModaleModifica({ visibile, titolo, sottotitolo, campi, record, o
         out[c.chiave] = iso;
       } else if (c.tipo === 'numero' || c.tipo === 'intero') {
         if (t === '') { out[c.chiave] = null; continue; }
-        const n = Number(t.replace(',', '.'));
-        if (!Number.isFinite(n) || (c.tipo === 'intero' && !Number.isInteger(n))) {
+        const n = aNumero(t);
+        if (n === null || (c.tipo === 'intero' && !Number.isInteger(n))) {
           ok = segnala(c.chiave, 'Inserisci un numero'); continue;
         }
         out[c.chiave] = n;
@@ -628,22 +670,26 @@ export function useFoto() {
   return { chiediFoto, fotocamera };
 }
 
-/** Miniatura toccabile che apre la foto a schermo intero. */
+/** Miniatura toccabile che apre la foto a schermo intero, con ingrandimento (＋ / −) e scorrimento. */
 export function AnteprimaFoto({ uri, titolo, altezza = 160 }) {
   const [grande, setGrande] = useState(false);
   const [errore, setErrore] = useState(false);
+  const [zoom, setZoom] = useState(1);
+  const { width, height } = useWindowDimensions();
   if (!uri) return null;
+  const tasto = { paddingVertical: 16, paddingHorizontal: 22, minWidth: 64, alignItems: 'center' };
   return (
     <View style={{ marginTop: 10 }}>
       {!!titolo && <Text style={S.label}>{titolo}</Text>}
       {errore ? (
-        <View style={{ height: 70, borderRadius: 10, backgroundColor: COLORS.warningSoft, justifyContent: 'center', padding: 10 }}>
+        <View style={{ minHeight: 70, borderRadius: 10, backgroundColor: COLORS.warningSoft, justifyContent: 'center', padding: 10 }}>
           <Text style={{ color: COLORS.warning, fontWeight: '700' }}>
             Foto non disponibile su questo telefono (può essere recuperata dalla cartella dei backup).
           </Text>
         </View>
       ) : (
-        <TouchableOpacity activeOpacity={0.8} onPress={() => setGrande(true)}>
+        <TouchableOpacity activeOpacity={0.8} onPress={() => { setZoom(1); setGrande(true); }}
+          accessibilityRole="imagebutton" accessibilityLabel={`${titolo || 'Foto'}: tocca per ingrandire`}>
           <Image source={{ uri }} onError={() => setErrore(true)}
             style={{ height: altezza, borderRadius: 10, backgroundColor: COLORS.bg }} resizeMode="cover" />
           <Text style={[S.muted, { marginTop: 4 }]}>Tocca per ingrandire</Text>
@@ -651,16 +697,28 @@ export function AnteprimaFoto({ uri, titolo, altezza = 160 }) {
       )}
       <Modal visible={grande} animationType="fade" onRequestClose={() => setGrande(false)}>
         <View style={{ flex: 1, backgroundColor: '#000' }}>
-          <ScrollView maximumZoomScale={4} minimumZoomScale={1} contentContainerStyle={{ flexGrow: 1 }}
-            centerContent>
-            <Image source={{ uri }} style={{ width: '100%', flex: 1, minHeight: 500 }} resizeMode="contain" />
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}>
+            <ScrollView horizontal contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}>
+              <Image source={{ uri }} resizeMode="contain"
+                style={{ width: width * zoom, height: (height - 80) * zoom }} />
+            </ScrollView>
           </ScrollView>
-          <TouchableOpacity style={{ padding: 20, backgroundColor: '#111' }} onPress={() => setGrande(false)}>
-            <Text style={{ color: '#fff', textAlign: 'center', fontSize: 16, fontWeight: '700' }}>Chiudi</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', backgroundColor: '#111', alignItems: 'center' }}>
+            <TouchableOpacity style={tasto} disabled={zoom <= 1} onPress={() => setZoom((z) => Math.max(1, z - 1))}
+              accessibilityRole="button" accessibilityLabel="Rimpicciolisci">
+              <Text style={{ color: zoom <= 1 ? '#666' : '#fff', fontSize: 26, fontWeight: '800' }}>−</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={tasto} disabled={zoom >= 5} onPress={() => setZoom((z) => Math.min(5, z + 1))}
+              accessibilityRole="button" accessibilityLabel="Ingrandisci">
+              <Text style={{ color: zoom >= 5 ? '#666' : '#fff', fontSize: 26, fontWeight: '800' }}>＋</Text>
+            </TouchableOpacity>
+            <Text style={{ color: '#bbb', fontSize: 14 }}>{zoom}×</Text>
+            <TouchableOpacity style={{ flex: 1, padding: 20 }} onPress={() => setGrande(false)} accessibilityRole="button">
+              <Text style={{ color: '#fff', textAlign: 'right', fontSize: 16, fontWeight: '700' }}>Chiudi</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </Modal>
     </View>
   );
 }
-

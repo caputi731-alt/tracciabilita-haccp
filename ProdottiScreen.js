@@ -1,12 +1,12 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Modal, Alert, TextInput } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { S, COLORS, ALLERGENI, CATEGORIE_PRODOTTO, CONSERVAZIONE, UNITA } from './theme';
+import { S, COLORS, ALLERGENI, CATEGORIE_PRODOTTO, CONSERVAZIONE, UNITA, aNumero, numeroPerCampo } from './theme';
 import {
   Campo, Chips, Selettore, Scanner, Bottone, conferma, useFoto, AnteprimaFoto, VistaModale, useErrori, Icona, Vuoto, Caricamento,
 } from './UI';
 import {
-  listaProdotti, salvaProdotto, eliminaProdotto, listaFornitori,
+  listaProdotti, salvaProdotto, eliminaProdotto, listaFornitori, leggiAllergeni,
 } from './database';
 
 const VUOTO = {
@@ -32,17 +32,38 @@ export default function ProdottiScreen() {
   }, []);
   useFocusEffect(ricarica);
 
-  const apri = (p) =>
-    setForm(p ? { ...p, allergeni: JSON.parse(p.allergeni || '[]') } : { ...VUOTO });
-
   const { errori, segnala, azzera, riepilogo } = useErrori();
+
+  const NUMERICI = ['temp_min', 'temp_max', 'shelf_life_giorni', 'giorni_dopo_apertura'];
+  const apri = (p) => {
+    azzera();
+    if (!p) return setForm({ ...VUOTO });
+    const f = { ...p, allergeni: leggiAllergeni(p.allergeni) };
+    NUMERICI.forEach((k) => { f[k] = numeroPerCampo(p[k]); }); // nei campi restano testi: si convertono al salvataggio
+    return setForm(f);
+  };
 
   const salva = async () => {
     azzera();
-    if (!form.denominazione.trim()) {
-      return segnala('denominazione', 'La denominazione è obbligatoria');
+    let ok = true;
+    if (!form.denominazione.trim()) ok = segnala('denominazione', 'La denominazione è obbligatoria');
+    const numeri = {};
+    for (const k of NUMERICI) {
+      const testo = String(form[k] ?? '').trim();
+      numeri[k] = testo === '' ? null : aNumero(testo);
+      if (testo !== '' && numeri[k] === null) ok = segnala(k, 'Inserisci un numero, es. -18 oppure 4,5');
     }
-    await salvaProdotto(form);
+    for (const k of ['shelf_life_giorni', 'giorni_dopo_apertura']) {
+      if (numeri[k] !== null && (!Number.isInteger(numeri[k]) || numeri[k] < 0)) ok = segnala(k, 'Numero intero di giorni');
+    }
+    if (numeri.temp_min !== null && numeri.temp_max !== null && numeri.temp_min > numeri.temp_max) {
+      ok = segnala('temp_max', 'La massima deve essere superiore alla minima');
+    }
+    if (!ok) return;
+    const doppio = prodotti.find((p) => p.id !== form.id
+      && p.denominazione.trim().toLowerCase() === form.denominazione.trim().toLowerCase());
+    if (doppio) return segnala('denominazione', 'Esiste già un prodotto con questo nome');
+    await salvaProdotto({ ...form, ...numeri, denominazione: form.denominazione.trim() });
     setForm(null);
     ricarica();
   };
@@ -52,7 +73,7 @@ export default function ProdottiScreen() {
       async () => { await eliminaProdotto(p.id); ricarica(); });
 
   const set = (k) => (v) => setForm((f) => ({ ...f, [k]: v }));
-  const setNum = (k) => (v) => setForm((f) => ({ ...f, [k]: v === '' ? null : Number(v) }));
+  const setNum = set;
 
   const daCompletare = prodotti.filter((p) => !p.allergeni_verificati).length;
   const filtrati = prodotti.filter((p) =>
@@ -62,8 +83,8 @@ export default function ProdottiScreen() {
   return (
     <View style={S.screen}>
       <View style={{ padding: 16, paddingBottom: 0 }}>
-        <TextInput style={S.input} placeholder="Cerca prodotto…" value={cerca}
-          onChangeText={setCerca} placeholderTextColor="#9CA3AF" />
+        <TextInput style={S.input} placeholder="Cerca prodotto…" value={cerca} accessibilityLabel="Cerca prodotto"
+          onChangeText={setCerca} placeholderTextColor={COLORS.segnaposto} />
       </View>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={S.content}>
@@ -84,10 +105,9 @@ export default function ProdottiScreen() {
             testo={cerca ? 'Prova con un\'altra parola.' : 'I prodotti si creano da soli importando una fattura, oppure aggiungili col pulsante in basso.'} />
         )}
         {filtrati.map((p) => {
-          const all = JSON.parse(p.allergeni || '[]');
+          const all = leggiAllergeni(p.allergeni);
           return (
-            <TouchableOpacity key={p.id} style={S.card} onPress={() => apri(p)}
-              onLongPress={() => elimina(p)}>
+            <TouchableOpacity key={p.id} style={S.card} onPress={() => apri(p)} accessibilityRole="button">
               <View style={S.row}>
                 <Text style={{ fontSize: 16, fontWeight: '700', flex: 1 }}>{p.denominazione}</Text>
                 {!!p.foto_etichetta && <Icona nome="camera" size={20} colore={COLORS.muted} />}
@@ -141,17 +161,20 @@ export default function ProdottiScreen() {
 
             {form.conservazione !== 'ambiente' && (
               <>
-                <Campo label="Temperatura minima (°C)" value={form.temp_min}
-                  onChange={setNum('temp_min')} keyboardType="numbers-and-punctuation" />
-                <Campo label="Temperatura massima (°C)" value={form.temp_max}
-                  onChange={setNum('temp_max')} keyboardType="numbers-and-punctuation" />
+                <Campo label="Temperatura minima (°C)" value={form.temp_min} errore={errori.temp_min}
+                  onChange={setNum('temp_min')} keyboardType="numbers-and-punctuation" placeholder="es. -18 oppure 0" />
+                <Campo label="Temperatura massima (°C)" value={form.temp_max} errore={errori.temp_max}
+                  onChange={setNum('temp_max')} keyboardType="numbers-and-punctuation" placeholder="es. 4" />
+                <Text style={[S.muted, { marginTop: 4 }]}>
+                  Se al ricevimento la temperatura è fuori da questi limiti, l'app apre una non conformità.
+                </Text>
               </>
             )}
 
-            <Campo label="Durata (giorni dalla ricezione)" value={form.shelf_life_giorni}
-              onChange={setNum('shelf_life_giorni')} keyboardType="numeric" />
-            <Campo label="Giorni di consumo dopo apertura" value={form.giorni_dopo_apertura}
-              onChange={setNum('giorni_dopo_apertura')} keyboardType="numeric"
+            <Campo label="Durata (giorni dalla ricezione)" value={form.shelf_life_giorni} errore={errori.shelf_life_giorni}
+              onChange={setNum('shelf_life_giorni')} keyboardType="number-pad" />
+            <Campo label="Giorni di consumo dopo apertura" value={form.giorni_dopo_apertura} errore={errori.giorni_dopo_apertura}
+              onChange={setNum('giorni_dopo_apertura')} keyboardType="number-pad"
               placeholder="usato per l'etichetta di apertura" />
             <Campo label="Origine / provenienza" value={form.origine} onChange={set('origine')} />
 
@@ -174,6 +197,10 @@ export default function ProdottiScreen() {
 
             {riepilogo}
             <Bottone testo="Salva" onPress={salva} />
+            {!!form.id && (
+              <Bottone testo="Elimina prodotto" ghost colore={COLORS.danger}
+                onPress={() => { const x = form; setForm(null); elimina(x); }} />
+            )}
             <Bottone testo="Annulla" ghost onPress={() => setForm(null)} />
           </VistaModale>
         )}

@@ -2,14 +2,18 @@ import React, { useState, useCallback } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { View, Text, ScrollView, Alert } from 'react-native';
 import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import { S, COLORS } from './theme';
 import { Bottone, conferma, useAvviso } from './UI';
 import {
   statoBackup, scegliCartellaBackup, eseguiBackup, recuperaFotoMancanti, MAX_COPIE,
+  salvaCopiaDiSicurezza, copiaDiSicurezza, leggiCopiaDiSicurezza,
 } from './backupAutomatico';
-import { esportaTutto, importaTutto, csvRegistroCarichi, csvTabella } from './database';
+import {
+  esportaTutto, importaTutto, csvRegistroCarichi, csvRegistroTemperature, leggiPreferenza, salvaPreferenza,
+} from './database';
+import { condividiTesto } from './condividi';
+import { aggiornaPromemoria } from './notifiche';
 
 const stamp = () => {
   const d = new Date();
@@ -17,25 +21,22 @@ const stamp = () => {
   return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
 };
 
-async function scriviECondividi(nomeFile, contenuto, mime) {
-  const uri = FileSystem.documentDirectory + nomeFile;
-  await FileSystem.writeAsStringAsync(uri, contenuto, {
-    encoding: FileSystem.EncodingType.UTF8,
-  });
-  if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(uri, { mimeType: mime, dialogTitle: nomeFile });
-  } else {
-    Alert.alert('Salvato', `File creato: ${nomeFile}`);
-  }
-  return uri;
-}
+/** I file condivisi stanno nella memoria temporanea (non si accumulano). Il segno iniziale fa leggere gli accenti a Excel. */
+const scriviECondividi = (nomeFile, contenuto, mime) =>
+  condividiTesto(nomeFile, mime === 'text/csv' ? `\uFEFF${contenuto}` : contenuto, mime);
 
 export default function BackupScreen() {
   const [occupato, setOccupato] = useState(false);
   const [stato, setStato] = useState(null);
   const { avviso, mostra } = useAvviso();
 
-  const aggiornaStato = useCallback(() => { statoBackup().then(setStato); }, []);
+  const [esterno, setEsterno] = useState(null);     // istante dell'ultima copia inviata fuori dal telefono
+  const [sicurezza, setSicurezza] = useState(null); // dati di prima dell'ultimo ripristino
+  const aggiornaStato = useCallback(() => {
+    statoBackup().then(setStato).catch(() => {});
+    leggiPreferenza('backup_esterno_ultimo').then(setEsterno).catch(() => {});
+    copiaDiSicurezza().then(setSicurezza);
+  }, []);
   useFocusEffect(aggiornaStato);
 
   const attiva = async () => {
@@ -98,6 +99,8 @@ export default function BackupScreen() {
         JSON.stringify(dump),
         'application/json'
       );
+      await salvaPreferenza('backup_esterno_ultimo', new Date().toISOString());
+      aggiornaStato();
     } catch (e) {
       Alert.alert('Errore backup', String(e?.message || e));
     } finally {
@@ -121,13 +124,34 @@ export default function BackupScreen() {
   const exportTemperature = async () => {
     try {
       setOccupato(true);
-      const csv = await csvTabella('registro_temperature');
+      const csv = await csvRegistroTemperature();
       if (!csv) return Alert.alert('Vuoto', 'Non ci sono rilevazioni da esportare.');
       await scriviECondividi(`registro-temperature-${stamp()}.csv`, csv, 'text/csv');
     } catch (e) {
       Alert.alert('Errore export', String(e?.message || e));
     } finally {
       setOccupato(false);
+    }
+  };
+
+  /** Sostituisce i dati con quelli del backup, dopo aver messo da parte quelli attuali. */
+  const sostituisci = async (dump, messaggio) => {
+    try {
+      setOccupato(true);
+      await salvaCopiaDiSicurezza(); // se è il file sbagliato si può tornare indietro
+      await importaTutto(dump);
+      let foto = { recuperate: 0, mancanti: 0 };
+      try { foto = await recuperaFotoMancanti(); } catch (e) { /* le foto si possono recuperare anche dopo */ }
+      aggiornaPromemoria();
+      Alert.alert('Ripristino completato ✓',
+        `${messaggio}${foto.recuperate ? `\n${foto.recuperate} foto recuperate dalla cartella dei backup.` : ''}`
+        + `${foto.mancanti ? `\n${foto.mancanti} foto non trovate: scegli la cartella dei backup e tocca "Recupera foto mancanti".` : ''}`
+        + '\n\nI dati di prima sono stati messi da parte: se hai scelto il file sbagliato puoi tornare indietro da questa schermata.');
+    } catch (e) {
+      Alert.alert('Ripristino non riuscito', `I dati attuali non sono stati toccati.\n\n${String(e?.message || e)}`);
+    } finally {
+      setOccupato(false);
+      aggiornaStato();
     }
   };
 
@@ -139,29 +163,29 @@ export default function BackupScreen() {
       });
       if (res.canceled || !res.assets?.[0]) return;
       const testo = await FileSystem.readAsStringAsync(res.assets[0].uri);
-      const dump = JSON.parse(testo);
+      let dump;
+      try { dump = JSON.parse(testo); } catch (e) { throw new Error('Il file scelto non è un backup valido.'); }
+      const quando = dump.generato ? new Date(dump.generato).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) : 'data sconosciuta';
+      const nLotti = Array.isArray(dump.tabelle?.lotti) ? dump.tabelle.lotti.length : 0;
+      const nTemp = Array.isArray(dump.tabelle?.registro_temperature) ? dump.tabelle.registro_temperature.length : 0;
       conferma(
         'Ripristinare questo backup?',
-        'Tutti i dati attuali verranno sostituiti con quelli del file scelto. Operazione non annullabile.',
-        async () => {
-          try {
-            setOccupato(true);
-            await importaTutto(dump);
-            Alert.alert(
-              'Ripristino completato ✓',
-              'Tutti i dati del backup sono stati caricati. Torna alla Home per vederli.'
-            );
-          } catch (e) {
-            Alert.alert('Errore ripristino', String(e?.message || e));
-          } finally {
-            setOccupato(false);
-          }
-        }
+        `Backup del ${quando}: ${nLotti} lotti, ${nTemp} temperature.\n\nTutti i dati attuali verranno sostituiti con quelli del file scelto.`,
+        () => sostituisci(dump, 'Tutti i dati del backup sono stati caricati.')
       );
     } catch (e) {
       Alert.alert('Errore lettura file', String(e?.message || e));
     }
   };
+
+  const tornaIndietro = () => conferma('Tornare ai dati di prima del ripristino?',
+    'I dati attuali verranno sostituiti con quelli che c\'erano prima dell\'ultimo ripristino.',
+    async () => {
+      try { await sostituisci(await leggiCopiaDiSicurezza(), 'Sono tornati i dati di prima del ripristino.'); }
+      catch (e) { Alert.alert('Operazione non riuscita', String(e?.message || e)); }
+    });
+
+  const giorniEsterno = esterno ? Math.floor((Date.now() - new Date(esterno).getTime()) / 86400000) : null;
 
   return (
     <View style={S.screen}>
@@ -186,7 +210,7 @@ export default function BackupScreen() {
             {!!stato.errore && (
               <Text style={{ color: COLORS.danger, marginTop: 6 }}>Ultimo tentativo fallito: {stato.errore}</Text>
             )}
-            <Bottone testo="Fai un backup adesso" onPress={oraSubito} />
+            <Bottone testo="Fai un backup adesso" onPress={oraSubito} disabilitato={occupato} />
             <Bottone testo="Recupera foto mancanti dalla cartella" ghost onPress={recuperaFoto} />
             <Bottone testo="Cambia cartella" ghost onPress={attiva} />
           </>
@@ -199,20 +223,27 @@ export default function BackupScreen() {
             <Bottone testo="Attiva backup automatico" onPress={attiva} />
           </>
         )}
-        <Text style={[S.muted, { marginTop: 10 }]}>
-          Per avere una copia anche fuori dal telefono, ogni tanto usa "Esporta backup completo" e
-          invialo a Drive o via email.
-        </Text>
+
       </View>
 
-      <View style={S.card}>
-        <Text style={S.h2}>Backup completo</Text>
-        <Text style={S.muted}>
-          Salva tutti i dati in un unico file. Serve anche per spostare tutto su un
-          altro dispositivo.
+      <View style={[S.card, {
+        borderLeftWidth: 5,
+        borderLeftColor: giorniEsterno === null ? COLORS.danger : giorniEsterno <= 7 ? COLORS.ok : COLORS.warning,
+      }]}>
+        <Text style={S.h2}>Copia fuori dal telefono</Text>
+        <Text style={{ fontSize: 15, color: COLORS.text, fontWeight: '700' }}>
+          {giorniEsterno === null ? 'Mai fatta' : giorniEsterno === 0 ? 'Ultima: oggi' : giorniEsterno === 1 ? 'Ultima: ieri' : `Ultima: ${giorniEsterno} giorni fa`}
         </Text>
-        <Bottone testo="Esporta backup completo" onPress={backupJson} />
-        <Bottone testo="Ripristina da un backup" ghost onPress={ripristina} />
+        <Text style={S.muted}>
+          Il backup automatico resta sul telefono: se il telefono si rompe o si perde, va perso anche lui.
+          Una volta a settimana invia questa copia a Google Drive o alla tua email: la Home te lo ricorda.
+        </Text>
+        <Bottone testo="Invia una copia a Drive / email" icona="cloud-upload-outline" onPress={backupJson} disabilitato={occupato} />
+        <Bottone testo="Ripristina da un backup" ghost onPress={ripristina} disabilitato={occupato} />
+        {!!sicurezza && (
+          <Bottone testo={`Torna ai dati di prima dell'ultimo ripristino${sicurezza.quando ? ` (${sicurezza.quando.toLocaleDateString('it-IT')})` : ''}`}
+            ghost colore={COLORS.danger} onPress={tornaIndietro} disabilitato={occupato} />
+        )}
       </View>
 
       <View style={S.card}>
@@ -226,7 +257,7 @@ export default function BackupScreen() {
 
       <Text style={[S.muted, { marginTop: 12 }]}>
         Le foto di etichette e documenti vengono copiate dal backup automatico nella sottocartella
-        "foto" della cartella scelta. Il file "Esporta backup completo" contiene solo i dati, non le foto.
+        "foto" della cartella scelta. La copia inviata a Drive o per email contiene solo i dati, non le foto.
       </Text>
     </ScrollView>
     {avviso}

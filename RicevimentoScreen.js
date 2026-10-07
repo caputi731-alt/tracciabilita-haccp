@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, Alert, Switch, Image, TouchableOpacity } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { S, COLORS, UNITA, isoDaCampo } from './theme';
+import { S, COLORS, UNITA, isoDaCampo, aNumero, oggiLocale, piuGiorni } from './theme';
 import {
   Campo, Chips, Selettore, Scanner, Bottone, useFoto, AnteprimaFoto, useErrori, CampoData,
 } from './UI';
@@ -9,25 +9,25 @@ import {
   listaFornitori, listaProdotti, prodottoDaBarcode, registraCarico, impostaFotoProdotto,
 } from './database';
 
-const oggi = () => new Date().toISOString().slice(0, 10);
-
-const VUOTO = {
-  fornitore_id: null, ddt_numero: '', ddt_data: oggi(), prodotto_id: null,
+/** Modulo vuoto: la data del documento è quella di oggi nel momento in cui si apre il modulo. */
+const vuoto = () => ({
+  fornitore_id: null, ddt_numero: '', ddt_data: oggiLocale(), prodotto_id: null,
   numero_lotto: '', quantita: '', colli: '', unita_misura: 'kg', data_scadenza: '',
   temperatura_rilevata: '', integrita_imballo: true, conformita_etichettatura: true,
   prezzo_unitario: '', note: '', foto_ddt: null, foto_etichetta: null,
-};
+});
 
 export default function RicevimentoScreen({ navigation }) {
   const [fornitori, setFornitori] = useState([]);
   const [prodotti, setProdotti] = useState([]);
-  const [f, setF] = useState({ ...VUOTO });
+  const [f, setF] = useState(vuoto);
   const [scanner, setScanner] = useState(false);
   const { chiediFoto, fotocamera } = useFoto();
 
   useFocusEffect(useCallback(() => {
-    listaFornitori().then(setFornitori);
-    listaProdotti().then(setProdotti);
+    Promise.all([listaFornitori(), listaProdotti()])
+      .then(([a, b]) => { setFornitori(a); setProdotti(b); })
+      .catch((e) => Alert.alert('Lettura non riuscita', String(e?.message || e)));
   }, []));
 
   const set = (k) => (v) => setF((s) => ({ ...s, [k]: v }));
@@ -40,8 +40,7 @@ export default function RicevimentoScreen({ navigation }) {
     setF((s) => {
       const nuovo = { ...s, prodotto_id: p.id, unita_misura: p.unita_misura || s.unita_misura };
       if ((!s.data_scadenza || scadenzaAuto) && p.shelf_life_giorni) {
-        const d = new Date(); d.setDate(d.getDate() + Number(p.shelf_life_giorni));
-        nuovo.data_scadenza = d.toISOString().slice(0, 10);
+        nuovo.data_scadenza = piuGiorni(oggiLocale(), p.shelf_life_giorni);
         setScadenzaAuto(true);
       }
       return nuovo;
@@ -55,45 +54,70 @@ export default function RicevimentoScreen({ navigation }) {
       scegliProdotto(p);
     } else {
       Alert.alert('Prodotto sconosciuto',
-        'Questo codice non è in catalogo. Crea prima il prodotto nella sezione Prodotti.');
+        `Il codice ${code} non è in catalogo. Puoi scegliere il prodotto dall'elenco qui sopra, oppure crearlo in anagrafica (lì puoi scansionare di nuovo il codice per abbinarlo).`,
+        [{ text: 'Scelgo dall\'elenco', style: 'cancel' },
+          { text: 'Vai ai prodotti', onPress: () => navigation.navigate('Anagrafiche', { scheda: 'Prodotti' }) }]);
     }
   };
 
   const { errori, segnala, azzera, riepilogo } = useErrori();
 
+  const prodottoSel = prodotti.find((p) => p.id === f.prodotto_id);
+  const tempLetta = aNumero(f.temperatura_rilevata);
+  const fuoriTemperatura = !!prodottoSel && tempLetta !== null && (
+    (prodottoSel.temp_max !== null && prodottoSel.temp_max !== undefined && tempLetta > prodottoSel.temp_max)
+    || (prodottoSel.temp_min !== null && prodottoSel.temp_min !== undefined && tempLetta < prodottoSel.temp_min));
+
   const salva = async () => {
     azzera();
     let ok = true;
+    const quantita = aNumero(f.quantita);
+    const temperatura = String(f.temperatura_rilevata).trim() === '' ? null : aNumero(f.temperatura_rilevata);
+    const prezzo = String(f.prezzo_unitario).trim() === '' ? null : aNumero(f.prezzo_unitario);
+    const colli = String(f.colli).trim() === '' ? null : aNumero(f.colli);
     if (!f.fornitore_id) ok = segnala('fornitore_id', 'Seleziona il fornitore');
     if (!f.prodotto_id) ok = segnala('prodotto_id', 'Seleziona il prodotto');
-    if (!f.quantita || !(Number(String(f.quantita).replace(',', '.')) > 0)) ok = segnala('quantita', 'Indica la quantità ricevuta');
+    if (quantita === null || quantita <= 0) ok = segnala('quantita', 'Indica la quantità ricevuta, es. 2,5');
+    if (String(f.temperatura_rilevata).trim() !== '' && temperatura === null) ok = segnala('temperatura', 'Inserisci un numero, es. 3,5');
+    if (String(f.prezzo_unitario).trim() !== '' && (prezzo === null || prezzo < 0)) ok = segnala('prezzo', 'Inserisci un numero, es. 4,90');
+    if (colli !== null && (!Number.isInteger(colli) || colli <= 0)) ok = segnala('colli', 'Numero intero');
+    if (String(f.colli).trim() !== '' && colli === null) ok = segnala('colli', 'Numero intero');
     if (isoDaCampo(f.data_scadenza) === undefined) ok = segnala('data_scadenza', 'Scrivi la scadenza come gg/mm/aaaa');
     if (!ok) return;
 
-    const nonConforme = !f.integrita_imballo || !f.conformita_etichettatura;
+    const nonConforme = !f.integrita_imballo || !f.conformita_etichettatura || fuoriTemperatura;
+    try {
+      if (f.foto_etichetta) await impostaFotoProdotto(f.prodotto_id, f.foto_etichetta, true);
+      await registraCarico({
+        ...f,
+        quantita, colli,
+        temperatura_rilevata: temperatura,
+        prezzo_unitario: prezzo,
+        data_scadenza: isoDaCampo(f.data_scadenza),
+        data_ricevimento: new Date().toISOString(),
+        esito_controllo: nonConforme ? 'non conforme' : 'conforme',
+      });
+    } catch (e) {
+      return Alert.alert('Carico non registrato', `Nessun dato è stato salvato.\n\n${String(e?.message || e)}`);
+    }
 
-    if (f.foto_etichetta) await impostaFotoProdotto(f.prodotto_id, f.foto_etichetta, true);
-    await registraCarico({
-      ...f,
-      quantita: Number(String(f.quantita).replace(',', '.')),
-      colli: f.colli ? parseInt(f.colli, 10) || null : null,
-      temperatura_rilevata: f.temperatura_rilevata === '' ? null : Number(f.temperatura_rilevata),
-      prezzo_unitario: f.prezzo_unitario === '' ? null : Number(f.prezzo_unitario),
-      data_scadenza: isoDaCampo(f.data_scadenza),
-      data_ricevimento: new Date().toISOString(),
-      esito_controllo: nonConforme ? 'non conforme' : 'conforme',
-    });
-
+    // il documento resta compilato: per un DDT con più prodotti si reinserisce solo il prodotto
+    const stessoDocumento = () => {
+      setScadenzaAuto(false);
+      setF((s0) => ({ ...vuoto(), fornitore_id: s0.fornitore_id, ddt_numero: s0.ddt_numero, ddt_data: s0.ddt_data, foto_ddt: s0.foto_ddt }));
+    };
     Alert.alert(
-      'Carico registrato',
+      'Carico registrato ✓',
       nonConforme
         ? 'Attenzione: è stata aperta una non conformità per questo lotto.'
         : 'Il lotto è ora in magazzino.',
-      [{ text: 'OK', onPress: () => { setF({ ...VUOTO }); navigation.navigate('Magazzino'); } }]
+      [
+        { text: 'Altro prodotto dello stesso documento', onPress: stessoDocumento },
+        { text: 'Vai al magazzino', onPress: () => { setF(vuoto()); navigation.navigate('Magazzino'); } },
+      ],
+      { cancelable: false }
     );
   };
-
-  const prodottoSel = prodotti.find((p) => p.id === f.prodotto_id);
 
   return (
     <ScrollView style={S.screen} contentContainerStyle={S.content}>
@@ -123,16 +147,16 @@ export default function RicevimentoScreen({ navigation }) {
         <Campo label="Numero di lotto" value={f.numero_lotto} onChange={set('numero_lotto')}
           placeholder="come riportato sull'etichetta" />
         <Campo label="Quantità *" value={f.quantita} onChange={set('quantita')} errore={errori.quantita}
-          keyboardType="numeric" />
+          keyboardType="decimal-pad" />
         <Chips label="Unità" opzioni={UNITA} valore={f.unita_misura} onChange={set('unita_misura')} />
-        <Campo label="Colli (facoltativo)" value={f.colli} onChange={set('colli')}
+        <Campo label="Colli (facoltativo)" value={f.colli} onChange={set('colli')} errore={errori.colli}
           keyboardType="number-pad" placeholder="numero di confezioni/casse ricevute" />
         <CampoData label="Data di scadenza / TMC" value={f.data_scadenza || null} errore={errori.data_scadenza}
           nota={scadenzaAuto ? 'Proposta dalla durata indicata nella scheda prodotto: controlla l\'etichetta' : null}
           scorciatoie={[{ testo: '+3 gg', giorni: 3 }, { testo: '+7 gg', giorni: 7 }, { testo: '+30 gg', giorni: 30 }]}
           onChange={(iso) => { setScadenzaAuto(false); set('data_scadenza')(iso || ''); }} />
-        <Campo label="Prezzo unitario (€)" value={f.prezzo_unitario}
-          onChange={set('prezzo_unitario')} keyboardType="numeric" />
+        <Campo label="Prezzo unitario (€)" value={f.prezzo_unitario} errore={errori.prezzo}
+          onChange={set('prezzo_unitario')} keyboardType="decimal-pad" />
 
         <Bottone testo={f.foto_etichetta ? 'Rifai foto etichetta' : "Fotografa l'etichetta"} ghost
           onPress={() => foto('foto_etichetta')} />
@@ -141,24 +165,23 @@ export default function RicevimentoScreen({ navigation }) {
 
       <Text style={S.h2}>3. Controllo al ricevimento</Text>
       <View style={S.card}>
-        <Campo label="Temperatura rilevata (°C)" value={f.temperatura_rilevata}
+        <Campo label="Temperatura rilevata (°C)" value={f.temperatura_rilevata} errore={errori.temperatura}
           onChange={set('temperatura_rilevata')} keyboardType="numbers-and-punctuation" />
-        {prodottoSel && prodottoSel.temp_max != null && f.temperatura_rilevata !== '' &&
-          Number(f.temperatura_rilevata) > prodottoSel.temp_max && (
-            <Text style={{ color: COLORS.danger, marginTop: 6, fontWeight: '600' }}>
-              Sopra il limite previsto ({prodottoSel.temp_max}°C)
-            </Text>
+        {fuoriTemperatura && (
+          <Text style={{ color: COLORS.danger, marginTop: 6, fontWeight: '700' }}>
+            Fuori dai limiti del prodotto ({prodottoSel.temp_min ?? '—'}/{prodottoSel.temp_max ?? '—'}°C): salvando si apre una non conformità.
+          </Text>
         )}
 
         <View style={[S.row, { marginTop: 16 }]}>
           <Text style={{ fontSize: 15, flex: 1 }}>Imballo integro</Text>
           <Switch value={f.integrita_imballo} onValueChange={set('integrita_imballo')}
-            trackColor={{ true: COLORS.primary }} />
+            trackColor={{ true: COLORS.primary }} accessibilityLabel="Imballo integro" />
         </View>
         <View style={[S.row, { marginTop: 12 }]}>
           <Text style={{ fontSize: 15, flex: 1 }}>Etichettatura conforme</Text>
           <Switch value={f.conformita_etichettatura} onValueChange={set('conformita_etichettatura')}
-            trackColor={{ true: COLORS.primary }} />
+            trackColor={{ true: COLORS.primary }} accessibilityLabel="Etichettatura conforme" />
         </View>
 
         <Campo label="Note / rilievi" value={f.note} onChange={set('note')} multiline />
@@ -167,7 +190,7 @@ export default function RicevimentoScreen({ navigation }) {
       {riepilogo}
       <Bottone testo="Registra carico" onPress={salva} />
 
-      <TouchableOpacity onPress={() => setF({ ...VUOTO })} style={{ padding: 16 }}>
+      <TouchableOpacity onPress={() => setF(vuoto())} style={{ padding: 16 }} accessibilityRole="button">
         <Text style={[S.muted, { textAlign: 'center' }]}>Svuota il modulo</Text>
       </TouchableOpacity>
 

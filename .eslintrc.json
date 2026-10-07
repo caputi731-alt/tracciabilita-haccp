@@ -1,0 +1,31 @@
+{
+  "root": true,
+  "parser": "@babel/eslint-parser",
+  "parserOptions": {
+    "requireConfigFile": false,
+    "babelOptions": { "presets": ["babel-preset-expo"], "babelrc": false, "configFile": false },
+    "ecmaVersion": 2022,
+    "sourceType": "module",
+    "ecmaFeatures": { "jsx": true }
+  },
+  "env": { "es2022": true },
+  "globals": {
+    "setTimeout": "readonly", "clearTimeout": "readonly", "console": "readonly", "Promise": "readonly",
+    "decodeURIComponent": "readonly", "TextDecoder": "readonly", "Uint8Array": "readonly", "atob": "readonly"
+  },
+  "plugins": ["react", "import"],
+  "settings": { "import/resolver": { "node": { "extensions": [".js"] } }, "import/ignore": ["node_modules"] },
+  "rules": {
+    "no-undef": "error",
+    "no-dupe-keys": "error",
+    "no-redeclare": "error",
+    "no-unreachable": "error",
+    "react/jsx-no-undef": "error",
+    "react/jsx-uses-vars": "error",
+    "react/jsx-uses-react": "error",
+    "react/jsx-key": "error",
+    "import/named": "error",
+    "import/no-unresolved": ["error", { "caseSensitive": true, "ignore": ["^expo", "^react", "^@react-navigation", "^@expo", "^pako$"] }],
+    "no-unused-vars": ["warn", { "args": "none", "ignoreRestSiblings": true, "varsIgnorePattern": "^React$" }]
+  }
+}

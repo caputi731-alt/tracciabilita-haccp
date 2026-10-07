@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, ActivityIndicator, StatusBar, AppState } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { initDatabase } from './database';
-import { backupAutomaticoSeServe, mettiAlSicuroFoto } from './backupAutomatico';
+import { backupAutomaticoSeServe, mettiAlSicuroFoto, pulisciFotoInutili } from './backupAutomatico';
 import { COLORS, S } from './theme';
+import { aggiornaPromemoria, ascoltaToccoNotifica } from './notifiche';
 
 import HomeScreen from './HomeScreen';
 import FornitoriScreen from './FornitoriScreen';
@@ -27,19 +28,35 @@ import RicetteScreen from './RicetteScreen';
 import ProduzioniScreen from './ProduzioniScreen';
 
 const Stack = createNativeStackNavigator();
+const navigazione = createNavigationContainerRef();
+
+/** Apre una schermata da fuori (tocco su una notifica), anche se la navigazione non è ancora pronta. */
+let rottaInAttesa = null;
+function apriDaNotifica(rotta) {
+  if (!navigazione.isReady()) { rottaInAttesa = rotta; return; }
+  navigazione.navigate(rotta, { daNotifica: Date.now() });
+}
 
 export default function App() {
   const [pronto, setPronto] = useState(false);
   const [errore, setErrore] = useState(null);
 
   useEffect(() => {
+    let scollega = () => {};
     initDatabase()
-      .then(async () => { setPronto(true); await mettiAlSicuroFoto(); backupAutomaticoSeServe(); })
-      .catch((e) => setErrore(e.message));
+      .then(async () => {
+        setPronto(true);
+        scollega = ascoltaToccoNotifica(apriDaNotifica); // dopo l'avvio del database: usa le preferenze
+        aggiornaPromemoria();
+        await mettiAlSicuroFoto();
+        await backupAutomaticoSeServe();
+        pulisciFotoInutili(); // dopo il backup: le foto sono già copiate nella cartella esterna
+      })
+      .catch((e) => setErrore(String(e?.message || e)));
     const sub = AppState.addEventListener('change', (stato) => {
-      if (stato === 'active') backupAutomaticoSeServe();
+      if (stato === 'active') { backupAutomaticoSeServe(); aggiornaPromemoria(); }
     });
-    return () => sub.remove();
+    return () => { sub.remove(); scollega(); };
   }, []);
 
   if (errore) {
@@ -61,7 +78,8 @@ export default function App() {
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigazione}
+      onReady={() => { if (rottaInAttesa) { const r = rottaInAttesa; rottaInAttesa = null; apriDaNotifica(r); } }}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.primaryDark} />
       <Stack.Navigator
         screenOptions={{

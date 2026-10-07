@@ -1,6 +1,7 @@
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import * as db from '../database.js';
+import { oggiLocale, piuGiorni, giornoDi } from '../utile.js';
 
 before(async () => {
   await db.initDatabase();
@@ -183,4 +184,99 @@ test('annulla subito: scarico, temperatura (con la sua non conformità) e pulizi
   await db.annullaSanificazione(s);
   assert.equal((await db.queryOne('SELECT COUNT(*) n FROM registro_sanificazione WHERE id = ?', [s])).n, 0);
   assert.ok((await db.query("SELECT * FROM registro_modifiche WHERE campo = 'annullato'")).length >= 3);
+});
+
+/* ---------- giacenze, produzioni, temperature flessibili, giorni locali ---------- */
+
+test('scarico: mai più della giacenza, neanche con un doppio tocco; annulla riporta la quantità giusta', async () => {
+  const id = await carico({ quantita: 2 });
+  const [a, b] = await Promise.allSettled([db.registraScarico(id, 2, 'consumo'), db.registraScarico(id, 2, 'consumo')]);
+  assert.equal([a, b].filter((x) => x.status === 'fulfilled').length, 1, 'uno solo dei due scarichi contemporanei passa');
+  const riuscito = [a, b].find((x) => x.status === 'fulfilled').value;
+  await db.annullaUscita(riuscito);
+  const l = await db.queryOne('SELECT quantita_residua, stato FROM lotti WHERE id = ?', [id]);
+  assert.deepEqual([l.quantita_residua, l.stato], [2, 'disponibile']);
+  await assert.rejects(db.registraScarico(id, 0, 'consumo'), /maggiore di zero/);
+  await assert.rejects(db.registraScarico(id, NaN, 'consumo'), /maggiore di zero/);
+});
+
+test('lotti scaduti: non proposti alle produzioni, non usabili come consumo, scartabili', async () => {
+  const pid = (await db.exec("INSERT INTO prodotti (denominazione, allergeni) VALUES ('Panna', '[\"Latte\"]')")).lastInsertRowId;
+  const scaduto = await carico({ prodotto_id: pid, quantita: 3, data_scadenza: '2020-01-01' });
+  const buono = await carico({ prodotto_id: pid, quantita: 3, data_scadenza: '2099-01-01' });
+  assert.deepEqual((await db.lottiDisponibiliProdotto(pid)).map((l) => l.id), [buono]);
+  assert.deepEqual((await db.lottiScadutiProdotto(pid)).map((l) => l.id), [scaduto]);
+  await assert.rejects(db.registraScarico(scaduto, 1, 'consumo'), /scaduto/);
+  await assert.rejects(db.registraProduzione({ nome: 'X' }, [{ lotto_id: scaduto, quantita: 1 }]), /scaduto/);
+  await db.registraScarico(scaduto, 3, 'scarto');
+  assert.equal((await db.queryOne('SELECT stato FROM lotti WHERE id = ?', [scaduto])).stato, 'esaurito');
+});
+
+test('produzione: quantità non valida o eccessiva rifiutata senza salvare nulla; allergeni salvati; annullamento', async () => {
+  const pid = (await db.exec("INSERT INTO prodotti (denominazione, allergeni) VALUES ('Burro', '[\"Latte\"]')")).lastInsertRowId;
+  const lotto = await carico({ prodotto_id: pid, quantita: 2 });
+  const prima = (await db.listaProduzioni()).length;
+  await assert.rejects(db.registraProduzione({ nome: 'Sugo' }, [{ lotto_id: lotto, quantita: Number('0,5') }]), /non valida/);
+  await assert.rejects(db.registraProduzione({ nome: 'Sugo' }, [{ lotto_id: lotto, quantita: 50 }]), /restano solo 2/);
+  assert.equal((await db.listaProduzioni()).length, prima, 'nessuna produzione salvata a metà');
+  assert.equal((await db.queryOne('SELECT quantita_residua q FROM lotti WHERE id = ?', [lotto])).q, 2);
+
+  const pr = await db.registraProduzione({ nome: 'Sugo' }, [{ lotto_id: lotto, quantita: 0.5 }]);
+  assert.deepEqual(JSON.parse((await db.getProduzione(pr)).allergeni), ['Latte']);
+  assert.equal((await db.queryOne('SELECT quantita_residua q FROM lotti WHERE id = ?', [lotto])).q, 1.5);
+  await db.annullaProduzione(pr, 'prova');
+  assert.equal((await db.queryOne('SELECT quantita_residua q FROM lotti WHERE id = ?', [lotto])).q, 2);
+  assert.equal((await db.movimentiDiLotto(lotto)).filter((m) => m.tipo !== 'carico').length, 0);
+  assert.equal((await db.produzioniDaLotto(lotto)).length, 0);
+  assert.equal((await db.getProduzione(pr)).annullata, 1);
+  await assert.rejects(db.annullaProduzione(pr), /già annullata/);
+});
+
+test('temperature: più rilevazioni al giorno, giorni passati annotati, niente giorni futuri', async () => {
+  const punto = (await db.salvaPuntoControllo({ nome: 'Frigo prova', tipo: 'frigorifero', temp_min: 0, temp_max: 4 })).lastInsertRowId;
+  const oggi = oggiLocale();
+  const ieri = piuGiorni(oggi, -1);
+  await db.registraTemperatura(punto, 3, null);
+  await db.registraTemperatura(punto, 3.5, null);
+  assert.equal((await db.temperatureDelGiorno(oggi)).filter((r) => r.punto_controllo_id === punto).length, 2);
+
+  const r = await db.registraTemperatura(punto, 9, null, ieri);
+  const diIeri = (await db.temperatureDelGiorno(ieri)).filter((x) => x.punto_controllo_id === punto);
+  assert.equal(diIeri.length, 1);
+  assert.match(diIeri[0].note, /Registrata in ritardo/);
+  assert.equal(giornoDi(diIeri[0].data_ora), ieri);
+  const nc = await db.queryOne('SELECT * FROM non_conformita WHERE temperatura_id = ?', [r.id]);
+  assert.equal(nc.stato, 'aperta');
+
+  // correzione: la non conformità collegata si chiude, resta la traccia
+  await db.modificaTemperatura(r.id, 3);
+  assert.equal((await db.queryOne('SELECT stato FROM non_conformita WHERE id = ?', [nc.id])).stato, 'chiusa');
+  assert.equal((await db.correzioniRecord('registro_temperature', r.id)).length, 1);
+
+  await assert.rejects(db.registraTemperatura(punto, 3, null, piuGiorni(oggi, 1)), /futuri/);
+  await assert.rejects(db.registraTemperatura(punto, NaN, null), /non valida/);
+
+  const sit = await db.situazioneTemperature(3);
+  assert.deepEqual(sit.map((g) => g.giorno), [piuGiorni(oggi, -2), ieri, oggi]);
+  assert.ok(sit[2].fatti >= 1 && sit[0].fatti === 0);
+  const buchi = await db.giorniSenzaTemperature(piuGiorni(oggi, -2), oggi);
+  assert.ok(buchi.some((b) => b.giorno === piuGiorni(oggi, -2)));
+});
+
+test('ricevimento: temperatura fuori dai limiti del prodotto apre una non conformità', async () => {
+  const pid = (await db.exec("INSERT INTO prodotti (denominazione, temp_min, temp_max) VALUES ('Pesce fresco', 0, 4)")).lastInsertRowId;
+  const id = await carico({ prodotto_id: pid, temperatura_rilevata: 9 });
+  assert.equal((await db.queryOne('SELECT esito_controllo e FROM lotti WHERE id = ?', [id])).e, 'non conforme');
+  const nc = await db.queryOne("SELECT * FROM non_conformita WHERE lotto_id = ? AND origine = 'ricevimento'", [id]);
+  assert.match(nc.descrizione, /9°C al ricevimento/);
+});
+
+test('pulizie: "da fare" rispetta la frequenza dell\'area', async () => {
+  const sett = (await db.salvaArea({ nome: 'Cappa prova', frequenza: 'settimanale' })).lastInsertRowId;
+  const gior = (await db.salvaArea({ nome: 'Piano prova', frequenza: 'giornaliera' })).lastInsertRowId;
+  const treGiorniFa = new Date(Date.now() - 3 * 86400000).toISOString();
+  await db.exec('INSERT INTO registro_sanificazione (area_id, data_ora) VALUES (?,?), (?,?)', [sett, treGiorniFa, gior, treGiorniFa]);
+  const stato = await db.areeConStato();
+  assert.equal(stato.find((a) => a.id === sett).daFare, false, 'settimanale fatta 3 giorni fa: a posto');
+  assert.equal(stato.find((a) => a.id === gior).daFare, true, 'giornaliera fatta 3 giorni fa: da fare');
 });

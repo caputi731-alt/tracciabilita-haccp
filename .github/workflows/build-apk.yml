@@ -3,6 +3,9 @@ name: Compila APK
 on:
   push:
     branches: [main]
+    # le modifiche alla sola documentazione non fanno partire una build
+    paths-ignore:
+      - '**.md'
   workflow_dispatch:
 
 permissions:
@@ -20,11 +23,19 @@ jobs:
         with:
           node-version: 22
 
-      - name: Installa le dipendenze
-        run: npm install
+      - name: Installa le dipendenze (versioni esatte del file package-lock.json)
+        run: npm ci
 
       - name: Esegui i test
         run: npm test
+
+      - name: Controlla il codice (variabili e import inesistenti, chiavi doppie)
+        run: npm run lint
+
+      - name: Prova a impacchettare tutte le schermate (trova gli errori in un minuto, prima della build Android)
+        run: npx expo export --platform android --output-dir "$RUNNER_TEMP/esportazione"
+        env:
+          EXPO_NO_TELEMETRY: 1
 
   build:
     needs: test
@@ -51,8 +62,14 @@ jobs:
           echo "ANDROID_HOME=$ANDROID_HOME"
           ls "$ANDROID_HOME"
 
-      - name: Installa le dipendenze
-        run: npm install
+      - name: Installa le dipendenze (versioni esatte del file package-lock.json)
+        run: npm ci
+
+      - name: Scrivi il numero di build nell'app (visibile in fondo alla Home) e nel versionCode
+        run: |
+          printf "export const BUILD = '%s';\n" "${{ github.run_number }}" > build.js
+          node -e "const f='app.json';const c=JSON.parse(require('fs').readFileSync(f,'utf8'));c.expo.android.versionCode=Number(process.argv[1]);c.expo.version='1.0.'+process.argv[1];require('fs').writeFileSync(f,JSON.stringify(c,null,2))" "${{ github.run_number }}"
+          cat build.js
 
       - name: Genera il progetto Android nativo
         run: npx expo prebuild --platform android --clean

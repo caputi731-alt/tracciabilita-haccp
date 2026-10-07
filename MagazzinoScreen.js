@@ -1,14 +1,14 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, TextInput, TouchableOpacity, Modal, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { S, COLORS, fmtData, fmtDataOra, giorniAllaScadenza } from './theme';
+import { S, COLORS, fmtData, fmtDataOra, giorniAllaScadenza, aNumero, numeroPerCampo, arrotonda } from './theme';
 import {
   Campo, Bottone, Chips, ModaleModifica, useAvviso, conferma, useFoto, AnteprimaFoto, VistaModale, Segmenti, useErrori, Sezione, Caricamento, Vuoto, Icona,
 } from './UI';
 import {
   listaLotti, registraScarico, query, correggiRecord, correggiUscita, annullaCarico, impostaFotoLotto,
   lottiBloccati, annullaUscita, cercaLotti, movimentiDiLotto, produzioniDaLotto, impattoLotto, bloccaLotto, sbloccaLotto,
-  getImpostazioni,
+  getImpostazioni, getLotto, lottoScaduto,
 } from './database';
 import { stampaSchedaLotto } from './schedaLotto';
 
@@ -18,12 +18,19 @@ const coloreStato = (stato) =>
   (stato === 'disponibile' ? COLORS.ok
     : stato === 'bloccato' || stato === 'scartato' ? COLORS.danger : COLORS.muted);
 
-const fmtQ = (n) => (n === null || n === undefined ? '—'
-  : (Math.round(Number(n) * 1000) / 1000).toLocaleString('it-IT'));
-const aNumero = (t) => {
-  const n = Number(String(t).trim().replace(',', '.'));
-  return Number.isFinite(n) ? n : null;
-};
+const fmtQ = (n) => (n === null || n === undefined ? '—' : numeroPerCampo(arrotonda(n)));
+
+function Riquadro({ titolo, children }) {
+  return (
+    <View style={S.card}>
+      {!!titolo && <Text style={S.h2}>{titolo}</Text>}
+      {children}
+    </View>
+  );
+}
+
+/** Lotti da cui si può scaricare con questa causale: per il consumo quelli scaduti sono esclusi. */
+const utilizzabili = (elenco, causale) => (causale === 'consumo' ? elenco.filter((l) => !lottoScaduto(l)) : elenco);
 
 const CAMPI_CARICO = [
   { chiave: 'numero_lotto', label: 'Numero di lotto', tipo: 'testo' },
@@ -84,13 +91,22 @@ export default function MagazzinoScreen({ route, navigation }) {
   const { errori, segnala, azzera } = useErrori();
   const { chiediFoto, fotocamera } = useFoto();
 
+  const richiesta = React.useRef(0);
   const ricarica = useCallback(() => {
-    Promise.all([listaLotti(cerca), cercaLotti(cerca), lottiBloccati()]).then(([a, b, c]) => {
+    const n = ++richiesta.current;
+    return Promise.all([listaLotti(cerca), cercaLotti(cerca), lottiBloccati()]).then(([a, b, c]) => {
+      if (n !== richiesta.current) return; // è arrivata una ricerca più recente
       setLotti(a); setTutti(b); setBloccati(c); setCaricato(true);
-    });
+    }).catch((e) => { setCaricato(true); Alert.alert('Lettura non riuscita', String(e?.message || e)); });
   }, [cerca]);
-  useFocusEffect(ricarica);
-  React.useEffect(() => { ricarica(); }, [cerca]);
+  // all'apertura subito; mentre si scrive nella ricerca si aspetta una breve pausa
+  const primaVolta = React.useRef(true);
+  useFocusEffect(useCallback(() => {
+    const attesa = primaVolta.current ? 0 : 250;
+    primaVolta.current = false;
+    const t = setTimeout(ricarica, attesa);
+    return () => clearTimeout(t);
+  }, [ricarica]));
 
   // raggruppa i lotti per prodotto (e unità di misura)
   const gruppi = [];
@@ -115,14 +131,17 @@ export default function MagazzinoScreen({ route, navigation }) {
   gruppi.sort((a, b) => fifo(a.lotti[0], b.lotti[0]));
 
   const apriLotto = async (l) => {
-    setSel(l);
-    setStorico(await movimentiDiLotto(l.id));
-    setProduzioni(await produzioniDaLotto(l.id));
-    setImpatto(await impattoLotto(l.id));
+    try {
+      setSel(l);
+      const [m, pr, im] = await Promise.all([movimentiDiLotto(l.id), produzioniDaLotto(l.id), impattoLotto(l.id)]);
+      setStorico(m); setProduzioni(pr); setImpatto(im);
+    } catch (e) {
+      Alert.alert('Lettura non riuscita', String(e?.message || e));
+    }
   };
   const ricaricaLotto = async (id) => {
     ricarica();
-    const l = (await cercaLotti('')).find((x) => x.id === id);
+    const l = await getLotto(id);
     if (l) await apriLotto(l); else setSel(null);
   };
 
@@ -131,7 +150,7 @@ export default function MagazzinoScreen({ route, navigation }) {
     const id = route?.params?.lottoId;
     if (!id) return;
     (async () => {
-      const l = (await cercaLotti('')).find((x) => x.id === id);
+      const l = await getLotto(id);
       if (l) {
         await apriLotto(l);
         if (route.params.blocca && l.stato !== 'bloccato') setAzione({ tipo: 'blocca', lotti: [l.id], testo: '' });
@@ -167,32 +186,51 @@ export default function MagazzinoScreen({ route, navigation }) {
   const confermaUscita = async () => {
     azzera();
     const q = aNumero(uscita.qta);
-    if (!q || q <= 0) return segnala('qta', 'Inserisci una quantità maggiore di zero');
-    const elenco = uscita.lotto ? [uscita.lotto] : uscita.gruppo.lotti;
-    const disponibile = elenco.reduce((s, l) => s + Number(l.quantita_residua), 0);
-    if (q > disponibile + 1e-9) {
-      return segnala('qta', `Ne sono disponibili solo ${fmtQ(disponibile)} ${elenco[0].unita_misura || ''}`);
+    if (q === null || q <= 0) return segnala('qta', 'Inserisci una quantità maggiore di zero, es. 0,5');
+    const tutti0 = uscita.lotto ? [uscita.lotto] : uscita.gruppo.lotti;
+    const elenco = utilizzabili(tutti0, uscita.causale);
+    const um = tutti0[0].unita_misura || '';
+    if (elenco.length === 0) {
+      return segnala('qta', 'Lotto scaduto: non si può usare. Scegli la causale "scarto".');
+    }
+    const disponibile = elenco.reduce((t, l) => t + Number(l.quantita_residua), 0);
+    if (q > disponibile + 0.0005) {
+      const scaduti = tutti0.length - elenco.length;
+      return segnala('qta', `Ne sono disponibili solo ${fmtQ(disponibile)} ${um}${scaduti ? ` (${scaduti} ${scaduti === 1 ? 'lotto scaduto escluso' : 'lotti scaduti esclusi'}: scaricali come scarto)` : ''}`);
     }
     let resto = q;
     const usati = [];
     const movimenti = [];
-    for (const l of elenco) {
-      if (resto <= 1e-9) break;
-      const parte = Math.min(resto, Number(l.quantita_residua));
-      if (parte <= 0) continue;
-      movimenti.push(await registraScarico(l.id, Math.round(parte * 1000) / 1000, uscita.causale));
-      usati.push(l.numero_lotto || `#${l.id}`);
-      resto -= parte;
-    }
     const idLotto = uscita.lotto ? uscita.lotto.id : null;
+    const causale = uscita.causale;
+    try {
+      for (const l of elenco) {
+        if (resto <= 0.0005) break;
+        const parte = Math.min(resto, Number(l.quantita_residua));
+        if (parte <= 0) continue;
+        movimenti.push(await registraScarico(l.id, arrotonda(parte), causale));
+        usati.push(l.numero_lotto || `#${l.id}`);
+        resto -= parte;
+      }
+    } catch (e) {
+      // la giacenza è cambiata nel frattempo: si annulla quanto già scaricato in questo giro
+      for (const m of movimenti) { try { await annullaUscita(m); } catch (e2) { /* resta visibile nei movimenti */ } }
+      setUscita(null);
+      if (idLotto) await ricaricaLotto(idLotto); else ricarica();
+      return Alert.alert('Scarico non registrato', String(e?.message || e));
+    }
     setUscita(null);
     if (idLotto) await ricaricaLotto(idLotto); else ricarica();
-    mostra(`Scaricati ${fmtQ(q)} ${elenco[0].unita_misura || ''} (${usati.length > 1 ? `lotti ${usati.join(', ')}` : `lotto ${usati[0]}`})`, {
+    mostra(`Scaricati ${fmtQ(q)} ${um} (${usati.length > 1 ? `lotti ${usati.join(', ')}` : `lotto ${usati[0]}`})`, {
       testo: 'Annulla',
       onPress: async () => {
-        for (const m of movimenti) await annullaUscita(m);
+        try {
+          for (const m of movimenti) await annullaUscita(m);
+          mostra('Scarico annullato');
+        } catch (e) {
+          Alert.alert('Annullamento non riuscito', String(e?.message || e));
+        }
         if (idLotto) await ricaricaLotto(idLotto); else ricarica();
-        mostra('Scarico annullato');
       },
     });
   };
@@ -224,6 +262,7 @@ export default function MagazzinoScreen({ route, navigation }) {
 
   const salvaUscita = async () => {
     const q = aNumero(qtaUscita);
+    if (q === null || q <= 0) return Alert.alert('Quantità non valida', 'Inserisci un numero maggiore di zero, es. 0,5.');
     try {
       await correggiUscita(modUscita.id, q);
       setModUscita(null);
@@ -238,9 +277,12 @@ export default function MagazzinoScreen({ route, navigation }) {
   const modaleUscita = (
       <Modal visible={!!uscita} transparent animationType="fade" onRequestClose={() => { azzera(); setUscita(null); }}>
         {uscita && (() => {
-          const elenco = uscita.lotto ? [uscita.lotto] : uscita.gruppo.lotti;
-          const um = elenco[0].unita_misura || '';
-          const disp = elenco.reduce((s, l) => s + Number(l.quantita_residua), 0);
+          const tutti0 = uscita.lotto ? [uscita.lotto] : uscita.gruppo.lotti;
+          const um = tutti0[0].unita_misura || '';
+          const utili = utilizzabili(tutti0, uscita.causale);
+          const scaduti = tutti0.filter((l) => lottoScaduto(l)).length;
+          const elenco = utili.length ? utili : tutti0;
+          const disp = utili.reduce((s, l) => s + Number(l.quantita_residua), 0);
           const q = aNumero(uscita.qta) || 0;
           let resto = q;
           const piano = [];
@@ -255,25 +297,32 @@ export default function MagazzinoScreen({ route, navigation }) {
               <View style={S.card}>
                 <Text style={S.h2}>Scarica {uscita.lotto ? uscita.lotto.prodotto : uscita.gruppo.prodotto}</Text>
                 <Text style={S.muted}>Disponibili {fmtQ(disp)} {um}{uscita.lotto ? ` nel lotto ${uscita.lotto.numero_lotto || '—'}` : ''}</Text>
+                {scaduti > 0 && (
+                  <Text style={{ color: COLORS.danger, fontWeight: '700', marginTop: 4 }}>
+                    {uscita.causale === 'consumo'
+                      ? `${scaduti} ${scaduti === 1 ? 'lotto scaduto' : 'lotti scaduti'}: non si ${scaduti === 1 ? 'può' : 'possono'} usare. Per toglier${scaduti === 1 ? 'lo' : 'li'} scegli "scarto".`
+                      : `${scaduti} ${scaduti === 1 ? 'lotto scaduto' : 'lotti scaduti'} da togliere dal magazzino.`}
+                  </Text>
+                )}
                 <Campo label={`Quantità (${um})`} value={uscita.qta} keyboardType="decimal-pad" autoFocus
                   errore={errori.qta} onChange={(v) => setUscita((u) => ({ ...u, qta: v }))} />
                 <View style={[S.chipWrap, { marginTop: 10 }]}>
                   <TouchableOpacity style={S.chip}
-                    onPress={() => setUscita((u) => ({ ...u, qta: String(Number(elenco[0].quantita_residua)).replace('.', ',') }))}>
+                    onPress={() => setUscita((u) => ({ ...u, qta: fmtQ(elenco[0].quantita_residua) }))}>
                     <Text style={S.chipText}>Tutto il primo lotto</Text>
                   </TouchableOpacity>
                   {elenco[0].colli > 0 && (
                     <TouchableOpacity style={S.chip}
                       onPress={() => {
-                        const unCollo = Math.round((elenco[0].quantita_iniziale / elenco[0].colli) * 1000) / 1000;
-                        setUscita((u) => ({ ...u, qta: String(Math.min(unCollo, disp)).replace('.', ',') }));
+                        const unCollo = arrotonda(elenco[0].quantita_iniziale / elenco[0].colli);
+                        setUscita((u) => ({ ...u, qta: fmtQ(Math.min(unCollo, disp || unCollo)) }));
                       }}>
                       <Text style={S.chipText}>1 collo ({fmtQ(elenco[0].quantita_iniziale / elenco[0].colli)})</Text>
                     </TouchableOpacity>
                   )}
                   {elenco.length > 1 && (
                     <TouchableOpacity style={S.chip}
-                      onPress={() => setUscita((u) => ({ ...u, qta: String(Math.round(disp * 1000) / 1000).replace('.', ',') }))}>
+                      onPress={() => setUscita((u) => ({ ...u, qta: fmtQ(disp) }))}>
                       <Text style={S.chipText}>Tutto ({fmtQ(disp)})</Text>
                     </TouchableOpacity>
                   )}
@@ -303,18 +352,12 @@ export default function MagazzinoScreen({ route, navigation }) {
     }
   });
 
-  const Riquadro = ({ titolo, children }) => (
-    <View style={S.card}>
-      {!!titolo && <Text style={S.h2}>{titolo}</Text>}
-      {children}
-    </View>
-  );
-
   return (
     <View style={S.screen}>
       <View style={{ padding: 16, paddingBottom: 0 }}>
         <TextInput style={S.input} placeholder="Cerca prodotto, lotto o fornitore…" value={cerca}
-          onChangeText={setCerca} placeholderTextColor="#9CA3AF" />
+          accessibilityLabel="Cerca prodotto, lotto o fornitore"
+          onChangeText={setCerca} placeholderTextColor={COLORS.segnaposto} />
         <Segmenti opzioni={['In giacenza', 'Tutti i lotti']} valore={modo} onChange={setModo} />
         {modo === 'In giacenza' && lotti.length > 0 && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}
@@ -349,6 +392,7 @@ export default function MagazzinoScreen({ route, navigation }) {
           <>
             <Text style={[S.muted, { marginBottom: 6 }]}>
               Storico completo, anche lotti esauriti, bloccati o annullati: qui trovi la rintracciabilità di ogni partita.
+              {tutti.length >= 150 ? ' Sono mostrati i 150 più recenti: usa la ricerca per trovare quelli più vecchi.' : ''}
             </Text>
             {caricato && tutti.length === 0 && (
               <Vuoto icona="magnify" titolo="Nessun lotto trovato" testo={cerca ? 'Prova a cercare con un\'altra parola.' : 'Qui compariranno tutti i lotti ricevuti.'} />
@@ -409,8 +453,13 @@ export default function MagazzinoScreen({ route, navigation }) {
                 </Text>
               </TouchableOpacity>
 
-              <Bottone testo="Scarica"
-                onPress={() => setUscita({ gruppo: g, qta: '', causale: 'consumo' })} />
+              {g.lotti.every((l) => lottoScaduto(l)) ? (
+                <Bottone testo="Scarta (scaduto)" colore={COLORS.danger} icona="delete-outline"
+                  onPress={() => setUscita({ gruppo: g, qta: fmtQ(g.totale), causale: 'scarto' })} />
+              ) : (
+                <Bottone testo="Scarica"
+                  onPress={() => setUscita({ gruppo: g, qta: '', causale: 'consumo' })} />
+              )}
 
               {aperto && g.lotti.map((l, i) => (
                 <TouchableOpacity key={l.id} onPress={() => apriLotto(l)}
@@ -452,8 +501,13 @@ export default function MagazzinoScreen({ route, navigation }) {
                 </Text>
                 <Text style={[S.muted, { marginTop: 4 }]}>Lotto {sel.numero_lotto || '—'} · {sel.fornitore}</Text>
                 {sel.stato === 'disponibile' && (
-                  <Bottone testo="Scarica da questo lotto" icona="tray-arrow-up"
-                    onPress={() => setUscita({ lotto: sel, qta: '', causale: 'consumo' })} />
+                  lottoScaduto(sel) ? (
+                    <Bottone testo="Scarta questo lotto (scaduto)" icona="delete-outline" colore={COLORS.danger}
+                      onPress={() => setUscita({ lotto: sel, qta: fmtQ(sel.quantita_residua), causale: 'scarto' })} />
+                  ) : (
+                    <Bottone testo="Scarica da questo lotto" icona="tray-arrow-up"
+                      onPress={() => setUscita({ lotto: sel, qta: '', causale: 'consumo' })} />
+                  )
                 )}
                 <Bottone testo="Stampa etichetta" icona="label-outline" ghost
                   onPress={() => {
@@ -550,7 +604,7 @@ export default function MagazzinoScreen({ route, navigation }) {
               <Sezione titolo="Movimenti" icona="swap-vertical" riassunto={`${storico.length} moviment${storico.length === 1 ? 'o' : 'i'}`}>
                 {storico.map((m, i) => (
                   <TouchableOpacity key={m.id} disabled={m.tipo === 'carico'}
-                    onPress={() => { setModUscita(m); setQtaUscita(String(m.quantita).replace('.', ',')); }}
+                    onPress={() => { setModUscita(m); setQtaUscita(fmtQ(m.quantita)); }}
                     style={[S.row, { paddingVertical: 8, borderTopWidth: i ? 1 : 0, borderTopColor: COLORS.border }]}>
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.text }}>

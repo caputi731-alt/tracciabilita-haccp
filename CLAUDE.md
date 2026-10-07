@@ -23,9 +23,35 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
 - Stili centralizzati in `theme.js`; report PDF tramite il modulo condiviso `report.js`.
 
 ## Controlli prima del commit
-- Sintassi JS valida su tutti i file modificati.
+- `npm test` e `npm run lint` devono passare (li esegue anche GitHub Actions, insieme a una prova di impacchettamento
+  `expo export`: se uno fallisce l'APK non viene creato). Il lint trova variabili e import inesistenti e chiavi doppie.
 - Nessun import verso file inesistenti o con maiuscole/minuscole diverse.
 - Nessuna funzione duplicata in `database.js`.
+
+## Numeri e date (modulo `utile.js`, riesportato da `theme.js`)
+- Numeri digitati: sempre `aNumero(testo)` (accetta virgola e segno meno; non valido → null). MAI `Number(testo)` su un campo.
+  Nei moduli i valori numerici restano testo e si convertono al salvataggio; per mostrarli `numeroPerCampo`.
+- Giorni: sempre quelli del telefono. `oggiLocale()`, `piuGiorni(iso, n)`, `giornoDi(istante)`.
+  MAI `toISOString().slice(0, 10)` (è il giorno UTC: dopo mezzanotte sbaglia giorno).
+- Ricerche per periodo nel database: `limitiGiorni(da, a)` + `data_ora >= ? AND data_ora < ?`, non `substr(data_ora, 1, 10)`.
+- Testi dentro l'HTML di stampe ed etichette: sempre `escHtml` (o `esc` di report.js).
+
+## Giacenze e transazioni
+- Ogni salvataggio in più passi va in `d.withTransactionAsync` (le transazioni sono messe in fila in `getDb`:
+  mai aprirne una dentro un'altra; per questo esiste `caricoInTransazione`).
+- `registraScarico` e `registraProduzione` rifiutano quantità non valide o superiori alla giacenza e i lotti scaduti
+  (un lotto scaduto si può solo scartare o rendere). Le schermate ripartiscono le quantità in FIFO sui lotti non scaduti.
+- `Bottone` blocca i doppi tocchi se `onPress` è asincrono e mostra l'errore se la funzione fallisce.
+- Produzioni: allergeni salvati in `produzioni.allergeni` al momento della produzione; `annullaProduzione` riporta le quantità nei lotti.
+
+## Temperature e promemoria
+- Più rilevazioni al giorno per frigorifero; `registraTemperatura(punto, valore, note, giorno)` con `giorno` passato
+  annota la riga come "Registrata in ritardo il …". Nessun operatore (scelta di Luca).
+- La non conformità automatica è collegata con `non_conformita.temperatura_id`.
+- `notifiche.js` (expo-notifications ~0.29.14, solo notifiche locali): un avviso al giorno all'ora scelta, riprogrammato
+  a ogni apertura e dopo ogni registrazione per i 14 giorni successivi; quello di oggi salta se le temperature sono complete.
+  Il tocco apre `Temperature` con `{ daNotifica }` e parte l'inserimento in sequenza. Impostazioni in `RiquadroPromemoria.js`.
+- Pulizie: "da fare" secondo la frequenza dell'area (`areeConStato`, `GIORNI_FREQUENZA`).
 
 ## Importazione fatture PDF
 - `letturaPdf.js`: estrazione testo da PDF in puro JS (solo `pako`, nessun modulo nativo). Non aggiungere librerie PDF native.
@@ -66,5 +92,15 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
 - Componenti UI comuni: `Icona` (MaterialCommunityIcons da @expo/vector-icons, niente emoji), `Bottone icona=`, `Sezione` (blocchi apribili),
   `Caricamento` (segnaposto), `Vuoto` (elenco vuoto con azione), `CampoData` (calendario, valori ISO). Le date si scelgono sempre con `CampoData`.
 - Registri PDF: i corpi HTML stanno in report.js (`corpoTemperature`, `corpoCarichi`, ...) e sono riusati da `htmlPacchettoASL`.
+- Accessibilità: i componenti di UI.js hanno già ruolo ed etichetta; per i `TouchableOpacity` scritti a mano aggiungere
+  `accessibilityRole="button"` (e `accessibilityLabel` se il testo non basta). Aree toccabili ≥ 48px.
+  Colori dei testi con contrasto ≥ 4,5:1 (`COLORS.warning`, `danger`, `segnaposto`); bordo dei campi `COLORS.bordoCampo`.
+- Niente azioni raggiungibili solo con la pressione lunga: "Elimina" sta dentro la finestra di modifica.
+- Condivisione di PDF/CSV/backup: `condividi.js` (file nella memoria temporanea, non in documentDirectory).
+- Backup: prima di ogni ripristino `salvaCopiaDiSicurezza()`; la copia inviata fuori dal telefono aggiorna la preferenza
+  `backup_esterno_ultimo` (la Home avvisa dopo 7 giorni). `pulisciFotoInutili()` elimina le foto non più collegate.
+- Dipendenze: `package-lock.json` è nel repository e la build usa `npm ci`: dopo ogni modifica a package.json rigenerarlo
+  (`npm install --package-lock-only`) e includerlo nello stesso commit.
+- Il numero di build compare in fondo alla Home (`build.js`, scritto da GitHub Actions; non modificarlo a mano).
 - Dipendenze: mai versioni con "^" per pacchetti che contengono codice nativo. Devono restare quelle di Expo SDK 52
   (es. expo-font ~13.0.4, @expo/vector-icons ~14.0.4): la 14.1 di vector-icons trascina expo-font 57 e rompe la compilazione Android.

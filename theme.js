@@ -1,4 +1,9 @@
 import { StyleSheet } from 'react-native';
+import { oggiLocale, daIsoLocale } from './utile';
+
+export {
+  aNumero, numeroPerCampo, oggiLocale, isoLocale, piuGiorni, giornoDi, arrotonda, escHtml,
+} from './utile';
 
 export const COLORS = {
   bg: '#EEF2F0',
@@ -9,12 +14,15 @@ export const COLORS = {
   text: '#13211C',
   muted: '#4E5A55',
   border: '#E1E7E4',
-  danger: '#C63A2F',
+  danger: '#B3261E',
   dangerSoft: '#FBE9E7',
-  warning: '#C77A12',
+  warning: '#9A5B00',
   warningSoft: '#FBF0DC',
   ok: '#12795A',
   accent: '#1E9E76',
+  // bordo dei campi (visibile: contrasto 3:1 sul bianco) e testo dei segnaposto
+  bordoCampo: '#84908A',
+  segnaposto: '#66726C',
   // colore delle azioni (pulsanti, collegamenti, scelte attive): distinto dal verde degli stati "ok"
   azione: '#1B5E9E',
   azioneDark: '#144A7D',
@@ -37,8 +45,8 @@ export const UNITA = ['kg', 'g', 'l', 'ml', 'pz', 'cassa', 'conf'];
 
 export const fmtData = (iso) => {
   if (!iso) return '—';
-  const d = new Date(iso.length === 10 ? iso + 'T00:00:00' : iso);
-  return d.toLocaleDateString('it-IT');
+  const d = iso.length === 10 ? daIsoLocale(iso) : new Date(iso);
+  return Number.isNaN(d.getTime()) ? String(iso) : d.toLocaleDateString('it-IT');
 };
 
 export const fmtDataOra = (iso) => {
@@ -66,10 +74,9 @@ export const isoDaCampo = (testo) => {
 
 export const giorniAllaScadenza = (iso) => {
   if (!iso) return null;
-  const scad = new Date(iso + 'T00:00:00');
-  const oggi = new Date();
-  oggi.setHours(0, 0, 0, 0);
-  return Math.round((scad - oggi) / 86400000);
+  const scad = daIsoLocale(iso);
+  if (Number.isNaN(scad.getTime())) return null;
+  return Math.round((scad - daIsoLocale(oggiLocale())) / 86400000);
 };
 
 export const S = StyleSheet.create({
@@ -98,7 +105,7 @@ export const S = StyleSheet.create({
     textTransform: 'uppercase', letterSpacing: 0.4,
   },
   input: {
-    borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, paddingHorizontal: 14,
+    borderWidth: 1, borderColor: COLORS.bordoCampo, borderRadius: 12, paddingHorizontal: 14,
     paddingVertical: 13, fontSize: 16, backgroundColor: '#fff', color: COLORS.text,
   },
 
@@ -120,7 +127,7 @@ export const S = StyleSheet.create({
   chip: {
     paddingHorizontal: 16, paddingVertical: 12, minHeight: 46, justifyContent: 'center',
     borderRadius: 23, borderWidth: 1,
-    borderColor: COLORS.border, marginRight: 8, marginBottom: 8, backgroundColor: '#fff',
+    borderColor: COLORS.bordoCampo, marginRight: 8, marginBottom: 8, backgroundColor: '#fff',
   },
   chipOn: { backgroundColor: COLORS.azione, borderColor: COLORS.azione },
   chipText: { color: COLORS.text, fontSize: 15 },

@@ -1,12 +1,26 @@
 import * as SQLite from 'expo-sqlite';
+import { oggiLocale, piuGiorni, limitiGiorni, giornoDi, daIsoLocale, arrotonda } from './utile';
 
-let db = null;
+let apertura = null;
 
-export async function getDb() {
-  if (db) return db;
-  db = await SQLite.openDatabaseAsync('haccp.db');
-  await db.execAsync('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
-  return db;
+/** Apre il database una sola volta, anche se più schermate lo chiedono nello stesso momento. */
+export function getDb() {
+  if (!apertura) {
+    apertura = (async () => {
+      const d = await SQLite.openDatabaseAsync('haccp.db');
+      await d.execAsync('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
+      // le transazioni si mettono in fila: due salvataggi partiti insieme (doppio tocco) non si accavallano
+      const originale = d.withTransactionAsync.bind(d);
+      let coda = Promise.resolve();
+      d.withTransactionAsync = (fn) => {
+        const esito = coda.then(() => originale(fn));
+        coda = esito.catch(() => {});
+        return esito;
+      };
+      return d;
+    })().catch((e) => { apertura = null; throw e; });
+  }
+  return apertura;
 }
 
 export async function initDatabase() {
@@ -251,8 +265,22 @@ export async function initDatabase() {
     }
   } catch (e) {}
 
+  await aggiungiSeManca('non_conformita', 'temperatura_id', 'INTEGER');
+  await aggiungiSeManca('produzioni', 'annullata', 'INTEGER DEFAULT 0');
+  await d.execAsync(`
+    CREATE INDEX IF NOT EXISTS idx_movimenti_lotto ON movimenti(lotto_id);
+    CREATE INDEX IF NOT EXISTS idx_lotti_prodotto ON lotti(prodotto_id);
+    CREATE INDEX IF NOT EXISTS idx_sanif_data ON registro_sanificazione(data_ora);
+    CREATE INDEX IF NOT EXISTS idx_prodlotti_lotto ON produzione_lotti(lotto_id);
+    CREATE INDEX IF NOT EXISTS idx_modifiche_record ON registro_modifiche(tabella, record_id);
+    PRAGMA user_version = ${VERSIONE_SCHEMA};
+  `);
+
   return d;
 }
+
+/** Numero della versione dello schema (PRAGMA user_version): aumentarlo a ogni modifica delle tabelle. */
+export const VERSIONE_SCHEMA = 3;
 
 /* ---------- helper generici ---------- */
 
@@ -351,9 +379,36 @@ export const eliminaPuntoControllo = (id) =>
 /** Stato del lotto dopo un cambio di giacenza: un lotto bloccato o annullato resta tale. */
 const statoDopo = (statoAttuale, residua) =>
   (statoAttuale === 'bloccato' || statoAttuale === 'annullato'
-    ? statoAttuale : residua <= 0 ? 'esaurito' : 'disponibile');
+    ? statoAttuale : residua <= 0.0005 ? 'esaurito' : 'disponibile');
 
+/** Un lotto è scaduto se la data di scadenza è passata (il giorno di scadenza è ancora buono). */
+export const lottoScaduto = (l) => !!(l && l.data_scadenza) && String(l.data_scadenza).slice(0, 10) < oggiLocale();
+
+/** Temperatura al ricevimento fuori dai limiti indicati nella scheda prodotto? Restituisce il testo del rilievo o null. */
+async function rilievoTemperatura(prodottoId, temperatura) {
+  if (temperatura === null || temperatura === undefined || !Number.isFinite(Number(temperatura))) return null;
+  const p = await queryOne('SELECT denominazione, temp_min, temp_max FROM prodotti WHERE id = ?', [prodottoId]);
+  if (!p) return null;
+  const t = Number(temperatura);
+  const sopra = p.temp_max !== null && p.temp_max !== undefined && t > p.temp_max;
+  const sotto = p.temp_min !== null && p.temp_min !== undefined && t < p.temp_min;
+  if (!sopra && !sotto) return null;
+  return `${p.denominazione}: ${t}°C al ricevimento (limiti ${p.temp_min ?? '—'}/${p.temp_max ?? '—'}°C)`;
+}
+
+/** Registra un carico (lotto + movimento + eventuale non conformità) in un'unica transazione. */
 export async function registraCarico(l) {
+  const d = await getDb();
+  let lottoId;
+  await d.withTransactionAsync(async () => { lottoId = (await caricoInTransazione(l)).lottoId; });
+  return lottoId;
+}
+
+/** Come registraCarico, ma da usare dentro una transazione già aperta. Restituisce { lottoId, rilievo }. */
+async function caricoInTransazione(l0) {
+  if (!(Number(l0.quantita) > 0)) throw new Error('La quantità ricevuta deve essere maggiore di zero.');
+  const rilievo = await rilievoTemperatura(l0.prodotto_id, l0.temperatura_rilevata);
+  const l = rilievo ? { ...l0, esito_controllo: 'non conforme' } : l0;
   const res = await exec(
     `INSERT INTO lotti (prodotto_id, fornitore_id, numero_lotto, ddt_numero, ddt_data,
      data_ricevimento, quantita_iniziale, quantita_residua, unita_misura, data_scadenza,
@@ -376,11 +431,20 @@ export async function registraCarico(l) {
       `INSERT INTO non_conformita (data_ora, origine, descrizione, lotto_id)
        VALUES (?,?,?,?)`,
       [new Date().toISOString(), 'ricevimento',
-       `Merce non conforme al ricevimento: ${l.note || 'vedi scheda lotto'}`, lottoId]
+       `Merce non conforme al ricevimento: ${[rilievo, l.note].filter(Boolean).join(' · ') || 'vedi scheda lotto'}`, lottoId]
     );
   }
-  return lottoId;
+  return { lottoId, rilievo };
 }
+
+const SELECT_LOTTO = `SELECT l.*, p.denominazione AS prodotto, p.categoria, p.conservazione, p.allergeni,
+            f.ragione_sociale AS fornitore, f.partita_iva AS fornitore_piva, f.numero_riconoscimento_ce
+     FROM lotti l
+     JOIN prodotti p ON p.id = l.prodotto_id
+     JOIN fornitori f ON f.id = l.fornitore_id`;
+
+/** Un lotto con i dati di prodotto e fornitore. */
+export const getLotto = (id) => queryOne(`${SELECT_LOTTO} WHERE l.id = ?`, [id]);
 
 export const listaLotti = (filtro = '') =>
   query(
@@ -395,24 +459,45 @@ export const listaLotti = (filtro = '') =>
     [filtro, `%${filtro}%`, `%${filtro}%`]
   );
 
+/**
+ * Registra un'uscita dal lotto (consumo, scarto, reso) in un'unica transazione.
+ * Rifiuta le quantità superiori alla giacenza: così movimenti e giacenza restano sempre allineati,
+ * anche con un doppio tocco sul pulsante.
+ */
 export async function registraScarico(lottoId, quantita, causale) {
-  const lotto = await queryOne('SELECT * FROM lotti WHERE id = ?', [lottoId]);
-  if (!lotto) throw new Error('Lotto non trovato');
-  const residua = Math.max(0, lotto.quantita_residua - quantita);
-  await exec(
-    'UPDATE lotti SET quantita_residua = ?, stato = ? WHERE id = ?',
-    [residua, statoDopo(lotto.stato, residua), lottoId]
-  );
-  const r = await exec(
-    'INSERT INTO movimenti (lotto_id, tipo, quantita, data_ora, causale) VALUES (?,?,?,?,?)',
-    [lottoId, causale === 'scarto' ? 'scarto' : 'scarico', quantita,
-     new Date().toISOString(), causale]
-  );
-  return r.lastInsertRowId;
+  const q = arrotonda(quantita);
+  if (!(q > 0)) throw new Error('La quantità deve essere maggiore di zero.');
+  const d = await getDb();
+  let movimentoId;
+  await d.withTransactionAsync(async () => {
+    const lotto = await queryOne('SELECT * FROM lotti WHERE id = ?', [lottoId]);
+    if (!lotto) throw new Error('Lotto non trovato');
+    if (lotto.stato === 'bloccato' && causale === 'consumo') {
+      throw new Error('Il lotto è bloccato: non può essere usato. Può solo essere reso o scartato.');
+    }
+    if (lotto.stato === 'annullato') throw new Error('Il carico di questo lotto è stato annullato.');
+    if (q > lotto.quantita_residua + 0.0005) {
+      throw new Error(`Nel lotto restano solo ${arrotonda(lotto.quantita_residua)} ${lotto.unita_misura || ''}.`);
+    }
+    if (causale === 'consumo' && lottoScaduto(lotto)) {
+      throw new Error('Il lotto è scaduto: non può essere usato. Scaricalo come scarto.');
+    }
+    const residua = Math.max(0, arrotonda(lotto.quantita_residua - q));
+    await exec(
+      'UPDATE lotti SET quantita_residua = ?, stato = ? WHERE id = ?',
+      [residua, statoDopo(lotto.stato, residua), lottoId]
+    );
+    const r = await exec(
+      'INSERT INTO movimenti (lotto_id, tipo, quantita, data_ora, causale) VALUES (?,?,?,?,?)',
+      [lottoId, causale === 'scarto' ? 'scarto' : 'scarico', q, new Date().toISOString(), causale]
+    );
+    movimentoId = r.lastInsertRowId;
+  });
+  return movimentoId;
 }
 
 export const lottiInScadenza = (giorni = 3) => {
-  const limite = new Date(Date.now() + giorni * 86400000).toISOString().slice(0, 10);
+  const limite = piuGiorni(oggiLocale(), giorni);
   return query(
     `SELECT l.*, p.denominazione AS prodotto
      FROM lotti l JOIN prodotti p ON p.id = l.prodotto_id
@@ -423,67 +508,128 @@ export const lottiInScadenza = (giorni = 3) => {
 
 /* ---------- temperature ---------- */
 
-export async function registraTemperatura(puntoId, temperatura, note) {
-  const punto = await queryOne('SELECT * FROM punti_controllo WHERE id = ?', [puntoId]);
-  const conforme = temperatura >= punto.temp_min && temperatura <= punto.temp_max;
-  const r = await exec(
-    'INSERT INTO registro_temperature (punto_controllo_id, data_ora, temperatura, esito, note) VALUES (?,?,?,?,?)',
-    [puntoId, new Date().toISOString(), temperatura, conforme ? 'conforme' : 'non conforme', note]
-  );
-  let ncId = null;
-  if (!conforme) {
-    const nc = await exec(
-      'INSERT INTO non_conformita (data_ora, origine, descrizione) VALUES (?,?,?)',
-      [new Date().toISOString(), 'temperatura',
-       `${punto.nome}: rilevati ${temperatura}°C (limiti ${punto.temp_min}/${punto.temp_max}°C)`]
+const descrizioneNcTemperatura = (punto, temperatura) =>
+  `${punto.nome}: rilevati ${temperatura}°C (limiti ${punto.temp_min}/${punto.temp_max}°C)`;
+
+/**
+ * Registra una rilevazione. Si possono fare più rilevazioni al giorno per lo stesso punto.
+ * giorno (AAAA-MM-GG, facoltativo): per inserire una rilevazione di un giorno passato; la riga
+ * viene annotata come "registrata in ritardo", così il registro resta trasparente.
+ */
+export async function registraTemperatura(puntoId, temperatura, note, giorno = null) {
+  const t = Number(temperatura);
+  if (!Number.isFinite(t)) throw new Error('Temperatura non valida.');
+  const oggi = oggiLocale();
+  if (giorno && giorno > oggi) throw new Error('Non si possono registrare temperature per giorni futuri.');
+  const inRitardo = !!giorno && giorno < oggi;
+  const adesso = new Date();
+  const dataOra = inRitardo ? daIsoLocale(giorno).toISOString() : adesso.toISOString();
+  const annotazione = inRitardo ? `Registrata in ritardo il ${adesso.toLocaleDateString('it-IT')}` : null;
+  const nota = [note, annotazione].filter(Boolean).join(' | ') || null;
+  const d = await getDb();
+  let esito;
+  await d.withTransactionAsync(async () => {
+    const punto = await queryOne('SELECT * FROM punti_controllo WHERE id = ?', [puntoId]);
+    if (!punto) throw new Error('Frigorifero non trovato');
+    const conforme = t >= punto.temp_min && t <= punto.temp_max;
+    const r = await exec(
+      'INSERT INTO registro_temperature (punto_controllo_id, data_ora, temperatura, esito, note) VALUES (?,?,?,?,?)',
+      [puntoId, dataOra, t, conforme ? 'conforme' : 'non conforme', nota]
     );
-    ncId = nc.lastInsertRowId;
-  }
-  return { conforme, id: r.lastInsertRowId, ncId };
+    let ncId = null;
+    if (!conforme) {
+      const nc = await exec(
+        'INSERT INTO non_conformita (data_ora, origine, descrizione, temperatura_id) VALUES (?,?,?,?)',
+        [dataOra, 'temperatura', descrizioneNcTemperatura(punto, t), r.lastInsertRowId]
+      );
+      ncId = nc.lastInsertRowId;
+    }
+    esito = { conforme, id: r.lastInsertRowId, ncId };
+  });
+  return esito;
 }
 
-export const temperatureDiOggi = () => {
-  const oggi = new Date().toISOString().slice(0, 10);
+/** Rilevazioni di un giorno (AAAA-MM-GG, del telefono), dalla più recente. */
+export const temperatureDelGiorno = (giorno) => {
+  const [da, a] = limitiGiorni(giorno);
   return query(
     `SELECT r.*, pc.nome FROM registro_temperature r
      JOIN punti_controllo pc ON pc.id = r.punto_controllo_id
-     WHERE substr(r.data_ora, 1, 10) = ? ORDER BY r.data_ora DESC`, [oggi]);
+     WHERE r.data_ora >= ? AND r.data_ora < ? ORDER BY r.data_ora DESC, r.id DESC`, [da, a]);
 };
+
+export const temperatureDiOggi = () => temperatureDelGiorno(oggiLocale());
+
+/**
+ * Situazione degli ultimi n giorni (oggi compreso, dal più vecchio): per ogni giorno quanti
+ * frigoriferi attivi hanno almeno una rilevazione e quante sono fuori limite.
+ */
+export async function situazioneTemperature(n = 7) {
+  const oggi = oggiLocale();
+  const primo = piuGiorni(oggi, -(n - 1));
+  const [da, a] = limitiGiorni(primo, oggi);
+  const punti = await query('SELECT id FROM punti_controllo WHERE attivo = 1');
+  const attivi = new Set(punti.map((p) => p.id));
+  const righe = await query(
+    'SELECT punto_controllo_id, data_ora, esito FROM registro_temperature WHERE data_ora >= ? AND data_ora < ?', [da, a]);
+  const giorni = {};
+  for (let i = 0; i < n; i++) giorni[piuGiorni(primo, i)] = { fatti: new Set(), fuori: 0 };
+  for (const r of righe) {
+    const g = giorni[giornoDi(r.data_ora)];
+    if (!g) continue;
+    if (attivi.has(r.punto_controllo_id)) g.fatti.add(r.punto_controllo_id);
+    if (r.esito !== 'conforme') g.fuori++;
+  }
+  return Object.keys(giorni).sort().map((giorno) => ({
+    giorno, fatti: giorni[giorno].fatti.size, totali: attivi.size, fuori: giorni[giorno].fuori,
+    completo: attivi.size > 0 && giorni[giorno].fatti.size >= attivi.size,
+  }));
+}
 
 /** Corregge una rilevazione già salvata, lasciando traccia del valore originale. */
 export async function modificaTemperatura(id, nuovaTemperatura) {
-  const r = await queryOne(
-    `SELECT r.*, pc.nome, pc.temp_min, pc.temp_max FROM registro_temperature r
-     JOIN punti_controllo pc ON pc.id = r.punto_controllo_id WHERE r.id = ?`, [id]);
-  if (!r) return null;
-  const conforme = nuovaTemperatura >= r.temp_min && nuovaTemperatura <= r.temp_max;
-  const esito = conforme ? 'conforme' : 'non conforme';
-  const adesso = new Date().toISOString();
-  const traccia = `Corretto il ${adesso.slice(0, 10)}: era ${r.temperatura}°C`;
-  const note = r.note ? `${r.note} | ${traccia}` : traccia;
-  await exec('UPDATE registro_temperature SET temperatura = ?, esito = ?, note = ? WHERE id = ?',
-    [nuovaTemperatura, esito, note, id]);
-
-  const descrVecchia = `${r.nome}: rilevati ${r.temperatura}°C (limiti ${r.temp_min}/${r.temp_max}°C)`;
-  if (r.esito !== 'conforme' && conforme) {
-    // Era un errore di digitazione: chiude la non conformità aperta automaticamente
+  const nuova = Number(nuovaTemperatura);
+  if (!Number.isFinite(nuova)) throw new Error('Temperatura non valida.');
+  const d = await getDb();
+  let esitoFinale = null;
+  await d.withTransactionAsync(async () => {
+    const r = await queryOne(
+      `SELECT r.*, pc.nome, pc.temp_min, pc.temp_max FROM registro_temperature r
+       JOIN punti_controllo pc ON pc.id = r.punto_controllo_id WHERE r.id = ?`, [id]);
+    if (!r) return;
+    const conforme = nuova >= r.temp_min && nuova <= r.temp_max;
+    esitoFinale = { conforme, nome: r.nome, temp_min: r.temp_min, temp_max: r.temp_max };
+    if (nuova === r.temperatura) return;
+    const adesso = new Date();
+    const traccia = `Corretto il ${adesso.toLocaleDateString('it-IT')}: era ${r.temperatura}°C`;
+    await exec('UPDATE registro_temperature SET temperatura = ?, esito = ?, note = ? WHERE id = ?',
+      [nuova, conforme ? 'conforme' : 'non conforme', r.note ? `${r.note} | ${traccia}` : traccia, id]);
     await exec(
-      `UPDATE non_conformita SET stato = 'chiusa', data_chiusura = ?,
-       azione_correttiva = 'Valore digitato per errore, corretto nel registro'
-       WHERE origine = 'temperatura' AND stato = 'aperta' AND descrizione = ?`,
-      [adesso, descrVecchia]);
-  } else if (!conforme) {
-    const descrNuova = `${r.nome}: rilevati ${nuovaTemperatura}°C (limiti ${r.temp_min}/${r.temp_max}°C)`;
-    if (r.esito !== 'conforme') {
+      `INSERT INTO registro_modifiche (tabella, record_id, data_ora, campo, valore_precedente, valore_nuovo)
+       VALUES ('registro_temperature', ?, ?, 'temperatura', ?, ?)`,
+      [id, adesso.toISOString(), String(r.temperatura), String(nuova)]);
+
+    // la non conformità aperta in automatico: collegata per id (o, per i dati vecchi, per descrizione)
+    const nc = (await queryOne(
+      "SELECT * FROM non_conformita WHERE temperatura_id = ? AND stato = 'aperta'", [id]))
+      || (await queryOne(
+        "SELECT * FROM non_conformita WHERE origine = 'temperatura' AND stato = 'aperta' AND temperatura_id IS NULL AND descrizione = ?",
+        [descrizioneNcTemperatura(r, r.temperatura)]));
+    if (conforme && nc) {
+      // era un errore di digitazione
       await exec(
-        `UPDATE non_conformita SET descrizione = ? WHERE origine = 'temperatura'
-         AND stato = 'aperta' AND descrizione = ?`, [descrNuova, descrVecchia]);
-    } else {
-      await exec('INSERT INTO non_conformita (data_ora, origine, descrizione) VALUES (?,?,?)',
-        [adesso, 'temperatura', descrNuova]);
+        `UPDATE non_conformita SET stato = 'chiusa', data_chiusura = ?, temperatura_id = ?,
+         azione_correttiva = 'Valore digitato per errore, corretto nel registro' WHERE id = ?`,
+        [adesso.toISOString(), id, nc.id]);
+    } else if (!conforme && nc) {
+      await exec('UPDATE non_conformita SET descrizione = ?, temperatura_id = ? WHERE id = ?',
+        [descrizioneNcTemperatura(r, nuova), id, nc.id]);
+    } else if (!conforme && r.esito === 'conforme') {
+      await exec('INSERT INTO non_conformita (data_ora, origine, descrizione, temperatura_id) VALUES (?,?,?,?)',
+        [adesso.toISOString(), 'temperatura', descrizioneNcTemperatura(r, nuova), id]);
     }
-  }
-  return { conforme, nome: r.nome, temp_min: r.temp_min, temp_max: r.temp_max };
+  });
+  return esitoFinale;
 }
 
 export const nonConformitaAperte = () =>
@@ -520,6 +666,9 @@ export async function esportaTutto() {
  */
 export async function importaTutto(dump) {
   if (!dump || !dump.tabelle || typeof dump.tabelle !== 'object') throw new Error('File di backup non valido.');
+  if (!Array.isArray(dump.tabelle.prodotti) && !Array.isArray(dump.tabelle.lotti)) {
+    throw new Error('Il file scelto non è un backup di questa app.');
+  }
   const d = await getDb();
   const esistenti = (await elencoTabelle()).filter((t) => !TABELLE_LOCALI.includes(t));
   const colonne = {};
@@ -593,19 +742,33 @@ export async function csvRegistroCarichi() {
   return toCsv(righe);
 }
 
+/** Registro temperature leggibile in Excel: nomi dei frigoriferi, data e ora del telefono, virgola decimale. */
+export async function csvRegistroTemperature() {
+  const righe = await query(
+    `SELECT r.data_ora, pc.nome AS punto, pc.temp_min, pc.temp_max, r.temperatura, r.esito, r.note
+     FROM registro_temperature r JOIN punti_controllo pc ON pc.id = r.punto_controllo_id
+     ORDER BY r.data_ora DESC, r.id DESC`);
+  const it = (n) => (n === null || n === undefined ? '' : String(n).replace('.', ','));
+  return toCsv(righe.map((r) => {
+    const d = new Date(r.data_ora);
+    return {
+      data: d.toLocaleDateString('it-IT'),
+      ora: d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
+      punto: r.punto, limite_min: it(r.temp_min), limite_max: it(r.temp_max),
+      temperatura: it(r.temperatura), esito: r.esito, note: r.note || '',
+    };
+  }));
+}
+
 /* ---------- rintracciabilità e report (Blocco B) ---------- */
 
-export const cercaLotti = (filtro = '') =>
+/** Storico dei lotti (anche esauriti, bloccati, annullati), dal più recente; al massimo "limite" righe. */
+export const cercaLotti = (filtro = '', limite = 150) =>
   query(
-    `SELECT l.*, p.denominazione AS prodotto, p.allergeni,
-            f.ragione_sociale AS fornitore, f.partita_iva AS fornitore_piva,
-            f.numero_riconoscimento_ce
-     FROM lotti l
-     JOIN prodotti p ON p.id = l.prodotto_id
-     JOIN fornitori f ON f.id = l.fornitore_id
+    `${SELECT_LOTTO}
      WHERE (? = '' OR p.denominazione LIKE ? OR l.numero_lotto LIKE ? OR f.ragione_sociale LIKE ?)
-     ORDER BY l.data_ricevimento DESC`,
-    [filtro, `%${filtro}%`, `%${filtro}%`, `%${filtro}%`]
+     ORDER BY l.data_ricevimento DESC, l.id DESC LIMIT ?`,
+    [filtro, `%${filtro}%`, `%${filtro}%`, `%${filtro}%`, limite]
   );
 
 export const movimentiDiLotto = (id) =>
@@ -616,10 +779,29 @@ export const temperatureTra = (da, a) =>
     `SELECT r.*, pc.nome, pc.temp_min, pc.temp_max
      FROM registro_temperature r
      JOIN punti_controllo pc ON pc.id = r.punto_controllo_id
-     WHERE substr(r.data_ora, 1, 10) BETWEEN ? AND ?
-     ORDER BY r.data_ora`,
-    [da, a]
+     WHERE r.data_ora >= ? AND r.data_ora < ?
+     ORDER BY r.data_ora, r.id`,
+    limitiGiorni(da, a)
   );
+
+/** Giorni del periodo (fino a oggi) in cui almeno un frigorifero attivo non ha rilevazioni. */
+export async function giorniSenzaTemperature(da, a) {
+  const fine = a > oggiLocale() ? oggiLocale() : a;
+  if (da > fine) return [];
+  const punti = await query('SELECT id FROM punti_controllo WHERE attivo = 1');
+  if (punti.length === 0) return [];
+  const righe = await query(
+    'SELECT punto_controllo_id, data_ora FROM registro_temperature WHERE data_ora >= ? AND data_ora < ?',
+    limitiGiorni(da, fine));
+  const fatti = {};
+  for (const r of righe) (fatti[giornoDi(r.data_ora)] = fatti[giornoDi(r.data_ora)] || new Set()).add(r.punto_controllo_id);
+  const mancanti = [];
+  for (let g = da; g <= fine && mancanti.length < 400; g = piuGiorni(g, 1)) {
+    const n = punti.filter((p) => !(fatti[g] && fatti[g].has(p.id))).length;
+    if (n) mancanti.push({ giorno: g, mancanti: n, totali: punti.length });
+  }
+  return mancanti;
+}
 
 export const carichiTra = (da, a) =>
   query(
@@ -627,9 +809,9 @@ export const carichiTra = (da, a) =>
      FROM lotti l
      JOIN prodotti p ON p.id = l.prodotto_id
      JOIN fornitori f ON f.id = l.fornitore_id
-     WHERE substr(l.data_ricevimento, 1, 10) BETWEEN ? AND ?
-     ORDER BY l.data_ricevimento`,
-    [da, a]
+     WHERE l.data_ricevimento >= ? AND l.data_ricevimento < ? AND l.stato <> 'annullato'
+     ORDER BY l.data_ricevimento, l.id`,
+    limitiGiorni(da, a)
   );
 
 export const tutteNonConformita = () =>
@@ -676,13 +858,32 @@ export async function registraSanificazione(s) {
   return r.lastInsertRowId;
 }
 
-export const sanificazioniOggi = () => {
-  const oggi = new Date().toISOString().slice(0, 10);
-  return query(
+export const sanificazioniOggi = () =>
+  query(
     `SELECT r.*, a.nome FROM registro_sanificazione r
      LEFT JOIN aree_pulizia a ON a.id = r.area_id
-     WHERE substr(r.data_ora, 1, 10) = ? ORDER BY r.data_ora DESC`, [oggi]);
-};
+     WHERE r.data_ora >= ? AND r.data_ora < ? ORDER BY r.data_ora DESC`, limitiGiorni(oggiLocale()));
+
+/** Ogni quanti giorni va rifatta una pulizia, secondo la frequenza dell'area. */
+export const GIORNI_FREQUENZA = { giornaliera: 1, 'a fine servizio': 1, settimanale: 7, mensile: 30 };
+
+/**
+ * Aree di pulizia con lo stato rispetto alla loro frequenza:
+ * ultima (istante dell'ultima pulizia), giorniFa, daFare (true se è passato l'intervallo).
+ */
+export async function areeConStato() {
+  const aree = await listaAree();
+  const ultime = await query('SELECT area_id, MAX(data_ora) AS ultima FROM registro_sanificazione GROUP BY area_id');
+  const mappa = {};
+  ultime.forEach((u) => { mappa[u.area_id] = u.ultima; });
+  const oggi = daIsoLocale(oggiLocale());
+  return aree.map((a) => {
+    const ultima = mappa[a.id] || null;
+    const giorniFa = ultima ? Math.round((oggi - daIsoLocale(giornoDi(ultima))) / 86400000) : null;
+    const intervallo = GIORNI_FREQUENZA[a.frequenza] || 1;
+    return { ...a, ultima, giorniFa, intervallo, daFare: giorniFa === null || giorniFa >= intervallo };
+  });
+}
 
 export const sanificazioniRecenti = (limite = 40) =>
   query(
@@ -694,8 +895,8 @@ export const sanificazioniTra = (da, a) =>
   query(
     `SELECT r.*, ar.nome FROM registro_sanificazione r
      LEFT JOIN aree_pulizia ar ON ar.id = r.area_id
-     WHERE substr(r.data_ora, 1, 10) BETWEEN ? AND ?
-     ORDER BY r.data_ora`, [da, a]);
+     WHERE r.data_ora >= ? AND r.data_ora < ?
+     ORDER BY r.data_ora, r.id`, limitiGiorni(da, a));
 
 /* ---------- non conformità: apertura manuale ---------- */
 
@@ -760,39 +961,120 @@ export async function allergeniRicetta(ricettaId) {
   return [...set];
 }
 
-export const lottiDisponibiliProdotto = (prodottoId) =>
+/** Lotti utilizzabili di un prodotto in ordine FIFO. I lotti scaduti sono esclusi (salvo ancheScaduti). */
+export const lottiDisponibiliProdotto = (prodottoId, ancheScaduti = false) =>
   query(
     `SELECT l.*, p.denominazione AS prodotto FROM lotti l
      JOIN prodotti p ON p.id = l.prodotto_id
      WHERE l.prodotto_id = ? AND l.stato = 'disponibile' AND l.quantita_residua > 0
-     ORDER BY l.data_scadenza IS NULL, l.data_scadenza ASC`, [prodottoId]);
+       AND (? = 1 OR l.data_scadenza IS NULL OR substr(l.data_scadenza, 1, 10) >= ?)
+     ORDER BY l.data_scadenza IS NULL, l.data_scadenza ASC, l.data_ricevimento ASC, l.id ASC`,
+    [prodottoId, ancheScaduti ? 1 : 0, oggiLocale()]);
 
+/** Lotti scaduti ancora in giacenza per un prodotto (da scartare). */
+export const lottiScadutiProdotto = (prodottoId) =>
+  query(
+    `SELECT * FROM lotti WHERE prodotto_id = ? AND stato = 'disponibile' AND quantita_residua > 0
+     AND data_scadenza IS NOT NULL AND substr(data_scadenza, 1, 10) < ?`, [prodottoId, oggiLocale()]);
+
+/**
+ * Registra una produzione e scarica i lotti usati, tutto in un'unica transazione.
+ * usi: [{ lotto_id, quantita }] (più righe per lo stesso ingrediente se si usano più lotti).
+ * Rifiuta quantità non valide, superiori alla giacenza, e lotti bloccati, annullati o scaduti.
+ * Gli allergeni del piatto vengono fotografati al momento della produzione.
+ */
 export async function registraProduzione(p, usi) {
   const d = await getDb();
   let prodId;
   await d.withTransactionAsync(async () => {
+    const adesso = new Date().toISOString();
     const res = await d.runAsync(
       `INSERT INTO produzioni (ricetta_id, nome, data_ora, quantita_prodotta, lotto_produzione, data_scadenza, operatore, note)
        VALUES (?,?,?,?,?,?,?,?)`,
-      [p.ricetta_id, p.nome, new Date().toISOString(), p.quantita_prodotta,
-       p.lotto_produzione, p.data_scadenza, p.operatore, p.note]);
+      [p.ricetta_id ?? null, p.nome, adesso, p.quantita_prodotta ?? null,
+       p.lotto_produzione ?? null, p.data_scadenza ?? null, p.operatore ?? null, p.note ?? null]);
     prodId = res.lastInsertRowId;
+    const allergeni = new Set(p.allergeni || []);
     for (const u of (usi || [])) {
-      if (!u.lotto_id || !u.quantita) continue;
+      if (!u.lotto_id) continue;
+      const q = arrotonda(u.quantita);
+      if (!(q > 0)) throw new Error('Quantità non valida per uno degli ingredienti.');
+      const lotto = await d.getFirstAsync(
+        `SELECT l.*, pr.denominazione AS prodotto, pr.allergeni FROM lotti l
+         JOIN prodotti pr ON pr.id = l.prodotto_id WHERE l.id = ?`, [u.lotto_id]);
+      if (!lotto) throw new Error('Lotto non trovato.');
+      const nome = `${lotto.prodotto}, lotto ${lotto.numero_lotto || lotto.id}`;
+      if (lotto.stato === 'bloccato') throw new Error(`${nome}: è bloccato (richiamo), non può essere impiegato.`);
+      if (lotto.stato === 'annullato') throw new Error(`${nome}: il carico è stato annullato.`);
+      if (lottoScaduto(lotto)) throw new Error(`${nome}: è scaduto, non può essere impiegato. Scaricalo come scarto.`);
+      if (q > lotto.quantita_residua + 0.0005) {
+        throw new Error(`${nome}: restano solo ${arrotonda(lotto.quantita_residua)} ${lotto.unita_misura || ''}.`);
+      }
+      leggiAllergeni(lotto.allergeni).forEach((a) => allergeni.add(a));
       await d.runAsync(
-        'INSERT INTO produzione_lotti (produzione_id, lotto_id, quantita_usata) VALUES (?,?,?)',
-        [prodId, u.lotto_id, u.quantita]);
-      const lotto = await d.getFirstAsync('SELECT quantita_residua, stato FROM lotti WHERE id=?', [u.lotto_id]);
-      if (lotto && lotto.stato === 'bloccato') throw new Error('Un lotto usato è bloccato (richiamo): non può essere impiegato.');
-      const residua = Math.max(0, (lotto?.quantita_residua || 0) - u.quantita);
+        'INSERT INTO produzione_lotti (produzione_id, lotto_id, prodotto_id, quantita_usata) VALUES (?,?,?,?)',
+        [prodId, u.lotto_id, lotto.prodotto_id, q]);
+      const residua = Math.max(0, arrotonda(lotto.quantita_residua - q));
       await d.runAsync('UPDATE lotti SET quantita_residua=?, stato=? WHERE id=?',
-        [residua, statoDopo(lotto?.stato, residua), u.lotto_id]);
+        [residua, statoDopo(lotto.stato, residua), u.lotto_id]);
       await d.runAsync(
-        'INSERT INTO movimenti (lotto_id, tipo, quantita, data_ora, causale) VALUES (?,?,?,?,?)',
-        [u.lotto_id, 'scarico', u.quantita, new Date().toISOString(), `Produzione: ${p.nome || ''}`]);
+        'INSERT INTO movimenti (lotto_id, tipo, quantita, data_ora, causale, produzione_id) VALUES (?,?,?,?,?,?)',
+        [u.lotto_id, 'scarico', q, adesso, `Produzione: ${p.nome || ''}`, prodId]);
     }
+    if (p.ricetta_id) (await allergeniRicetta(p.ricetta_id)).forEach((a) => allergeni.add(a));
+    await d.runAsync('UPDATE produzioni SET allergeni = ? WHERE id = ?', [JSON.stringify([...allergeni]), prodId]);
   });
   return prodId;
+}
+
+/** Annulla una produzione registrata per errore: le quantità tornano nei lotti e resta la traccia. */
+export async function annullaProduzione(id, motivo) {
+  const d = await getDb();
+  await d.withTransactionAsync(async () => {
+    const pr = await queryOne('SELECT * FROM produzioni WHERE id = ?', [id]);
+    if (!pr) throw new Error('Produzione non trovata');
+    if (pr.annullata) throw new Error('La produzione è già annullata.');
+    const usi = await query('SELECT * FROM produzione_lotti WHERE produzione_id = ?', [id]);
+    for (const u of usi) {
+      if (!u.lotto_id) continue;
+      const l = await queryOne('SELECT * FROM lotti WHERE id = ?', [u.lotto_id]);
+      if (!l || l.stato === 'annullato') continue;
+      const residua = arrotonda(l.quantita_residua + (u.quantita_usata || 0));
+      await exec('UPDATE lotti SET quantita_residua = ?, stato = ? WHERE id = ?',
+        [residua, statoDopo(l.stato, residua), l.id]);
+      // le produzioni registrate dalle versioni precedenti non hanno il collegamento sul movimento:
+      // si cerca lo scarico dello stesso lotto, con la stessa quantità, più vicino nel tempo
+      const vecchio = await queryOne(
+        `SELECT id FROM movimenti WHERE lotto_id = ? AND tipo = 'scarico' AND produzione_id IS NULL
+           AND causale LIKE 'Produzione:%' AND quantita = ?
+         ORDER BY ABS(julianday(data_ora) - julianday(?)) LIMIT 1`, [l.id, u.quantita_usata, pr.data_ora]);
+      if (vecchio) await exec('DELETE FROM movimenti WHERE id = ?', [vecchio.id]);
+    }
+    await exec("DELETE FROM movimenti WHERE tipo = 'scarico' AND produzione_id = ?", [id]);
+    await exec('DELETE FROM produzione_lotti WHERE produzione_id = ?', [id]);
+    const tracciaTesto = `Produzione annullata il ${oggiIt()}${motivo ? `: ${motivo}` : ''}`;
+    await exec('UPDATE produzioni SET annullata = 1, note = ? WHERE id = ?',
+      [pr.note ? `${pr.note} | ${tracciaTesto}` : tracciaTesto, id]);
+    await exec(
+      `INSERT INTO registro_modifiche (tabella, record_id, data_ora, campo, valore_precedente, valore_nuovo)
+       VALUES ('produzioni', ?, ?, 'annullata', ?, 'annullata')`,
+      [id, new Date().toISOString(), usi.map((u) => `lotto ${u.lotto_id}: ${u.quantita_usata}`).join('; ') || 'senza lotti']);
+  });
+}
+
+/** Produzioni del periodo con i lotti impiegati, per il registro PDF. */
+export async function produzioniTra(da, a) {
+  const righe = await query(
+    `SELECT * FROM produzioni WHERE data_ora >= ? AND data_ora < ? AND COALESCE(annullata, 0) = 0
+     ORDER BY data_ora, id`, limitiGiorni(da, a));
+  for (const pr of righe) {
+    pr.lotti = await query(
+      `SELECT pl.quantita_usata, l.numero_lotto, l.unita_misura, p.denominazione AS prodotto, f.ragione_sociale AS fornitore
+       FROM produzione_lotti pl JOIN lotti l ON l.id = pl.lotto_id
+       JOIN prodotti p ON p.id = l.prodotto_id JOIN fornitori f ON f.id = l.fornitore_id
+       WHERE pl.produzione_id = ?`, [pr.id]);
+  }
+  return righe;
 }
 
 export const listaProduzioni = () =>
@@ -821,7 +1103,7 @@ export const produzioniDaLotto = (lottoId) =>
   query(
     `SELECT pr.*, pl.quantita_usata FROM produzione_lotti pl
      JOIN produzioni pr ON pr.id = pl.produzione_id
-     WHERE pl.lotto_id = ? ORDER BY pr.data_ora DESC`, [lottoId]);
+     WHERE pl.lotto_id = ? AND COALESCE(pr.annullata, 0) = 0 ORDER BY pr.data_ora DESC`, [lottoId]);
 
 /* ---------- importazione fatture PDF ---------- */
 
@@ -858,6 +1140,7 @@ export const fatturaGiaImportata = (fornitoreId, numero, data) =>
 export async function importaFattura(imp) {
   const d = await getDb();
   let caricati = 0;
+  const rilievi = [];
   await d.withTransactionAsync(async () => {
     let fornitoreId = imp.fornitore_id;
     if (!fornitoreId) {
@@ -887,7 +1170,7 @@ export async function importaFattura(imp) {
          ON CONFLICT(fornitore_id, chiave) DO UPDATE SET prodotto_id = excluded.prodotto_id,
            descrizione = excluded.descrizione`,
         [fornitoreId, riga.chiave, riga.descrizione, prodottoId]);
-      await registraCarico({
+      const { rilievo } = await caricoInTransazione({
         prodotto_id: prodottoId, fornitore_id: fornitoreId,
         numero_lotto: riga.numero_lotto, ddt_numero: imp.numero, ddt_data: imp.data,
         data_ricevimento: adesso, quantita: riga.quantita, unita_misura: riga.unita_misura, colli: riga.colli,
@@ -898,12 +1181,15 @@ export async function importaFattura(imp) {
         prezzo_unitario: riga.prezzo_unitario, foto_ddt: null, foto_etichetta: riga.foto_etichetta || null,
         note: riga.note, senza_nc: true,
       });
+      if (rilievo) rilievi.push(rilievo);
       caricati++;
     }
-    if (imp.non_conforme) {
+    if (imp.non_conforme || rilievi.length) {
       await exec('INSERT INTO non_conformita (data_ora, origine, descrizione) VALUES (?,?,?)',
         [adesso, 'ricevimento',
-         `Merce non conforme al ricevimento (fattura n. ${imp.numero || '—'}): ${imp.nota_nc || 'vedi lotti caricati'}`]);
+         `Merce non conforme al ricevimento (fattura n. ${imp.numero || '—'}): ${
+           [imp.non_conforme ? (imp.nota_nc || 'imballo o etichettatura non conformi') : null, ...rilievi]
+             .filter(Boolean).join(' · ')}`]);
     }
     await exec(
       'INSERT INTO fatture_importate (fornitore_id, numero, data, data_import, totale, righe) VALUES (?,?,?,?,?,?)',
@@ -1070,7 +1356,8 @@ export async function aggiornaIndirizzoFoto(vecchio, nuovo) {
 
 /* ---------- allergeni ---------- */
 
-const leggiAllergeni = (json) => { try { return JSON.parse(json || '[]'); } catch (e) { return []; } };
+function leggiAllergeni(json) { try { const v = JSON.parse(json || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
+export { leggiAllergeni };
 
 /** Prodotti creati dalle fatture a cui mancano ancora allergeni/conservazione verificati. */
 export const prodottiDaCompletare = () =>
@@ -1157,7 +1444,7 @@ export async function impattoLotto(lottoId) {
   const piatti = await query(
     `SELECT pr.id, pr.nome, pr.data_ora, pr.lotto_produzione, pr.data_scadenza, pl.quantita_usata
      FROM produzione_lotti pl JOIN produzioni pr ON pr.id = pl.produzione_id
-     WHERE pl.lotto_id = ? ORDER BY pr.data_ora DESC`, [lottoId]);
+     WHERE pl.lotto_id = ? AND COALESCE(pr.annullata, 0) = 0 ORDER BY pr.data_ora DESC`, [lottoId]);
   const stessaPartita = l.numero_lotto
     ? await query(
       `SELECT l.*, f.ragione_sociale AS fornitore FROM lotti l JOIN fornitori f ON f.id = l.fornitore_id

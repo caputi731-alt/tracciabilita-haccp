@@ -58,7 +58,7 @@ export default function FornitoriScreen() {
         ))}
         {fornitori.length > 0 && (
           <Text style={[S.muted, { textAlign: 'center', marginTop: 8 }]}>
-            Tocca per modificare · tieni premuto per eliminare
+            Tocca un fornitore per modificarlo o eliminarlo
           </Text>
         )}
       </ScrollView>
@@ -86,6 +86,10 @@ export default function FornitoriScreen() {
             <Campo label="Note" value={form.note} onChange={set('note')} multiline />
             {riepilogo}
             <Bottone testo="Salva" onPress={salva} />
+            {!!form.id && (
+              <Bottone testo="Elimina fornitore" ghost colore={COLORS.danger}
+                onPress={() => { const x = form; setForm(null); elimina(x); }} />
+            )}
             <Bottone testo="Annulla" ghost onPress={() => setForm(null)} />
           </VistaModale>
         )}

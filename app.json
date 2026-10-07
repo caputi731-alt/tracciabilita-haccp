@@ -5,13 +5,20 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "android": {
       "package": "com.ristorante.tracciabilita",
       "versionCode": 1,
-      "permissions": ["CAMERA", "READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE"],
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ],
       "adaptiveIcon": {
-        "backgroundColor": "#1F6F5C"
+        "foregroundImage": "./adaptive-icon.png",
+        "backgroundColor": "#12795A"
       }
     },
     "plugins": [
@@ -35,6 +42,7 @@
           "cameraPermission": "L'app usa la fotocamera per archiviare le foto dei documenti di trasporto."
         }
       ]
-    ]
+    ],
+    "icon": "./icon.png"
   }
 }

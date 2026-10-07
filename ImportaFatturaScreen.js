@@ -5,7 +5,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import * as FileSystem from 'expo-file-system';
 import * as DocumentPicker from 'expo-document-picker';
-import { S, COLORS, UNITA } from './theme';
+import { S, COLORS, UNITA, aNumero, numeroPerCampo, oggiLocale, piuGiorni, isoDaCampo } from './theme';
 import {
   Campo, Selettore, Bottone, Chips, useFoto, AnteprimaFoto, useErrori, CampoData, Icona,
 } from './UI';
@@ -13,33 +13,20 @@ import { base64ToBytes, estraiTestoPdf } from './letturaPdf';
 import { analizzaFattura, chiaveArticolo, nomeProdottoProposto } from './fattura';
 import {
   listaFornitori, listaProdotti, getImpostazioni, fornitoreDaPartiteIva,
-  abbinamentiFornitore, fatturaGiaImportata, importaFattura,
+  abbinamentiFornitore, fatturaGiaImportata, importaFattura, leggiPreferenza, salvaPreferenza,
 } from './database';
 
 const euro = (n) => (n === null || n === undefined ? '—'
   : n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €');
-const numTesto = (n) => (n === null || n === undefined ? '' : String(n).replace('.', ','));
-const aNumero = (t) => {
-  const n = Number(String(t).replace(/\s/g, '').replace(',', '.'));
-  return Number.isFinite(n) ? n : null;
-};
-const isoDaTesto = (t) => {
-  if (!t) return null;
-  const s = t.trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  const m = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})$/);
-  if (!m) return undefined;
-  const a = m[3].length === 2 ? `20${m[3]}` : m[3];
-  return `${a}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
-};
+const numTesto = numeroPerCampo;
+const isoDaTesto = isoDaCampo;
 const testoDaIso = (iso) => (iso ? iso.split('-').reverse().join('/') : '');
+const giornoLocale = (istante) => { const d = new Date(istante); return Number.isNaN(d.getTime()) ? String(istante).slice(0, 10) : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
 /** Scadenza proposta: data di arrivo + durata indicata nella scheda prodotto. */
 const scadenzaProposta = (prodotto, dataIso) => {
   if (!prodotto || !prodotto.shelf_life_giorni) return '';
-  const d = new Date(`${(dataIso || new Date().toISOString()).slice(0, 10)}T12:00:00`);
-  d.setDate(d.getDate() + Number(prodotto.shelf_life_giorni));
-  return d.toISOString().slice(0, 10).split('-').reverse().join('/');
+  return piuGiorni((dataIso || oggiLocale()).slice(0, 10), prodotto.shelf_life_giorni).split('-').reverse().join('/');
 };
 const eFreddo = (p) => !!p && (p.conservazione === 'refrigerato' || p.conservazione === 'congelato');
 
@@ -58,9 +45,31 @@ export default function ImportaFatturaScreen({ navigation }) {
   });
 
   useFocusEffect(useCallback(() => {
-    listaFornitori().then(setFornitori);
-    listaProdotti().then(setProdotti);
+    Promise.all([listaFornitori(), listaProdotti()])
+      .then(([a, b]) => { setFornitori(a); setProdotti(b); })
+      .catch((e) => Alert.alert('Lettura non riuscita', String(e?.message || e)));
   }, []));
+
+  /* --- bozza: la verifica di una fattura lunga non si perde se l'app viene chiusa o il telefono squilla --- */
+  const [bozza, setBozza] = useState(null);
+  React.useEffect(() => {
+    leggiPreferenza('bozza_fattura')
+      .then((t) => { if (t) { const b = JSON.parse(t); if (b && b.doc && Array.isArray(b.righe)) setBozza(b); } })
+      .catch(() => {});
+  }, []);
+  React.useEffect(() => {
+    if (!doc) return undefined;
+    const t = setTimeout(() => {
+      salvaPreferenza('bozza_fattura', JSON.stringify({ doc, righe, controlli, salvata: new Date().toISOString() })).catch(() => {});
+    }, 700);
+    return () => clearTimeout(t);
+  }, [doc, righe, controlli]);
+  const scartaBozza = () => { setBozza(null); salvaPreferenza('bozza_fattura', null).catch(() => {}); };
+  const riprendiBozza = () => {
+    setDoc(bozza.doc); setRighe(bozza.righe);
+    if (bozza.controlli) setControlli(bozza.controlli);
+    setAperta(null); setBozza(null);
+  };
 
   const scegliPdf = async () => {
     try {
@@ -197,6 +206,7 @@ export default function ImportaFatturaScreen({ navigation }) {
           non_conforme: nonConforme, nota_nc: controlli.nota_nc,
         });
         setSalvataggio(false);
+        scartaBozza();
         const nuovi = righeFinali.filter((r) => !r.prodotto_id).length;
         Alert.alert('Salvato ✓',
           `${n} lotti caricati in magazzino dalla fattura n. ${doc.numero || '—'}.` +
@@ -209,15 +219,26 @@ export default function ImportaFatturaScreen({ navigation }) {
       }
     };
 
+    // se la somma delle righe non corrisponde al totale, qualche riga può non essere stata letta: serve una conferma
+    const procedi = () => {
+      if (quadra === false) {
+        return Alert.alert('I conti non tornano',
+          `La somma delle righe lette (${euro(sommaRighe)}) è diversa dall'imponibile in fattura (${euro(doc.totaleImponibile)}): `
+          + 'qualche riga potrebbe non essere stata riconosciuta. Controlla la fattura: la merce mancante va caricata a mano.',
+          [{ text: 'Torno a controllare', style: 'cancel' }, { text: 'Carico comunque', style: 'destructive', onPress: esegui }]);
+      }
+      return esegui();
+    };
+
     if (doc.fornitore_id && doc.numero) {
       const gia = await fatturaGiaImportata(doc.fornitore_id, doc.numero, data);
       if (gia) {
         return Alert.alert('Fattura già importata',
-          `La fattura n. ${doc.numero} è stata caricata il ${testoDaIso(gia.data_import.slice(0, 10))}. Caricarla di nuovo duplicherebbe la merce.`,
-          [{ text: 'Annulla', style: 'cancel' }, { text: 'Importa comunque', style: 'destructive', onPress: esegui }]);
+          `La fattura n. ${doc.numero} è stata caricata il ${testoDaIso(giornoLocale(gia.data_import))}. Caricarla di nuovo duplicherebbe la merce.`,
+          [{ text: 'Annulla', style: 'cancel' }, { text: 'Importa comunque', style: 'destructive', onPress: procedi }]);
       }
     }
-    esegui();
+    return procedi();
   };
 
   /* ---------- schermata iniziale ---------- */
@@ -229,6 +250,17 @@ export default function ImportaFatturaScreen({ navigation }) {
           Scegli il PDF della fattura: l'app legge le righe, tu le controlli e carichi tutto in magazzino.
           Funziona senza internet.
         </Text>
+        {!!bozza && !lettura && (
+          <View style={[S.card, { borderLeftWidth: 5, borderLeftColor: COLORS.azione }]}>
+            <Text style={{ fontSize: 17, fontWeight: '800', color: COLORS.text }}>Hai una fattura lasciata a metà</Text>
+            <Text style={S.muted}>
+              {bozza.doc.numero ? `Fattura n. ${bozza.doc.numero}` : bozza.doc.nomeFile || 'Fattura'} · {bozza.righe.length} righe.
+              Le modifiche che avevi fatto sono state conservate.
+            </Text>
+            <Bottone testo="Riprendi da dove eri" onPress={riprendiBozza} />
+            <Bottone testo="Scarta" ghost colore={COLORS.danger} onPress={scartaBozza} />
+          </View>
+        )}
         {lettura ? (
           <View style={[S.card, { alignItems: 'center', paddingVertical: 28 }]}>
             <ActivityIndicator size="large" color={COLORS.primary} />
@@ -306,12 +338,12 @@ export default function ImportaFatturaScreen({ navigation }) {
           onChange={(v) => setControlli((c) => ({ ...c, temperatura: v }))} />
         <View style={[S.row, { marginTop: 10 }]}>
           <Text style={{ fontSize: 15, color: COLORS.text }}>Imballi integri</Text>
-          <Switch value={controlli.integrita_imballo}
+          <Switch value={controlli.integrita_imballo} accessibilityLabel="Imballi integri"
             onValueChange={(v) => setControlli((c) => ({ ...c, integrita_imballo: v }))} />
         </View>
         <View style={[S.row, { marginTop: 6 }]}>
           <Text style={{ fontSize: 15, color: COLORS.text }}>Etichettatura conforme</Text>
-          <Switch value={controlli.conformita_etichettatura}
+          <Switch value={controlli.conformita_etichettatura} accessibilityLabel="Etichettatura conforme"
             onValueChange={(v) => setControlli((c) => ({ ...c, conformita_etichettatura: v }))} />
         </View>
         {(!controlli.integrita_imballo || !controlli.conformita_etichettatura) && (
@@ -332,7 +364,7 @@ export default function ImportaFatturaScreen({ navigation }) {
         const prodotto = prodotti.find((p) => p.id === r.prodotto_id);
         return (
           <View key={r.key} style={[S.card, {
-            opacity: r.includi ? 1 : 0.5, borderLeftWidth: 4,
+            opacity: r.includi ? 1 : 0.5,
             borderLeftColor: r.errori && r.includi ? COLORS.danger : !r.includi ? COLORS.border : r.prodotto_id ? COLORS.ok : COLORS.warning,
             borderLeftWidth: r.errori && r.includi ? 6 : 4,
           }]}>
@@ -353,7 +385,8 @@ export default function ImportaFatturaScreen({ navigation }) {
                     <Text style={{ color: COLORS.warning, fontSize: 12, fontWeight: '700' }}>Nuovo prodotto</Text>
                   )}
                 </View>
-                <Switch value={r.includi} onValueChange={aggiorna(r.key, 'includi')} />
+                <Switch value={r.includi} onValueChange={aggiorna(r.key, 'includi')}
+                  accessibilityLabel={`Carica ${r.nuovo_prodotto || r.descrizione}`} />
               </View>
               <Text style={{ color: COLORS.azione, fontWeight: '700', marginTop: 4 }}>
                 {espansa ? '▲ Chiudi' : '✎ Dettagli'}
@@ -369,7 +402,7 @@ export default function ImportaFatturaScreen({ navigation }) {
                   onChange={(id) => setRighe((rr) => rr.map((x) => {
                     if (x.key !== r.key) return x;
                     const prop = !x.scadenzaTesto || x.scadenzaAuto
-                      ? scadenzaProposta(prodotti.find((p) => p.id === id), new Date().toISOString()) : '';
+                      ? scadenzaProposta(prodotti.find((p) => p.id === id), oggiLocale()) : '';
                     return prop ? { ...x, prodotto_id: id, scadenzaTesto: prop, scadenzaAuto: true } : { ...x, prodotto_id: id };
                   }))}
                   placeholder="Crea nuovo prodotto (tocca per abbinarne uno)" />
@@ -436,7 +469,7 @@ export default function ImportaFatturaScreen({ navigation }) {
           <>
             {riepilogo}
             <Bottone testo={`Carica ${incluse.length} righe in magazzino`} onPress={carica} />
-            <Bottone testo="Scegli un altro PDF" ghost onPress={() => { setDoc(null); setRighe([]); }} />
+            <Bottone testo="Scegli un altro PDF" ghost onPress={() => { scartaBozza(); setDoc(null); setRighe([]); }} />
           </>
         )}
       </View>

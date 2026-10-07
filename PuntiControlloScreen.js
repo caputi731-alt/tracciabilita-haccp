@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Modal, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { S, COLORS, TIPI_PUNTO } from './theme';
+import { S, COLORS, TIPI_PUNTO, aNumero, numeroPerCampo } from './theme';
 import {
   Campo, Chips, Bottone, conferma, VistaModale, useErrori, Vuoto,
 } from './UI';
@@ -28,7 +28,7 @@ export default function PuntiControlloScreen() {
   useFocusEffect(ricarica);
 
   const set = (k) => (v) => setForm((f) => ({ ...f, [k]: v }));
-  const setNum = (k) => (v) => setForm((f) => ({ ...f, [k]: v === '' || v === '-' ? v : Number(v) }));
+  const setNum = (k) => (v) => setForm((f) => ({ ...f, [k]: v })); // testo: si converte al salvataggio
 
   const cambiaTipo = (tipo) =>
     setForm((f) => ({ ...f, tipo, ...(f.id ? {} : PRESET[tipo]) }));
@@ -38,9 +38,9 @@ export default function PuntiControlloScreen() {
   const salva = async () => {
     azzera();
     if (!form.nome.trim()) return segnala('nome', 'Dai un nome al punto di controllo');
-    const min = Number(form.temp_min), max = Number(form.temp_max);
-    if (Number.isNaN(min) || Number.isNaN(max)) {
-      return Alert.alert('Temperature non valide', 'Inserisci due numeri.');
+    const min = aNumero(form.temp_min), max = aNumero(form.temp_max);
+    if (min === null || max === null) {
+      return Alert.alert('Temperature non valide', 'Inserisci due numeri, per esempio -18 e 4,5.');
     }
     if (min >= max) {
       return Alert.alert('Limiti invertiti', 'La temperatura minima deve essere inferiore alla massima.');
@@ -81,7 +81,7 @@ export default function PuntiControlloScreen() {
 
         {punti.length > 0 && (
           <Text style={[S.muted, { textAlign: 'center', marginTop: 8 }]}>
-            Tocca per modificare · tieni premuto per eliminare
+            Tocca un frigorifero per modificarlo o eliminarlo
           </Text>
         )}
       </ScrollView>
@@ -110,6 +110,10 @@ export default function PuntiControlloScreen() {
             </Text>
             {riepilogo}
             <Bottone testo="Salva" onPress={salva} />
+            {!!form.id && (
+              <Bottone testo="Elimina frigorifero" ghost colore={COLORS.danger}
+                onPress={() => { const x = form; setForm(null); elimina(x); }} />
+            )}
             <Bottone testo="Annulla" ghost onPress={() => setForm(null)} />
           </VistaModale>
         )}
