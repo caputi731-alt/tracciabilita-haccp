@@ -6,6 +6,7 @@ import path from 'node:path';
 
 const radice = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const mock = pathToFileURL(path.join(radice, 'test', 'expo-sqlite-finto.mjs')).href;
+const aes = pathToFileURL(path.join(radice, 'test', 'aes-finto.mjs')).href;
 const finti = {
   'react-native': 'data:text/javascript,export const StyleSheet = { create: (s) => s };',
   'expo-print': 'data:text/javascript,export const printAsync = async () => {};',
@@ -14,6 +15,7 @@ const finti = {
 
 export async function resolve(specifier, context, nextResolve) {
   if (specifier === 'expo-sqlite') return { url: mock, shortCircuit: true };
+  if (specifier === 'react-native-aes-crypto') return { url: aes, shortCircuit: true };
   if (finti[specifier]) return { url: finti[specifier], shortCircuit: true };
   if (specifier.startsWith('./') && context.parentURL && !path.extname(specifier)) {
     const candidato = path.join(path.dirname(fileURLToPath(context.parentURL)), `${specifier}.js`);

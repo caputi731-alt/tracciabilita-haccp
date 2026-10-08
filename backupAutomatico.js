@@ -1,7 +1,7 @@
 /**
  * Backup automatico giornaliero in una cartella scelta dall'utente (Storage Access Framework).
  * La cartella è fuori dall'app: il backup sopravvive anche alla disinstallazione.
- * Si conservano le ultime MAX_COPIE copie.
+ * Si conservano le ultime MAX_COPIE copie. Se il PIN è impostato (pin.js) il file dei dati è cifrato; le foto no.
  */
 import * as FileSystem from 'expo-file-system';
 import {
@@ -10,6 +10,7 @@ import {
 import {
   CARTELLA_FOTO, nomeFoto, esisteFoto, rendiPermanente, elencoFotoPermanenti, eliminaFotoOrfane,
 } from './foto';
+import { testoBackup } from './pin';
 
 const SAF = FileSystem.StorageAccessFramework;
 export const MAX_COPIE = 14;
@@ -50,7 +51,7 @@ export async function eseguiBackup() {
   const cartella = await leggiPreferenza('backup_cartella');
   if (!cartella) throw new Error('Scegli prima la cartella dei backup.');
   try {
-    const contenuto = JSON.stringify(await esportaTutto());
+    const contenuto = await testoBackup(await esportaTutto());
     const uri = await SAF.createFileAsync(cartella, `${PREFISSO}${timbro()}`, 'application/json');
     await FileSystem.writeAsStringAsync(uri, contenuto, { encoding: FileSystem.EncodingType.UTF8 });
 

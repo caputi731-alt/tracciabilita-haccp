@@ -14,6 +14,8 @@ import {
 } from './database';
 import { condividiTesto } from './condividi';
 import { aggiornaPromemoria } from './notifiche';
+import { testoBackup, leggiBackup } from './pin';
+import RiquadroPin, { ModalePin } from './RiquadroPin';
 
 const stamp = () => {
   const d = new Date();
@@ -27,11 +29,13 @@ const scriviECondividi = (nomeFile, contenuto, mime) =>
 
 export default function BackupScreen() {
   const [occupato, setOccupato] = useState(false);
+  const [giro, setGiro] = useState(0); // fa rileggere lo stato del PIN dopo un ripristino
   const [stato, setStato] = useState(null);
   const { avviso, mostra } = useAvviso();
 
   const [esterno, setEsterno] = useState(null);     // istante dell'ultima copia inviata fuori dal telefono
   const [sicurezza, setSicurezza] = useState(null); // dati di prima dell'ultimo ripristino
+  const [daAprire, setDaAprire] = useState(null);   // backup protetto in attesa del PIN: { testo, generato }
   const aggiornaStato = useCallback(() => {
     statoBackup().then(setStato).catch(() => {});
     leggiPreferenza('backup_esterno_ultimo').then(setEsterno).catch(() => {});
@@ -93,10 +97,9 @@ export default function BackupScreen() {
   const backupJson = async () => {
     try {
       setOccupato(true);
-      const dump = await esportaTutto();
       await scriviECondividi(
         `backup-haccp-${stamp()}.json`,
-        JSON.stringify(dump),
+        await testoBackup(await esportaTutto()), // cifrato se il PIN è impostato
         'application/json'
       );
       await salvaPreferenza('backup_esterno_ultimo', new Date().toISOString());
@@ -155,27 +158,44 @@ export default function BackupScreen() {
     }
   };
 
+  const dataDi = (iso) => (iso ? new Date(iso).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) : 'data sconosciuta');
+
+  /** Mostra cosa contiene il backup e chiede conferma prima di sostituire i dati. */
+  const proponi = (dump, adottato) => {
+    const nLotti = Array.isArray(dump.tabelle?.lotti) ? dump.tabelle.lotti.length : 0;
+    const nTemp = Array.isArray(dump.tabelle?.registro_temperature) ? dump.tabelle.registro_temperature.length : 0;
+    conferma(
+      'Ripristinare questo backup?',
+      `Backup del ${dataDi(dump.generato)}: ${nLotti} lotti, ${nTemp} temperature.\n\nTutti i dati attuali verranno sostituiti con quelli del file scelto.`
+        + (adottato ? '\n\nIl PIN di questo backup è ora anche il PIN di questo telefono.' : ''),
+      () => sostituisci(dump, 'Tutti i dati del backup sono stati caricati.')
+    );
+  };
+
   const ripristina = async () => {
     try {
       const res = await DocumentPicker.getDocumentAsync({
-        type: 'application/json',
+        type: ['application/json', 'application/octet-stream', 'text/plain'],
         copyToCacheDirectory: true,
       });
       if (res.canceled || !res.assets?.[0]) return;
       const testo = await FileSystem.readAsStringAsync(res.assets[0].uri);
-      let dump;
-      try { dump = JSON.parse(testo); } catch (e) { throw new Error('Il file scelto non è un backup valido.'); }
-      const quando = dump.generato ? new Date(dump.generato).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) : 'data sconosciuta';
-      const nLotti = Array.isArray(dump.tabelle?.lotti) ? dump.tabelle.lotti.length : 0;
-      const nTemp = Array.isArray(dump.tabelle?.registro_temperature) ? dump.tabelle.registro_temperature.length : 0;
-      conferma(
-        'Ripristinare questo backup?',
-        `Backup del ${quando}: ${nLotti} lotti, ${nTemp} temperature.\n\nTutti i dati attuali verranno sostituiti con quelli del file scelto.`,
-        () => sostituisci(dump, 'Tutti i dati del backup sono stati caricati.')
-      );
+      const letto = await leggiBackup(testo);
+      // protetto con un PIN che questo telefono non conosce (telefono nuovo, oppure PIN cambiato dopo quel backup)
+      if (letto.servePin) setDaAprire({ testo, generato: letto.generato });
+      else proponi(letto.dump, false);
     } catch (e) {
       Alert.alert('Errore lettura file', String(e?.message || e));
     }
+  };
+
+  /** Il PIN digitato per il backup in attesa: se è sbagliato l'errore torna alla finestra, che lo mostra sul campo. */
+  const apriConPin = async (pin) => {
+    const letto = await leggiBackup(daAprire.testo, pin);
+    setDaAprire(null);
+    if (letto.adottato) setGiro((g) => g + 1);
+    aggiornaStato();
+    proponi(letto.dump, letto.adottato);
   };
 
   const tornaIndietro = () => conferma('Tornare ai dati di prima del ripristino?',
@@ -184,6 +204,15 @@ export default function BackupScreen() {
       try { await sostituisci(await leggiCopiaDiSicurezza(), 'Sono tornati i dati di prima del ripristino.'); }
       catch (e) { Alert.alert('Operazione non riuscita', String(e?.message || e)); }
     });
+
+  // PIN appena impostato o cambiato: si fa subito un backup con il nuovo PIN, così la copia più recente è protetta
+  const dopoIlPin = async () => {
+    const s = await statoBackup();
+    if (s.cartella) {
+      try { await eseguiBackup(); mostra('PIN salvato ✓ · nuovo backup protetto'); } catch (e) { mostra('PIN salvato ✓'); }
+    } else mostra('PIN salvato ✓');
+    aggiornaStato();
+  };
 
   const giorniEsterno = esterno ? Math.floor((Date.now() - new Date(esterno).getTime()) / 86400000) : null;
 
@@ -246,6 +275,8 @@ export default function BackupScreen() {
         )}
       </View>
 
+      <RiquadroPin key={giro} onCambiato={dopoIlPin} />
+
       <View style={S.card}>
         <Text style={S.h2}>Export per ASL / commercialista</Text>
         <Text style={S.muted}>Fogli Excel/CSV apribili con qualsiasi programma.</Text>
@@ -258,8 +289,12 @@ export default function BackupScreen() {
       <Text style={[S.muted, { marginTop: 12 }]}>
         Le foto di etichette e documenti vengono copiate dal backup automatico nella sottocartella
         "foto" della cartella scelta. La copia inviata a Drive o per email contiene solo i dati, non le foto.
+        Il PIN protegge i dati: le foto e i fogli CSV restano file normali.
       </Text>
     </ScrollView>
+    <ModalePin visibile={!!daAprire} titolo="Backup protetto"
+      testo={`Questo backup${daAprire?.generato ? ` del ${dataDi(daAprire.generato)}` : ''} è protetto: scrivi il PIN che era impostato quando è stato fatto.`}
+      pulsante="Apri il backup" onConferma={apriConPin} onChiudi={() => setDaAprire(null)} />
     {avviso}
     </View>
   );

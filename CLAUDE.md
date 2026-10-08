@@ -78,6 +78,15 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
 - Chiave di firma attiva dal 17/09/2026 (alias `haccp`). Impronta SHA-256 del certificato:
   60:70:FD:FC:4C:AC:D6:8B:89:4F:CB:64:D6:8B:D5:F1:0D:0B:00:72:48:F2:31:E5:A8:9B:6A:44:F3:8B:ED:1B
   Ogni build deve mostrare questa impronta nel passo "Mostra con quale chiave è firmato l'APK". Non cambiare mai la chiave.
+- Backup protetti con il PIN del titolare (6 cifre, scelta di Luca): `protezione.js` (calcolo) e `pin.js` (PIN del telefono; nelle
+  preferenze locali restano solo sale e chiave ricavata, mai il PIN). I file di backup si scrivono sempre con `testoBackup(dump)` e si
+  leggono con `leggiBackup(testo, pin)` (accetta anche i vecchi backup in chiaro); mai `JSON.stringify(esportaTutto())` verso un file che
+  esce dal telefono. Senza PIN impostato i backup restano in chiaro. Foto e CSV non sono cifrati. La copia interna
+  `prima-del-ripristino.json` resta in chiaro (non esce dall'app). Interfaccia in `RiquadroPin.js` (riquadro nella schermata Backup e `ModalePin`).
+  I calcoli li fa il modulo nativo `react-native-aes-crypto` (PBKDF2-SHA256 300.000 giri, AES-256-CBC + HMAC-SHA256): in JavaScript
+  sul telefono (Hermes) sarebbero troppo lenti, misurato. Nei test lo sostituisce `test/aes-finto.mjs`, che deve fare gli stessi calcoli
+  del codice Android della libreria. La sezione Conti userà lo stesso PIN (`verificaPin`); a quel punto va rivisto "Ho dimenticato il PIN",
+  che oggi permette di sceglierne uno nuovo senza conoscere il vecchio.
 - Foto: sempre tramite `useFoto()` (UI.js), che copia in `documentDirectory/foto/` (`foto.js`); mai salvare URI della cache.
   Visualizzazione con `AnteprimaFoto`. Il backup automatico copia le foto nella sottocartella `foto` e `recuperaFotoMancanti` le riporta dopo una reinstallazione.
 - Stati del lotto: disponibile, esaurito, bloccato (richiamo), annullato. Usare `statoDopo()` quando cambia la giacenza: bloccato/annullato non si perdono.
