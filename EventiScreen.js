@@ -1,16 +1,18 @@
 /**
  * Eventi del Menù visti dalla cucina: per ogni evento il fabbisogno (ingredienti che servono, giacenza, lista d'ordine
- * per fornitore) e, dopo il PIN del titolare, il costo delle materie prime con il margine. I calcoli sono in evento.js.
+ * per fornitore), la scheda degli allergeni e, dopo il PIN del titolare, il costo delle materie prime con il margine. I calcoli sono in evento.js.
  * Senza parametri mostra l'elenco; con { evento: id } il dettaglio di quell'evento.
  */
 import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Share } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { S, COLORS, fmtData, oggiLocale, piuGiorni } from './theme';
+import { S, COLORS, fmtData, oggiLocale, piuGiorni, ALLERGENI } from './theme';
 import { Bottone, Segmenti, Vuoto, Icona, Caricamento } from './UI';
-import { menuLeggi, datiPerEventi } from './database';
+import { menuLeggi, datiPerEventi, ricettePerMenu, getImpostazioni } from './database';
 import { eventiMenu } from './menuPonte';
-import { fabbisogno, costi, testoOrdine } from './evento';
+import { fabbisogno, costi, testoOrdine, allergeniEvento } from './evento';
+import { stampa, htmlSchedaAllergeniEvento } from './report';
+import { condividiPdf } from './condividi';
 import { pinImpostato, costiSbloccati, sbloccaCosti, bloccaCosti } from './pin';
 import { ModalePin } from './RiquadroPin';
 
@@ -100,6 +102,48 @@ function Fabbisogno({ evento, dati }) {
   );
 }
 
+/** Allergeni portata per portata, con la scheda da stampare o inviare. */
+function Allergeni({ evento, dati }) {
+  const righe = allergeniEvento(evento, dati.ricetteMenu);
+  const dubbi = righe.filter((r) => r.stato !== 'ok');
+  const html = async () => htmlSchedaAllergeniEvento(evento, righe, await getImpostazioni());
+  return (
+    <>
+      {dubbi.length > 0 && (
+        <View style={[S.card, { borderWidth: 1.5, borderColor: COLORS.warning }]}>
+          <Text style={[S.h2, { color: COLORS.warning }]}>
+            {dubbi.length === 1 ? 'Una portata da completare' : `${dubbi.length} portate da completare`}
+          </Text>
+          {dubbi.map((r, i) => <Riga key={`${r.nome}-${i}`} prima={i === 0} titolo={r.nome} sotto={r.nota} />)}
+          <Text style={[S.muted, { marginTop: 8 }]}>
+            Finché non sono a posto, sulla scheda queste portate risultano "da completare", non senza allergeni.
+          </Text>
+        </View>
+      )}
+      <View style={S.card}>
+        <Text style={S.h2}>Allergeni delle portate</Text>
+        {righe.length === 0 && <Text style={S.muted}>Nessuna portata nel menù.</Text>}
+        {righe.map((r, i) => (
+          <Riga key={`${r.nome}-${i}`} prima={i === 0} titolo={r.bambini ? `${r.nome} (bambini)` : r.nome}
+            sotto={r.stato === 'manca' ? 'Non indicati'
+              : `${r.numeri.length ? r.numeri.map((n) => ALLERGENI[n - 1]).join(', ') : 'Nessun allergene'} · ${r.fonte === 'ricetta' ? 'dalla ricetta' : 'indicati a mano'}`}
+            destra={r.stato === 'ok' ? null : r.stato === 'manca' ? 'manca' : 'da verificare'} coloreDestra={COLORS.warning} />
+        ))}
+      </View>
+      {righe.length > 0 && (
+        <>
+          <Bottone testo="Condividi la scheda allergeni (PDF)" icona="share-variant-outline"
+            onPress={async () => condividiPdf(await html(), `Allergeni ${evento.titolo} ${evento.data}`)} />
+          <Bottone testo="Stampa" ghost icona="printer-outline" onPress={async () => stampa(await html())} />
+        </>
+      )}
+      <Text style={[S.muted, { marginTop: 12 }]}>
+        Gli allergeni vengono dalla ricetta quando la portata è collegata, altrimenti sono quelli indicati a mano nel Menù.
+      </Text>
+    </>
+  );
+}
+
 function Costo({ evento, dati, onBlocca }) {
   const c = costi(evento, dati.ricette, dati.prodotti);
   const coperti = c.adulti + c.bambini;
@@ -179,9 +223,10 @@ export default function EventiScreen({ navigation, route }) {
       try {
         const e = eventiMenu(await menuLeggi('state'));
         const d = await datiPerEventi();
+        d.ricetteMenu = new Map((await ricettePerMenu()).map((r) => [r.id, r]));
         const p = await pinImpostato();
         if (vivo) { setEventi(e); setDati(d); setPin(p); setSbloccato(costiSbloccati()); }
-      } catch (err) { if (vivo) { setEventi([]); setDati({ ricette: new Map(), prodotti: new Map() }); } }
+      } catch (err) { if (vivo) { setEventi([]); setDati({ ricette: new Map(), prodotti: new Map(), ricetteMenu: new Map() }); } }
     })();
     return () => { vivo = false; };
   }, []));
@@ -249,15 +294,17 @@ export default function EventiScreen({ navigation, route }) {
         <Text style={{ fontSize: 13, color: COLORS.muted }}>{fmtData(evento.data)}{evento.ora ? ` · ${evento.ora}` : ''} · {STATI[evento.stato] || evento.stato}</Text>
         <Text style={S.h1}>{evento.titolo}</Text>
         <Text style={[S.muted, { marginBottom: 4 }]}>{[evento.cliente, persone(evento)].filter(Boolean).join(' · ')}</Text>
-        <Segmenti opzioni={['Fabbisogno', 'Costo e margine']} valore={vista} onChange={setVista} />
+        <Segmenti opzioni={['Fabbisogno', 'Costo', 'Allergeni']} valore={vista} onChange={setVista} />
         <View style={{ height: 12 }} />
 
         {vista === 'Fabbisogno' && <Fabbisogno evento={evento} dati={dati} />}
 
-        {vista !== 'Fabbisogno' && sbloccato && (
+        {vista === 'Allergeni' && <Allergeni evento={evento} dati={dati} />}
+
+        {vista === 'Costo' && sbloccato && (
           <Costo evento={evento} dati={dati} onBlocca={() => { bloccaCosti(); setSbloccato(false); }} />
         )}
-        {vista !== 'Fabbisogno' && !sbloccato && (
+        {vista === 'Costo' && !sbloccato && (
           <View style={[S.card, { alignItems: 'center', paddingVertical: 28 }]}>
             <Icona nome="lock-outline" size={40} colore={COLORS.muted} />
             <Text style={[S.h2, { marginTop: 10, textAlign: 'center' }]}>Costi riservati al titolare</Text>

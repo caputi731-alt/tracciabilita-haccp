@@ -166,3 +166,28 @@ export function testoOrdine(evento, fab) {
   if (fab.incompleto) righe.push('', 'Attenzione: alcune portate non sono nel conto (ricetta mancante o incompleta).');
   return righe.join('\n');
 }
+
+/**
+ * Allergeni delle portate di un evento, per la scheda da stampare.
+ * `ricetteMenu` = Map id → elemento di ricettePerMenu() (allergeni come numeri 1–14, ingredienti, daVerificare).
+ * Per ogni portata: { nome, sezione, bambini, numeri, stato ('ok' | 'verifica' | 'manca'), fonte ('ricetta' | 'a mano'), nota }.
+ * Stesse regole del Menù: portata collegata → allergeni della ricetta; altrimenti quelli indicati a mano.
+ * Con stato 'manca' gli allergeni non sono noti: la scheda lo dice, non scrive "nessuno".
+ */
+export function allergeniEvento(evento, ricetteMenu) {
+  return (evento.portate || []).map((p) => {
+    const base = { nome: p.nome, sezione: p.sezione || '', bambini: !!p.bambini };
+    const r = p.ricettaId ? ricetteMenu.get(p.ricettaId) : null;
+    if (r) {
+      if (!r.ingredienti) return { ...base, numeri: [], stato: 'manca', fonte: 'ricetta', nota: `la ricetta "${r.nome}" non ha ingredienti` };
+      if (r.daVerificare.length) {
+        return { ...base, numeri: r.allergeni, stato: 'verifica', fonte: 'ricetta', nota: `allergeni non verificati sull'etichetta per ${r.daVerificare.join(', ')}` };
+      }
+      return { ...base, numeri: r.allergeni, stato: 'ok', fonte: 'ricetta', nota: '' };
+    }
+    const m = p.allergeniAMano || { numeri: [], stato: 'manca' };
+    const nota = m.stato === 'manca' ? 'allergeni mai indicati'
+      : m.stato === 'verifica' ? 'testo diverso dall\'archivio portate: controllare che gli allergeni valgano ancora' : '';
+    return { ...base, numeri: m.numeri || [], stato: m.stato, fonte: 'a mano', nota };
+  });
+}

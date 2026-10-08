@@ -130,6 +130,7 @@ export function eventiMenu(testoStato) {
     const stato = JSON.parse(testoStato);
     const portate = new Map((stato.dishes || []).filter(Boolean).map((d) => [d.id, d]));
     const unaRiga = (t) => String(t || '').replace(/\s+/g, ' ').trim();
+    const numeri = (a) => [...new Set((Array.isArray(a) ? a : []).map(Number).filter((n) => n >= 1 && n <= 14))].sort((x, y) => x - y);
     const prezzo = (suo, delModello) => {
       const v = suo === undefined || suo === null ? delModello : suo;
       const n = v === undefined || v === null || String(v).trim() === '' ? NaN : Number(String(v).replace(',', '.'));
@@ -143,9 +144,17 @@ export function eventiMenu(testoStato) {
           for (const i of (s && s.items) || []) {
             const d = i.dishId ? portate.get(i.dishId) : null;
             const stessa = !!d && unaRiga(d.name) === unaRiga(i.name);
+            // allergeni indicati a mano nel Menù, con le stesse regole dell'app web (algNums/algState in menu/js/03-pagine.js):
+            // quelli scritti sulla portata del menù, altrimenti quelli dell'archivio (da verificare se il testo è cambiato)
+            const suoi = Array.isArray(i.alg);
+            const archivio = !!d && ((Array.isArray(d.alg) && d.alg.length > 0) || d.algSet === true);
             righe.push({
               nome: unaRiga(i.name), sezione: s.name || '', bambini,
               portataId: d ? d.id : null, ricettaId: stessa && d.rid ? d.rid : null,
+              allergeniAMano: {
+                numeri: numeri(suoi ? i.alg : archivio ? d.alg : []),
+                stato: suoi ? 'ok' : !archivio ? 'manca' : stessa ? 'ok' : 'verifica',
+              },
             });
           }
         }

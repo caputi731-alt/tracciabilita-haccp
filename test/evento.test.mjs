@@ -105,3 +105,42 @@ test('costo: prezzi o ricette mancanti segnalati; senza prezzo a persona niente 
   assert.equal(soloAdulti.bambiniSenzaPrezzo, true);
   assert.equal(soloAdulti.ricavo, 1760);
 });
+
+test('allergeni dell\'evento: dalla ricetta se collegata, altrimenti a mano; mai "nessuno" se non si sa', async () => {
+  const { allergeniEvento } = await import('../evento.js');
+  const { eventiMenu } = await import('../menuPonte.js');
+  const { htmlSchedaAllergeniEvento } = await import('../report.js');
+  const stato = JSON.stringify({
+    dishes: [{ id: 'a', name: 'Orecchiette', rid: 1, alg: [9] }, { id: 'b', name: 'Agnello', alg: [], algSet: true }, { id: 'c', name: 'Torta', alg: [1, 3, 7] },
+      { id: 'd', name: 'Mai indicata' }, { id: 'e', name: 'Ricetta vuota', rid: 2 }, { id: 'f', name: 'Con dubbio', rid: 3 }],
+    menus: [{ id: 'm', date: '2026-10-17', heading: 'Battesimo <Rossi>', guests: 40, sections: [{ name: 'Primi', items: [
+      { dishId: 'a', name: 'Orecchiette' }, { dishId: 'b', name: 'Agnello' }, { dishId: 'c', name: 'Torta senza uova' },
+      { dishId: 'c', name: 'Torta speciale', alg: [1, 8] }, { dishId: 'd', name: 'Mai indicata' }, { name: 'Fuori archivio' },
+      { dishId: 'e', name: 'Ricetta vuota' }, { dishId: 'f', name: 'Con dubbio' }] }] }],
+  });
+  const ricette = new Map([
+    [1, { id: 1, nome: 'Orecchiette', ingredienti: 2, allergeni: [1, 4], daVerificare: [] }],
+    [2, { id: 2, nome: 'Vuota', ingredienti: 0, allergeni: [], daVerificare: [] }],
+    [3, { id: 3, nome: 'Dubbia', ingredienti: 1, allergeni: [1], daVerificare: ['Farina 00'] }],
+  ]);
+  const evento = eventiMenu(stato)[0];
+  const r = allergeniEvento(evento, ricette);
+  assert.deepEqual(r.map((x) => [x.nome, x.numeri, x.stato, x.fonte]), [
+    ['Orecchiette', [1, 4], 'ok', 'ricetta'],        // la ricetta vince su quelli a mano
+    ['Agnello', [], 'ok', 'a mano'],                 // "Nessuno" scelto a mano
+    ['Torta senza uova', [1, 3, 7], 'verifica', 'a mano'], // testo cambiato: quelli dell'archivio vanno controllati
+    ['Torta speciale', [1, 8], 'ok', 'a mano'],      // indicati su questa portata del menù
+    ['Mai indicata', [], 'manca', 'a mano'],
+    ['Fuori archivio', [], 'manca', 'a mano'],
+    ['Ricetta vuota', [], 'manca', 'ricetta'],
+    ['Con dubbio', [1], 'verifica', 'ricetta'],
+  ]);
+  assert.match(r[7].nota, /Farina 00/);
+  // ricetta collegata ma non più esistente: valgono quelli a mano dell'archivio
+  assert.deepEqual(allergeniEvento(evento, new Map())[0].numeri, [9]);
+  const html = htmlSchedaAllergeniEvento(evento, r, { nome_attivita: 'Prova' });
+  assert.ok(html.includes('Battesimo &lt;Rossi&gt;') && !html.includes('<Rossi>'));
+  assert.equal((html.match(/Allergeni non indicati/g) || []).length, 3);
+  assert.match(html, /Da completare prima di consegnare la scheda/);
+  assert.ok(html.includes('1. Glutine') && html.includes('14. Molluschi'));
+});

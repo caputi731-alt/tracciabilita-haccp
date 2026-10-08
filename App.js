@@ -10,6 +10,7 @@ import { aggiornaPromemoria, ascoltaToccoNotifica } from './notifiche';
 import { useFonts } from 'expo-font';
 import { CARATTERI, usaCaratteri } from './caratteri';
 import EventiScreen from './EventiScreen';
+import GiroScreen from './GiroScreen';
 
 import PrincipaleScreen from './PrincipaleScreen';
 import FornitoriScreen from './FornitoriScreen';
@@ -118,6 +119,7 @@ export default function App() {
         <Stack.Screen name="Ricette" component={RicetteScreen} options={{ title: 'Ricette' }} />
         <Stack.Screen name="Produzioni" component={ProduzioniScreen} options={{ title: 'Produzioni' }} />
         <Stack.Screen name="Eventi" component={EventiScreen} options={{ title: 'Eventi' }} />
+        <Stack.Screen name="Giro" component={GiroScreen} options={{ title: 'Giro di controllo' }} />
       </Stack.Navigator>
     </NavigationContainer>
   );

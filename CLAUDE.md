@@ -50,9 +50,13 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
 - Più rilevazioni al giorno per frigorifero; `registraTemperatura(punto, valore, note, giorno)` con `giorno` passato
   annota la riga come "Registrata in ritardo il …". Nessun operatore (scelta di Luca).
 - La non conformità automatica è collegata con `non_conformita.temperatura_id`.
-- `notifiche.js` (expo-notifications ~0.29.14, solo notifiche locali): un avviso al giorno all'ora scelta, riprogrammato
-  a ogni apertura e dopo ogni registrazione per i 14 giorni successivi; quello di oggi salta se le temperature sono complete.
-  Il tocco apre `Temperature` con `{ daNotifica }` e parte l'inserimento in sequenza. Impostazioni in `RiquadroPromemoria.js`.
+- `notifiche.js` (expo-notifications ~0.29.14, solo notifiche locali): tre promemoria (`PROMEMORIA`: temperature, pulizie, scadenze),
+  ognuno con il suo interruttore, la sua ora e il suo canale. `aggiornaPromemoria()` li riprogramma tutti a ogni apertura e dopo ogni
+  registrazione per i 14 giorni successivi; quello di oggi salta se non c'è più niente da fare. Le scadenze avvisano solo nei giorni in
+  cui qualcosa scade (`avvisiScadenze`). Il tocco apre `Temperature` (con `{ daNotifica }` parte l'inserimento in sequenza),
+  `Sanificazione` o `Magazzino`. Impostazioni: `<RiquadroPromemoria tipo=… />` nelle tre schermate.
+- Giro di controllo: `GiroScreen.js` (rotta `Giro`, dal pulsante della Home), passi calcolati da `passiGiro` in giro.js: temperature
+  mancanti, pulizie da fare, lotti scaduti o in scadenza entro domani. Ogni passo salva con le funzioni di sempre.
 - Pulizie: "da fare" secondo la frequenza dell'area (`areeConStato`, `GIORNI_FREQUENZA`).
 
 ## Importazione fatture PDF
@@ -148,6 +152,8 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
   Quello che non si può calcolare (portata senza ricetta, porzioni o quantità mancanti, unità non convertibili, prezzo assente)
   viene elencato, mai stimato. Ricavo al netto dell'IVA al 10% (`IVA_RISTORAZIONE`). Costi e margini si vedono solo dopo il PIN
   del titolare (`sbloccaCosti` / `costiSbloccati` in pin.js, 10 minuti): ogni nuova schermata con costi o incassi deve usare lo stesso blocco.
+  Scheda allergeni dell'evento: `allergeniEvento` (evento.js) + `htmlSchedaAllergeniEvento` (report.js); stesse regole del Menù
+  (`allergeniAMano` in `eventiMenu` ricalca `algNums`/`algState`): se cambiano là, vanno cambiate anche qui.
 - Ponte pagina ↔ suite: `menu/js/00-suite.js` (lato pagina, caricato per primo) e `menuPonte.js` (lato suite, senza dipendenze
   dal telefono, provato in `test/menuPonte.test.mjs`). La pagina manda messaggi JSON `{ tipo, ... }`; la suite risponde
   eseguendo `window.__suiteRisposta(id, ok, valore)`.

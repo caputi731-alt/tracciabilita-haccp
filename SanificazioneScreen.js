@@ -2,6 +2,8 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Modal, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, fmtDataOra } from './theme';
+import RiquadroPromemoria from './RiquadroPromemoria';
+import { aggiornaPromemoria } from './notifiche';
 import {
   Campo, Chips, Bottone, conferma, ModaleModifica, useAvviso, VistaModale, useErrori, Vuoto, Icona,
 } from './UI';
@@ -73,6 +75,7 @@ export default function SanificazioneScreen() {
     setReg(null);
     setSelezione(null);
     ricarica();
+    aggiornaPromemoria(); // se oggi non resta niente da pulire, il promemoria di oggi non arriva
     mostra(elenco.length > 1 ? `Salvate ${elenco.length} pulizie ✓` : `Salvato ✓ Pulizia: ${elenco[0].nome}`, {
       testo: 'Annulla',
       onPress: async () => {
@@ -214,6 +217,7 @@ export default function SanificazioneScreen() {
             </View>
           </>
         )}
+        {aree.length > 0 && <RiquadroPromemoria tipo="pulizie" />}
       </ScrollView>
 
       <View style={{ padding: 16, paddingTop: 0 }}>

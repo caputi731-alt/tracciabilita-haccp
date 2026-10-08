@@ -158,9 +158,8 @@ export default function HomeScreen({ navigation }) {
     titolo = mancanti === 1 ? 'Ne manca 1' : `Ne mancano ${mancanti}`;
     dettaglio = [tempMancanti ? plurale(tempMancanti, 'temperatura', 'temperature') : '',
       pulizieMancanti ? plurale(pulizieMancanti, 'pulizia', 'pulizie') : ''].filter(Boolean).join(' · ');
-    pulsante = tempMancanti
-      ? { testo: 'Registra le temperature', vai: () => apri('Temperature', { daNotifica: Date.now() }) }
-      : { testo: 'Registra le pulizie', vai: () => apri('Sanificazione') };
+    // un solo percorso guidato: prima le temperature che mancano, poi le pulizie, in fondo le scadenze
+    pulsante = { testo: 'Inizia il giro di controllo', vai: () => apri('Giro') };
   }
 
   const avvisi = [];

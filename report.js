@@ -87,6 +87,48 @@ export function htmlTabellaAllergeni(piatti, imp = {}) {
   return wrapDoc('Informazioni sugli allergeni dei piatti', corpoTabellaAllergeni(piatti), imp);
 }
 
+/**
+ * Scheda allergeni di un evento (A4 orizzontale): una riga per portata del menù, con gli allergeni presi dalle ricette
+ * o indicati a mano nel Menù. `righe` viene da allergeniEvento() (evento.js): le portate senza dati non risultano
+ * "senza allergeni", sono segnate come da completare.
+ */
+export function htmlSchedaAllergeniEvento(evento, righe, imp = {}) {
+  const intest = ALLERGENI.map((a, i) => `<th class="rot"><div>${i + 1}. ${esc(a)}</div></th>`).join('');
+  let sezione = null;
+  const corpoRighe = righe.map((p) => {
+    const titolo = `${p.sezione}${p.bambini ? ' (bambini)' : ''}`;
+    const cambio = titolo !== sezione ? `<tr><td class="sez" colspan="${ALLERGENI.length + 1}">${esc(titolo)}</td></tr>` : '';
+    sezione = titolo;
+    const celle = p.stato === 'manca'
+      ? `<td class="manca" colspan="${ALLERGENI.length}">Allergeni non indicati: chiedere in cucina</td>`
+      : ALLERGENI.map((a, i) => `<td class="c">${p.numeri.includes(i + 1) ? '●' : ''}</td>`).join('');
+    return `${cambio}<tr><td class="piatto">${esc(p.nome)}${p.stato === 'verifica' ? ' <span class="nc">*</span>' : ''}</td>${celle}</tr>`;
+  }).join('');
+  const dubbi = righe.filter((p) => p.stato !== 'ok');
+  const avvisi = dubbi.length ? `<div class="avviso"><b>Da completare prima di consegnare la scheda:</b><ul>${
+    dubbi.map((p) => `<li>${esc(p.nome)}: ${esc(p.nota)}</li>`).join('')}</ul></div>` : '';
+  const quando = [fmtData(evento.data), evento.cliente, [evento.ospiti ? `${evento.ospiti} adulti` : '', evento.bambini ? `${evento.bambini} bambini` : '']
+    .filter(Boolean).join(' e ')].filter(Boolean).join(' · ');
+  const corpo = `
+    <style>
+      @page { size: A4 landscape; margin: 10mm; }
+      th.rot { height: 124px; vertical-align: bottom; padding: 4px 2px; width: 38px; }
+      th.rot div { writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; font-size: 11px; margin: 0 auto; }
+      td.c { text-align: center; font-size: 15px; color: #B03A2E; }
+      td.piatto { font-weight: 700; font-size: 12px; }
+      td.sez { background: #f4f4f0; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
+      td.manca { text-align: center; font-style: italic; color: #9A5B00; }
+      .avviso { margin-top: 12px; border: 2px solid #C77A12; padding: 6px 10px; font-size: 11px; }
+      .legale { margin-top: 10px; font-size: 11px; }
+    </style>
+    <table><thead><tr><th>Portata</th>${intest}</tr></thead>
+    <tbody>${corpoRighe || `<tr><td colspan="${ALLERGENI.length + 1}">Nessuna portata nel menù</td></tr>`}</tbody></table>
+    <div class="legale">● = contiene l'allergene o suoi derivati (Reg. UE 1169/2011, allegato II).${dubbi.some((p) => p.stato === 'verifica') ? ' * = da verificare, vedi sotto.' : ''}
+      Le preparazioni possono contenere tracce di altri allergeni per contaminazione crociata: chiedere sempre al personale.</div>
+    ${avvisi}`;
+  return wrapDoc(`Allergeni del menù — ${evento.titolo}`, corpo, imp, quando);
+}
+
 /* ---------- registri (corpo HTML, riusati nei singoli PDF e nel pacchetto ASL) ---------- */
 
 /**

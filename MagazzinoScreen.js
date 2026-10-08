@@ -11,6 +11,7 @@ import {
   getImpostazioni, getLotto, lottoScaduto,
 } from './database';
 import { stampaSchedaLotto } from './schedaLotto';
+import RiquadroPromemoria from './RiquadroPromemoria';
 
 const MOTIVI = ['Richiamo del fornitore', 'Allerta sanitaria', 'Sospetta non conformità'];
 
@@ -482,6 +483,7 @@ export default function MagazzinoScreen({ route, navigation }) {
             </View>
           );
         })}
+        <RiquadroPromemoria tipo="scadenze" />
       </ScrollView>
 
       {!sel && modaleUscita}
