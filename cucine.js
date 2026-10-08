@@ -4,8 +4,8 @@
  * mostrata da CucineVista.js; riceve da qui disposizione e stati.
  *
  * Coordinate in metri: x da sinistra, d = profondità dal fronte. `ox` è dove sta la cucina nella scena.
- * Ogni attrezzatura ("posto") ha un id fisso: è la chiave con cui la tabella cucina_posti la collega a un
- * frigorifero (punto di controllo) e/o a un'area di pulizia. Se cambia un id, i collegamenti salvati si perdono.
+ * Ogni attrezzatura ("posto") ha un id fisso: è la chiave con cui la tabella cucina_posti collega frigoriferi e
+ * congelatori al loro punto di controllo. Se cambia un id, i collegamenti salvati si perdono.
  */
 export const CUCINE = {
   grande: { nome: 'Cucina grande', L: 12, D: 4.2, ox: -8.5,
@@ -45,55 +45,49 @@ export const POSTI = Object.keys(CUCINE).flatMap((k) => CUCINE[k].items.map((it)
   id: it.id, n: it.n, nome: it.nome, type: it.type, cucina: k, nomeCucina: CUCINE[k].nome,
 })));
 
-/** Tipi di attrezzatura che di solito hanno una temperatura da registrare. */
-export const TIPI_FREDDO = ['fridge', 'vetrina', 'chest', 'tower'];
+/** Frigoriferi e congelatori: sono le sole attrezzature con un tag e una scheda; il resto, toccato, apre il Magazzino. */
+export const TIPI_FREDDO = ['fridge', 'vetrina', 'chest'];
+export const FREDDI = POSTI.filter((p) => TIPI_FREDDO.includes(p.type));
+
+/** Tipo e limiti proposti quando Luca dà il nome a un frigorifero dalla mappa (poi li può correggere). */
+export const limitiProposti = (type) => (type === 'chest'
+  ? { tipo: 'congelatore', temp_min: -25, temp_max: -18 }
+  : { tipo: 'frigorifero', temp_min: 0, temp_max: 4 });
 
 const gradi = (n) => `${String(Math.round(Number(n) * 10) / 10).replace('.', ',').replace('-', '−')}°C`;
 
 /**
- * Stato di ogni attrezzatura, da mostrare nella scena e nella scheda.
- *  - collegamenti: righe di cucina_posti [{ posto, punto_controllo_id, area_id }]
+ * Stato di ogni frigorifero e congelatore della mappa, per il tag e per la scheda.
+ *  - collegamenti: righe di cucina_posti [{ posto, punto_controllo_id }]
  *  - punti: frigoriferi attivi; temperatureOggi: rilevazioni di oggi (la più recente per prima)
- *  - aree: areeConStato() (con `daFare`)
- * → { [posto]: { c, breve, punto, area, ultima } } con c = 'crit' (temperatura fuori limite), 'fare' (manca la
- *   temperatura di oggi o c'è una pulizia da fare), 'ok' (tutto a posto) oppure 'neutro' (niente di collegato).
- *   `breve` è il testo dell'etichetta sopra l'attrezzatura (null = nessuna etichetta).
+ * → { [posto]: { c, nome, breve, punto, ultima } } con c = 'crit' (temperatura fuori limite), 'fare' (manca la temperatura
+ *   di oggi), 'ok' (nei limiti) oppure 'neutro' (non ha ancora un nome). `nome` è quello scritto da Luca (null finché manca),
+ *   `breve` la seconda riga del tag.
  */
-export function statiCucine({ collegamenti = [], punti = [], temperatureOggi = [], aree = [] }) {
+export function statiCucine({ collegamenti = [], punti = [], temperatureOggi = [] }) {
   const perPosto = new Map(collegamenti.map((c) => [c.posto, c]));
   const out = {};
-  for (const p of POSTI) {
+  for (const p of FREDDI) {
     const c = perPosto.get(p.id) || {};
     const punto = c.punto_controllo_id ? punti.find((x) => x.id === c.punto_controllo_id) || null : null;
-    const area = c.area_id ? aree.find((x) => x.id === c.area_id) || null : null;
     const ultima = punto ? temperatureOggi.find((t) => t.punto_controllo_id === punto.id) || null : null;
     let stato = 'neutro';
-    let breve = null;
+    let breve = 'dai un nome';
     if (punto && ultima) {
-      const fuori = ultima.temperatura < punto.temp_min || ultima.temperatura > punto.temp_max;
-      stato = fuori ? 'crit' : 'ok';
+      stato = ultima.temperatura < punto.temp_min || ultima.temperatura > punto.temp_max ? 'crit' : 'ok';
       breve = gradi(ultima.temperatura);
     } else if (punto) {
       stato = 'fare';
       breve = 'da registrare';
     }
-    if (area) {
-      if (area.daFare && stato !== 'crit') {
-        // una temperatura già registrata resta scritta: si aggiunge solo che c'è da pulire
-        breve = stato === 'ok' ? `${breve} · da pulire` : stato === 'fare' ? breve : 'da pulire';
-        stato = 'fare';
-      } else if (!area.daFare && stato === 'neutro') {
-        stato = 'ok';
-      }
-    }
-    out[p.id] = { c: stato, breve, punto, area, ultima };
+    out[p.id] = { c: stato, nome: punto ? punto.nome : null, breve, punto, ultima };
   }
   return out;
 }
 
-/** Quello che serve alla pagina 3D: disposizione, stato ed etichetta di ogni attrezzatura, tema. */
+/** Quello che serve alla pagina 3D: disposizione, tag di ogni frigorifero, tema. */
 export function datiScena(stati, { scuro = false, scelto = null } = {}) {
   const leggeri = {};
-  Object.keys(stati).forEach((id) => { leggeri[id] = { c: stati[id].c, breve: stati[id].breve }; });
+  Object.keys(stati).forEach((id) => { leggeri[id] = { c: stati[id].c, nome: stati[id].nome, breve: stati[id].breve }; });
   return { cucine: CUCINE, stati: leggeri, scuro: !!scuro, scelto };
 }

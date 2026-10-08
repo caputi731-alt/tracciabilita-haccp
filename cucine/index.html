@@ -34,7 +34,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 <script>
 'use strict';
 /* La suite manda disposizione e stati con window.__cucine(dati) (vedi datiScena in cucine.js) e riceve:
-   { tipo:'pronta' } · { tipo:'senza3d' } · { tipo:'posto', id } · { tipo:'pavimento', cucina } */
+   { tipo:'pronta' } · { tipo:'senza3d' } · { tipo:'posto', id } (un frigorifero o congelatore) · { tipo:'pavimento', cucina } (tutto il resto: apre il Magazzino) */
 (function(){
   window.__inviati = [];
   const invia = (m) => { window.__inviati.push(m); const RN = window.ReactNativeWebView; if (RN && RN.postMessage) RN.postMessage(JSON.stringify(m)); };
@@ -95,17 +95,30 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
     return { g, h };
   }
 
-  const TINTE = { ok: '#2F6B2A', crit: '#B3261E', fare: '#9C4524', neutro: '#5B5F52' };
-  function etichetta(testo, c, icona){
-    const cv = document.createElement('canvas'); cv.width = 512; cv.height = 112; const g = cv.getContext('2d');
-    g.font = '800 50px Manrope, system-ui, sans-serif'; const tw = g.measureText(testo).width, w = Math.min(500, tw + 96), x0 = 256 - w / 2, r = 44;
-    g.beginPath(); g.moveTo(x0 + r, 12); g.arcTo(x0 + w, 12, x0 + w, 100, r); g.arcTo(x0 + w, 100, x0, 100, r); g.arcTo(x0, 100, x0, 12, r); g.arcTo(x0, 12, x0 + w, 12, r); g.closePath();
+  const TINTE = { ok: '#2F6B2A', crit: '#B3261E', fare: '#9C4524', neutro: '#6B6F62' };
+  /* tag: una riga (pulsante "Magazzino", frigorifero ancora senza nome) oppure due, nome sopra e temperatura sotto */
+  function etichetta(testo, c, icona, nome){
+    const due = !!nome, H = due ? 176 : 112, cv = document.createElement('canvas'); cv.width = 512; cv.height = H; const g = cv.getContext('2d');
+    const F1 = '700 38px Manrope, system-ui, sans-serif', F2 = '800 50px Manrope, system-ui, sans-serif';
+    let n = nome || '';
+    if (due) { g.font = F1; while (n.length > 3 && g.measureText(n).width > 400) n = n.slice(0, -2).trimEnd() + '…'; }
+    g.font = F2; const t2 = g.measureText(testo).width + (due ? 34 : 0); g.font = F1; const t1 = due ? g.measureText(n).width : 0;
+    const w = Math.min(500, Math.max(t1, t2) + (due ? 64 : 96)), x0 = 256 - w / 2, r = due ? 40 : 44, y0 = 12, y1 = H - 12;
+    g.beginPath(); g.moveTo(x0 + r, y0); g.arcTo(x0 + w, y0, x0 + w, y1, r); g.arcTo(x0 + w, y1, x0, y1, r); g.arcTo(x0, y1, x0, y0, r); g.arcTo(x0, y0, x0 + w, y0, r); g.closePath();
     const pieno = c === 'crit' || icona;
     g.fillStyle = pieno ? (icona ? '#2F4F23' : TINTE.crit) : '#ffffff'; g.fill(); g.lineWidth = 5; g.strokeStyle = icona ? '#2F4F23' : TINTE[c]; g.stroke();
-    g.fillStyle = pieno ? '#ffffff' : TINTE[c]; g.beginPath(); g.arc(x0 + 40, 56, 13, 0, 7); g.fill();
-    g.fillStyle = pieno ? '#ffffff' : '#1B1D17'; g.textBaseline = 'middle'; g.fillText(testo, x0 + 64, 59, w - 80);
+    g.textBaseline = 'middle';
+    if (due) {
+      g.font = F1; g.fillStyle = pieno ? '#ffffff' : '#5B5F52'; g.textAlign = 'center'; g.fillText(n, 256, 54);
+      g.font = F2; const tw = g.measureText(testo).width, xi = 256 - (tw + 34) / 2;
+      g.fillStyle = pieno ? '#ffffff' : TINTE[c]; g.beginPath(); g.arc(xi + 12, 116, 12, 0, 7); g.fill();
+      g.fillStyle = pieno ? '#ffffff' : '#1B1D17'; g.textAlign = 'left'; g.fillText(testo, xi + 34, 119);
+    } else {
+      g.font = F2; g.fillStyle = pieno ? '#ffffff' : TINTE[c]; g.beginPath(); g.arc(x0 + 40, 56, 13, 0, 7); g.fill();
+      g.fillStyle = pieno ? '#ffffff' : '#1B1D17'; g.fillText(testo, x0 + 64, 59, w - 80);
+    }
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthTest: false, transparent: true })); sp.renderOrder = 10;
-    sp.userData.base = [3.2, 0.7]; sp.scale.set(3.2, 0.7, 1); return sp;
+    sp.userData.base = [512, H]; sp.userData.righe = due ? 2 : 1; sp.userData.pieno = w / 512; return sp;
   }
   function targa(testo, scuro){
     const cv = document.createElement('canvas'); cv.width = 512; cv.height = 96; const g = cv.getContext('2d');
@@ -140,12 +153,12 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
         const along = it.face === 'up' || it.face === 'down', w = along ? it.x[1] - it.x[0] : it.d[1] - it.d[0], th = along ? it.d[1] - it.d[0] : it.x[1] - it.x[0];
         const u = buildUnit(it, w, th), cx = (it.x[0] + it.x[1]) / 2 - L / 2, cz = D / 2 - (it.d[0] + it.d[1]) / 2;
         u.g.position.set(cx, 0, cz); u.g.rotation.y = rot[it.face]; G.add(u.g);
-        u.g.traverse(o => { if (o.isMesh) { o.userData.id = it.id; bersagli.push(o); } });
+        u.g.traverse(o => { if (o.isMesh) { o.userData.id = it.id; o.userData.cucina = k; bersagli.push(o); } });
         const box = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(it.x[1] - it.x[0] + 0.12, u.h + 0.12, it.d[1] - it.d[0] + 0.12)), new THREE.LineBasicMaterial({ color: 0x9C4524 }));
         box.position.set(cx, u.h / 2, cz); box.visible = false; G.add(box);
         const alone = new THREE.Mesh(new THREE.PlaneGeometry(it.x[1] - it.x[0] + 0.5, it.d[1] - it.d[0] + 0.5), new THREE.MeshBasicMaterial({ color: 0x9C4524, transparent: true, opacity: .28 }));
         alone.rotation.x = -Math.PI / 2; alone.position.set(cx, 0.012, cz); alone.visible = false; G.add(alone);
-        perId[it.id] = { G, sp: null, box, alone, pos: [cx, u.h + 0.55, cz], breve: undefined, c: undefined };
+        perId[it.id] = { G, sp: null, box, alone, pos: [cx, u.h + 0.55, cz], breve: undefined, c: undefined, nome: undefined };
       });
     });
     const tutti = Object.keys(cucine).map(k => cucine[k]);
@@ -158,10 +171,10 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
   function aggiornaStati(stati){
     Object.keys(stati || {}).forEach(id => {
       const o = perId[id], s = stati[id]; if (!o || o.fisso) return;
-      if (o.breve === s.breve && o.c === s.c) return;
+      if (o.breve === s.breve && o.c === s.c && o.nome === s.nome) return;
       if (o.sp) { o.G.remove(o.sp); o.sp.material.map.dispose(); o.sp.material.dispose(); o.sp = null; }
-      if (s.breve) { o.sp = etichetta(s.breve, s.c === 'neutro' ? 'fare' : s.c); o.sp.position.set(o.pos[0], o.pos[1], o.pos[2]); o.sp.userData.id = id; o.G.add(o.sp); }
-      o.breve = s.breve; o.c = s.c;
+      if (s.breve) { o.sp = etichetta(s.breve, s.c, false, s.nome); o.sp.position.set(o.pos[0], o.pos[1] + (s.nome ? 0.2 : 0), o.pos[2]); o.sp.userData.id = id; o.G.add(o.sp); }
+      o.breve = s.breve; o.c = s.c; o.nome = s.nome; o.attivo = true;
     });
     bersagli = bersagli.filter(b => !b.isSprite || b.userData.cucina); Object.keys(perId).forEach(id => { if (perId[id].sp && !perId[id].fisso) bersagli.push(perId[id].sp); });
   }
@@ -199,13 +212,41 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
   function resize(){
     const w = window.innerWidth, h = window.innerHeight; if (!w || !h) return; renderer.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix();
     if (scatole.tutte) {
-      let meglio = null; [-0.28, -0.5, -0.72, -0.95, -1.15].forEach(th => { const r = adatta(scatole.tutte, TUTTO, th, th < -0.6 ? 0.9 : 0.82).r; if (!meglio || r < meglio.r * 0.97) meglio = { th, r }; });
-      T0 = meglio.th; P0 = T0 < -0.6 ? 0.9 : 0.82; raggio = meglio.r;
+      let meglio = null; const phiDi = th => th < -1.2 ? 0.78 : th < -0.6 ? 0.9 : 0.82;
+      [-0.28, -0.5, -0.72, -0.95, -1.15, -1.32].forEach(th => { const r = adatta(scatole.tutte, TUTTO, th, phiDi(th)).r; if (!meglio || r < meglio.r * 0.97) meglio = { th, r }; });
+      T0 = meglio.th; P0 = phiDi(T0); raggio = meglio.r;
       if (!toccata) inquadra(vistaOra, true);
     }
     sporco = true;
   }
   window.addEventListener('resize', resize); resize();
+  /* I tag restano leggibili a ogni distanza (alti sempre uguali sullo schermo) e non si coprono: frigoriferi vicini
+     hanno i tag uno sopra l'altro. Parte da quello più in basso sullo schermo e sposta in su quelli che lo toccano. */
+  function sistemaTag(){
+    cam.updateMatrixWorld();
+    const W = window.innerWidth, H = window.innerHeight, pxAlta = H < 420 ? 28 : 36, perPx = 2 * Math.tan(FOV * Math.PI / 360) / Math.max(1, H);
+    const su = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 1), v = new THREE.Vector3(), tag = [];
+    Object.keys(perId).forEach(id => {
+      const o = perId[id]; if (!o.sp) return;
+      if (!o.sp.userData.casa) o.sp.userData.casa = o.sp.position.clone();
+      o.sp.position.copy(o.sp.userData.casa); o.sp.updateMatrixWorld(); o.sp.getWorldPosition(v);
+      const d = v.distanceTo(cam.position), hpx = pxAlta * (o.sp.userData.righe === 2 ? 1.55 : 1) * (id === scelto ? 1.12 : 1), a = hpx * perPx * d;
+      o.sp.scale.set(a * o.sp.userData.base[0] / o.sp.userData.base[1], a, 1);
+      v.project(cam);
+      tag.push({ o, d, x: (v.x + 1) / 2 * W, y: (1 - v.y) / 2 * H, w: hpx * o.sp.userData.base[0] / o.sp.userData.base[1] * o.sp.userData.pieno, h: hpx * 0.86, su: 0 });
+    });
+    tag.sort((a, b) => b.y - a.y);
+    for (let i = 0; i < tag.length; i++) {
+      const t = tag[i];
+      for (let giro = 0; giro < 6; giro++) {
+        let mosso = false;
+        for (let j = 0; j < i; j++) { const q = tag[j];
+          if (Math.abs(t.x - q.x) < (t.w + q.w) / 2 + 4 && Math.abs((t.y - t.su) - (q.y - q.su)) < (t.h + q.h) / 2 + 3) { t.su = t.y - (q.y - q.su) + (t.h + q.h) / 2 + 3; mosso = true; } }
+        if (!mosso) break;
+      }
+      if (t.su) t.o.sp.position.addScaledVector(su, t.su * perPx * t.d);
+    }
+  }
   let prima = 0, ferma = false;
   function passo(ora){
     const dt = Math.min(100, Math.max(1, (ora || 0) - prima)); prima = ora || 0;
@@ -214,9 +255,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
       const k = 1 - Math.exp(-dt / 95); st.theta += (mira.theta - st.theta) * k; st.phi += (mira.phi - st.phi) * k; st.zoom += (mira.zoom - st.zoom) * k; st.target.lerp(mira.target, k);
       const r = raggio * st.zoom;
       cam.position.set(st.target.x + r * Math.sin(st.phi) * Math.sin(st.theta), st.target.y + r * Math.cos(st.phi), st.target.z + r * Math.sin(st.phi) * Math.cos(st.theta)); cam.lookAt(st.target);
-      // le etichette restano leggibili a ogni distanza: alte sempre circa uguali sullo schermo (mai più di un metro e mezzo nella scena)
-      const pxAlta = window.innerWidth < 520 ? 27 : 31, perPx = 2 * Math.tan(FOV * Math.PI / 360) / Math.max(1, window.innerHeight), w = new THREE.Vector3();
-      Object.keys(perId).forEach(id => { const o = perId[id]; if (o.sp) { o.sp.getWorldPosition(w); const a = Math.min(1.5, pxAlta * perPx * w.distanceTo(cam.position)) * (id === scelto ? 1.15 : 1); o.sp.scale.set(a * o.sp.userData.base[0] / o.sp.userData.base[1], a, 1); } });
+      sistemaTag();
       renderer.render(scene, cam); sporco = false; ferma = false;
     } else ferma = true;
     requestAnimationFrame(passo);
@@ -230,7 +269,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
     const b = canvas.getBoundingClientRect(); punto.set((x - b.left) / b.width * 2 - 1, -((y - b.top) / b.height * 2 - 1)); ray.setFromCamera(punto, cam);
     const hit = ray.intersectObjects(bersagli, false)[0]; if (!hit) return;
     const u = hit.object.userData;
-    if (u.id) { evidenzia(u.id); invia({ tipo: 'posto', id: u.id }); } else if (u.cucina) invia({ tipo: 'pavimento', cucina: u.cucina });
+    if (u.id && perId[u.id] && perId[u.id].attivo) { evidenzia(u.id); invia({ tipo: 'posto', id: u.id }); } else if (u.cucina) invia({ tipo: 'pavimento', cucina: u.cucina });
   }
   canvas.addEventListener('pointerdown', ev => { dita.set(ev.pointerId, { x: ev.clientX, y: ev.clientY }); if (dita.size === 1) mosso = 0; pizzico = 0; toccata = true; try { canvas.setPointerCapture(ev.pointerId); } catch (e) {} });
   canvas.addEventListener('pointermove', ev => {
@@ -262,9 +301,10 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
     } catch (e) { invia({ tipo: 'errore', testo: String(e && e.message || e) }); }
   };
   /* per le prove automatiche: cosa c'è in scena e un tocco su un'attrezzatura per id */
-  window.__scena = () => ({ posti: Object.keys(perId).filter(k => !perId[k].fisso).length, etichette: Object.keys(perId).filter(k => perId[k].sp && !perId[k].fisso).map(k => k + ':' + perId[k].breve), scelto });
+  window.__scena = () => ({ posti: Object.keys(perId).filter(k => !perId[k].fisso).length, etichette: Object.keys(perId).filter(k => perId[k].sp && !perId[k].fisso).map(k => k + ':' + (perId[k].nome ? perId[k].nome + '|' : '') + perId[k].breve), scelto });
   window.__tocca = tocca;
   window.__ferma = () => ferma;
+  window.__schermoTag = (id) => { const v = new THREE.Vector3(); perId[id].sp.getWorldPosition(v); return sulloSchermo(v); };
   window.__schermo = (id) => { const o = perId[id], v = new THREE.Vector3(o.pos[0], o.pos[1] - 0.9, o.pos[2]); o.G.localToWorld(v); cam.updateMatrixWorld(); v.project(cam); return [(v.x + 1) / 2 * window.innerWidth, (1 - v.y) / 2 * window.innerHeight]; };
   const sulloSchermo = (v) => { cam.updateMatrixWorld(); v.project(cam); return [(v.x + 1) / 2 * window.innerWidth, (1 - v.y) / 2 * window.innerHeight]; };
   window.__schermoMagazzino = () => { const sp = perId['magazzino-grande'].sp, v = new THREE.Vector3(); sp.getWorldPosition(v); return sulloSchermo(v); };

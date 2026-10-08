@@ -1,10 +1,10 @@
 // Vista delle cucine: stato di ogni attrezzatura (cucine.js) e collegamenti salvati (database.js).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CUCINE, POSTI, statiCucine, datiScena } from '../cucine.js';
+import { CUCINE, POSTI, FREDDI, limitiProposti, statiCucine, datiScena } from '../cucine.js';
 import {
   initDatabase, collegaPosto, collegamentiCucina, salvaPuntoControllo, listaPuntiControllo, registraTemperatura,
-  temperatureDiOggi, areeConStato, listaAree, salvaArea, registraSanificazione, esportaTutto, importaTutto,
+  temperatureDiOggi, listaAree, salvaArea, esportaTutto, importaTutto,
 } from '../database.js';
 
 const frigo = { id: 1, nome: 'Frigo 1', temp_min: 0, temp_max: 4 };
@@ -30,16 +30,19 @@ test('la pianta: id unici, misure dentro la stanza, niente attrezzature sovrappo
   assert.ok(!CUCINE.grande.items.some((it) => m.x > it.x[0] && m.x < it.x[1] && m.d > it.d[0] && m.d < it.d[1]));
 });
 
-test('senza collegamenti ogni attrezzatura è neutra e senza etichetta', () => {
+test('hanno un tag solo frigoriferi e congelatori; senza nome chiedono di darglielo', () => {
   const s = statiCucine({});
-  assert.equal(Object.keys(s).length, POSTI.length);
-  assert.ok(Object.values(s).every((x) => x.c === 'neutro' && x.breve === null));
+  assert.deepEqual(Object.keys(s).sort(), ['g1', 'g8', 'g9', 'p1']);
+  assert.deepEqual(FREDDI.map((p) => p.id).sort(), ['g1', 'g8', 'g9', 'p1']);
+  assert.ok(Object.values(s).every((x) => x.c === 'neutro' && x.nome === null && x.breve === 'dai un nome'));
+  assert.deepEqual(limitiProposti('chest'), { tipo: 'congelatore', temp_min: -25, temp_max: -18 });
+  assert.deepEqual(limitiProposti('fridge'), { tipo: 'frigorifero', temp_min: 0, temp_max: 4 });
 });
 
-test('frigorifero collegato: da registrare, nei limiti, fuori limite', () => {
+test('frigorifero con il nome: da registrare, nei limiti, fuori limite', () => {
   const collegamenti = [{ posto: 'g9', punto_controllo_id: 1, area_id: null }];
   let s = statiCucine({ collegamenti, punti: [frigo] });
-  assert.deepEqual([s.g9.c, s.g9.breve], ['fare', 'da registrare']);
+  assert.deepEqual([s.g9.c, s.g9.nome, s.g9.breve], ['fare', 'Frigo 1', 'da registrare']);
   // conta la rilevazione più recente (la prima dell'elenco)
   s = statiCucine({ collegamenti, punti: [frigo], temperatureOggi: [
     { punto_controllo_id: 1, temperatura: 3.5 }, { punto_controllo_id: 1, temperatura: 9 }] });
@@ -48,30 +51,15 @@ test('frigorifero collegato: da registrare, nei limiti, fuori limite', () => {
   assert.deepEqual([s.g9.c, s.g9.breve], ['crit', '9°C']);
   s = statiCucine({ collegamenti, punti: [{ ...frigo, temp_min: -25, temp_max: -18 }], temperatureOggi: [{ punto_controllo_id: 1, temperatura: -19.26 }] });
   assert.deepEqual([s.g9.c, s.g9.breve], ['ok', '−19,3°C']);
-  // frigorifero tolto dall'anagrafica: il collegamento non vale più
-  assert.equal(statiCucine({ collegamenti, punti: [] }).g9.c, 'neutro');
+  // frigorifero tolto dall'anagrafica: torna senza nome
+  assert.deepEqual([statiCucine({ collegamenti, punti: [] }).g9.c, statiCucine({ collegamenti, punti: [] }).g9.nome], ['neutro', null]);
+  // un tavolo non ha tag nemmeno se un vecchio collegamento lo riguarda (le pulizie non stanno più sulla mappa)
+  assert.equal(statiCucine({ collegamenti: [{ posto: 'g17', punto_controllo_id: 1, area_id: 7 }], punti: [frigo] }).g17, undefined);
 });
 
-test('pulizia collegata, da sola e insieme alla temperatura', () => {
-  const daFare = { id: 7, nome: 'Banchi', daFare: true };
-  const fatta = { id: 7, nome: 'Banchi', daFare: false };
-  let s = statiCucine({ collegamenti: [{ posto: 'g17', area_id: 7 }], aree: [daFare] });
-  assert.deepEqual([s.g17.c, s.g17.breve], ['fare', 'da pulire']);
-  s = statiCucine({ collegamenti: [{ posto: 'g17', area_id: 7 }], aree: [fatta] });
-  assert.deepEqual([s.g17.c, s.g17.breve], ['ok', null]);
-  const tutti = [{ posto: 'g9', punto_controllo_id: 1, area_id: 7 }];
-  s = statiCucine({ collegamenti: tutti, punti: [frigo], aree: [daFare], temperatureOggi: [{ punto_controllo_id: 1, temperatura: 3 }] });
-  assert.deepEqual([s.g9.c, s.g9.breve], ['fare', '3°C · da pulire']);
-  s = statiCucine({ collegamenti: tutti, punti: [frigo], aree: [daFare] });
-  assert.deepEqual([s.g9.c, s.g9.breve], ['fare', 'da registrare']);
-  // la temperatura fuori limite resta la cosa più importante
-  s = statiCucine({ collegamenti: tutti, punti: [frigo], aree: [daFare], temperatureOggi: [{ punto_controllo_id: 1, temperatura: 12 }] });
-  assert.deepEqual([s.g9.c, s.g9.breve], ['crit', '12°C']);
-});
-
-test('alla scena arrivano solo colore ed etichetta', () => {
+test('alla scena arrivano solo colore, nome ed etichetta', () => {
   const d = datiScena(statiCucine({ collegamenti: [{ posto: 'g9', punto_controllo_id: 1 }], punti: [frigo] }), { scuro: true, scelto: 'g9' });
-  assert.deepEqual(d.stati.g9, { c: 'fare', breve: 'da registrare' });
+  assert.deepEqual(d.stati.g9, { c: 'fare', nome: 'Frigo 1', breve: 'da registrare' });
   assert.equal(d.scuro, true);
   assert.equal(d.scelto, 'g9');
   assert.equal(d.cucine, CUCINE);
@@ -95,17 +83,17 @@ test('database: collegare, cambiare e togliere un collegamento; i dati veri dann
   await assert.rejects(() => collegaPosto('', { area_id: area.id }));
 
   const stato = async () => statiCucine({
-    collegamenti: await collegamentiCucina(), punti: await listaPuntiControllo(), temperatureOggi: await temperatureDiOggi(), aree: await areeConStato(),
+    collegamenti: await collegamentiCucina(), punti: await listaPuntiControllo(), temperatureOggi: await temperatureDiOggi(),
   });
-  assert.equal((await stato()).g9.breve, 'da registrare');
+  assert.deepEqual([(await stato()).g9.nome, (await stato()).g9.breve], ['Frigo cucina grande', 'da registrare']);
   await registraTemperatura(punto.id, 8, null);
   assert.equal((await stato()).g9.c, 'crit');
   await new Promise((r) => setTimeout(r, 5));
   await registraTemperatura(punto.id, 3, null);
-  assert.deepEqual([(await stato()).g9.c, (await stato()).g9.breve], ['fare', '3°C · da pulire']);
-  await registraSanificazione({ area_id: area.id, prodotto_utilizzato: '', operatore: '', note: '' });
-  const s = await stato();
-  assert.deepEqual([s.g9.c, s.g9.breve, s.g17.c], ['ok', '3°C', 'ok']);
+  assert.deepEqual([(await stato()).g9.c, (await stato()).g9.breve], ['ok', '3°C']);
+  // il nome si cambia dalla scheda: il tag lo segue
+  await salvaPuntoControllo({ ...punto, nome: 'Frigo carni' });
+  assert.equal((await stato()).g9.nome, 'Frigo carni');
 
   // i collegamenti entrano nel backup; un backup precedente alla vista non li cancella
   const dump = await esportaTutto();

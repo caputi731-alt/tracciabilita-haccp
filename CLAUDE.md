@@ -122,23 +122,30 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
   Il Menù riceve `scuro` dalla suite e usa la parte "Tema scuro" di `menu/css/suite.css`. Controllare sempre entrambi i temi:
   `SCHEMI=dark,light python3 test/anteprima/vedi.py …`. Finestre di sistema (Alert, barra di navigazione di Android) non ancora adattate.
 
-## Cucine in 3D nella sezione Oggi (scelta di Luca dell'8/10/2026: è la schermata principale)
+## Cucine in 3D nella sezione Oggi (scelte di Luca dell'8/10/2026: è la schermata principale, a tutto schermo)
 - `cucine.js` (puro, `test/cucine.test.mjs`): `CUCINE` = pianta delle due cucine dallo schizzo di Luca (misure in metri), `POSTI` = le
-  attrezzature, ognuna con un id fisso (`g9`, `p1`…): non cambiarli, sono la chiave dei collegamenti salvati. `statiCucine` calcola per
-  ogni attrezzatura colore ed etichetta (`crit` temperatura fuori limite, `fare` temperatura di oggi mancante o pulizia da fare, `ok`, `neutro`).
-- Tabella `cucina_posti` (posto → `punto_controllo_id` e/o `area_id`; `collegamentiCucina`, `collegaPosto`): è nel backup e in `TABELLE_NUOVE`.
-  Per ora solo temperature, pulizie e non conformità: il contenuto dei frigoriferi (lotti per posizione) è rimandato, scelta di Luca.
+  attrezzature, ognuna con un id fisso (`g9`, `p1`…): non cambiarli, sono la chiave dei collegamenti salvati. `FREDDI` = frigoriferi e
+  congelatori (`TIPI_FREDDO`): sono i soli con un tag e una scheda. `statiCucine` dà per ognuno colore, nome e seconda riga del tag
+  (`crit` fuori limite, `fare` temperatura di oggi mancante, `ok`, `neutro` = senza nome: "dai un nome").
+- I nomi dei frigoriferi li scrive Luca dalla scheda (`SchedaPosto.js`): il primo salvataggio crea il punto di controllo
+  (`salvaPuntoControllo`, limiti proposti da `limitiProposti`) e lo collega al posto (`collegaPosto`, tabella `cucina_posti`, nel backup e
+  in `TABELLE_NUOVE`). La colonna `area_id` resta ma non si usa più: le pulizie non stanno sulla mappa (scelta di Luca).
+  Il contenuto dei frigoriferi (lotti per posizione) è rimandato.
 - `cucine/index.html` + `cucine/three.min.js` (three r128, copiato da npm): la scena, pagina a sé copiata negli asset da `plugins/conMenu.js`
   (usa i caratteri di `../menu/vendor/fonts`). Riceve `window.__cucine(datiScena(...))` e manda `{ tipo: 'pronta' | 'senza3d' | 'errore' |
-  'posto', id | 'pavimento', cucina }`. Disegna solo quando qualcosa cambia; l'inquadratura si adatta da sola alla forma del riquadro (`adatta`).
+  'posto', id | 'pavimento', cucina }`: `posto` solo per i frigoriferi, tutto il resto (tavoli, fuochi, pavimento, "Magazzino") è `pavimento`
+  e apre la linguetta Magazzino (`navigate('SezioneMagazzino')`, vedi PrincipaleScreen). Disegna solo quando qualcosa cambia; l'inquadratura
+  si adatta alla forma del riquadro (`adatta`); i tag hanno altezza fissa sullo schermo e non si coprono (`sistemaTag`).
   I colori sono quelli di `theme.js` scritti a mano: se cambia la tavolozza vanno aggiornati anche lì.
-- `CucineVista.js` (WebView) e `SchedaPosto.js` (scheda dell'attrezzatura toccata: registra temperatura e pulizia con le funzioni di sempre,
-  collega/scollega). In `HomeScreen.js` la scena sta ferma in alto e il resto scorre sotto; toccare il pavimento o "Magazzino" apre la
-  linguetta Magazzino (`navigate('SezioneMagazzino')`, vedi PrincipaleScreen). Se il 3D non parte entro 8 secondi o dà errore, la Home torna
-  quella senza cucine con il riquadro grande dei controlli: deve sempre restare utilizzabile.
+- `HomeScreen.js`: con la mappa (`CucineVista.js`, WebView) la schermata è data in alto, mappa che riempie lo spazio, in basso la riga dei
+  controlli di oggi e il pannello "dettagli" (Modal) con temperature, pulizie, scadenze, avvisi e prossimo menù. Se il 3D non parte entro
+  8 secondi o dà errore, torna la Home senza mappa con il riquadro grande: deve sempre restare utilizzabile.
 - Prova della pagina: `python3 test/cucine-vista.py [cartella immagini]` (Playwright; gira anche su GitHub prima della build).
   Nell'anteprima del browser (`vedi.py`) la scena si vede davvero, dentro un iframe.
-- Sale e disposizione dei tavoli: da fare quando Luca manda le piantine (anche uno schizzo a penna con le misure).
+- Sale (prossimo passo, scelte di Luca): nuova voce "Sale" nella barra in basso; solo gli spazi "sala mensa" delle due piante (sala panoramica
+  e sala antica stalla), niente zone esterne; tavoli 90×90 e 180×90 di solito su due file parallele, con stima realistica dei posti anche per
+  i tavoli uniti; prenotazione scritta sul tavolo (nome, persone, ora); disposizioni come modelli con nome da applicare a data e servizio;
+  per i camerieri dispositivo in sala oppure immagine/PDF su WhatsApp.
 
 ## Modulo Menù (suite Tenuta Coppa)
 - La suite nasce da questa app: il Menù (prima app a parte, repository `menu-tenuta-coppa`) entra come modulo.

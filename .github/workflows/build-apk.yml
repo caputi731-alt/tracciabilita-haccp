@@ -119,6 +119,8 @@ jobs:
           PY
 
       - name: Compila l'APK
+        # di solito bastano 8-10 minuti: se si blocca (successo alla build 81) si ferma da sola invece di restare appesa per ore
+        timeout-minutes: 25
         working-directory: android
         env:
           HACCP_KEYSTORE: ${{ runner.temp }}/haccp.keystore

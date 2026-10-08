@@ -1,11 +1,11 @@
 /**
- * Sezione "Oggi" della suite: in alto le due cucine in 3D con lo stato di ogni attrezzatura (CucineVista.js),
- * sotto quanti controlli mancano, lo stato di temperature, pulizie e scadenze, le cose da sistemare,
- * il prossimo menù in calendario e il pulsante "Registra".
- * Se il telefono non riesce a mostrare il 3D resta la schermata senza cucine, con il riquadro grande dei controlli.
+ * Sezione "Oggi" della suite: la mappa 3D delle due cucine a tutto schermo, con il tag di ogni frigorifero (CucineVista.js);
+ * in basso la riga dei controlli di oggi e il pannello dei dettagli (temperature, pulizie, scadenze, cose da sistemare,
+ * prossimo menù), più il pulsante "Registra".
+ * Se il telefono non riesce a mostrare il 3D resta la schermata senza mappa, con il riquadro grande dei controlli.
  */
 import React, { useState, useCallback, useMemo } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Modal, Pressable, useWindowDimensions } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Modal, Pressable } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, TEMA_SCURO, giorniAllaScadenza, oggiLocale } from './theme';
 import { daIsoLocale } from './utile';
@@ -14,7 +14,7 @@ import {
   lottiInScadenza, temperatureDiOggi, listaPuntiControllo, nonConformitaAperte,
   areeConStato, prodottiDaCompletare, lottiBloccati, leggiPreferenza, menuLeggi, collegamentiCucina,
 } from './database';
-import { POSTI, statiCucine, datiScena } from './cucine';
+import { FREDDI, statiCucine, datiScena } from './cucine';
 import SchedaPosto from './SchedaPosto';
 import { statoBackup } from './backupAutomatico';
 import { prossimoMenu } from './menuPonte';
@@ -142,9 +142,9 @@ export default function HomeScreen({ navigation }) {
   const [menu, setMenu] = useState(null);
   const [registra, setRegistra] = useState(false);
   const [scena, setScena] = useState('attesa'); // 'attesa' | 'ok' | 'no' (il 3D non parte: Home senza cucine)
-  const [cucina, setCucina] = useState({ collegamenti: [], punti: [], temperature: [], aree: [] });
-  const [scelto, setScelto] = useState(null); // attrezzatura toccata nella scena
-  const finestra = useWindowDimensions();
+  const [cucina, setCucina] = useState({ collegamenti: [], punti: [], temperature: [] });
+  const [scelto, setScelto] = useState(null); // frigorifero toccato nella mappa
+  const [pannello, setPannello] = useState(false); // dettagli di oggi aperti sopra la mappa
 
   const carica = useCallback(async () => {
         try {
@@ -158,7 +158,7 @@ export default function HomeScreen({ navigation }) {
           // pulizie di ogni frequenza: giornaliere, settimanali e mensili scadute
           const aree = await areeConStato();
           setPulizie({ fatte: aree.filter((a) => !a.daFare).length, totali: aree.length });
-          setCucina({ collegamenti: await collegamentiCucina(), punti, temperature: t, aree });
+          setCucina({ collegamenti: (await collegamentiCucina()).filter((c) => c.punto_controllo_id), punti, temperature: t });
           setBackup(await statoBackup());
           const ultimaEsterna = await leggiPreferenza('backup_esterno_ultimo');
           setEsterno(ultimaEsterna ? Math.floor((Date.now() - new Date(ultimaEsterna).getTime()) / 86400000) : null);
@@ -171,15 +171,15 @@ export default function HomeScreen({ navigation }) {
 
   // stato di ogni attrezzatura delle cucine e quello che serve alla scena 3D
   const stati = useMemo(() => statiCucine({
-    collegamenti: cucina.collegamenti, punti: cucina.punti, temperatureOggi: cucina.temperature, aree: cucina.aree,
+    collegamenti: cucina.collegamenti, punti: cucina.punti, temperatureOggi: cucina.temperature,
   }), [cucina]);
   const dati = useMemo(() => datiScena(stati, { scuro: TEMA_SCURO, scelto }), [stati, scelto]);
-  const suPosto = useCallback((id) => { if (POSTI.some((p) => p.id === id)) setScelto(id); }, []);
+  const suPosto = useCallback((id) => { if (FREDDI.some((p) => p.id === id)) setScelto(id); }, []);
   const suPavimento = useCallback(() => navigation.navigate('SezioneMagazzino'), [navigation]);
   const senzaCucine = useCallback(() => setScena('no'), []);
   const Cucine = scena === 'no' ? null : moduloCucine();
   const conCucine = !!Cucine;
-  const altoScena = Math.round(Math.min(380, Math.max(240, finestra.height * 0.38)));
+  const oggiScritto = maiuscola(new Date().toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' }));
 
   const tempMancanti = Math.max(0, puntiTot - tempFatte);
   const pulizieMancanti = Math.max(0, pulizie.totali - pulizie.fatte);
@@ -190,7 +190,7 @@ export default function HomeScreen({ navigation }) {
   const backupOk = backup && backup.cartella && backup.giorni !== null && backup.giorni <= 2 && !backup.errore;
   const esternoOk = esterno !== undefined && esterno !== null && esterno <= 7;
 
-  const apri = (rotta, parametri) => { setRegistra(false); navigation.navigate(rotta, parametri); };
+  const apri = (rotta, parametri) => { setRegistra(false); setPannello(false); navigation.navigate(rotta, parametri); };
 
   // il riquadro in alto: cosa manca oggi e il pulsante per farlo subito
   let titolo; let dettaglio; let pulsante = null;
@@ -239,95 +239,15 @@ export default function HomeScreen({ navigation }) {
   const giornoMenu = menu ? daIsoLocale(menu.data) : null;
 
   const intestazione = (
-    <View style={{ marginLeft: 4, marginBottom: conCucine ? 10 : 16 }}>
+    <View style={{ marginLeft: 4, marginBottom: 16 }}>
       <Text style={{ fontSize: 13, fontWeight: '700', letterSpacing: 1.2, color: COLORS.muted }}>TENUTA COPPA</Text>
-      <Text accessibilityRole="header" style={[S.h1, { marginBottom: 0 }]}>
-        {maiuscola(new Date().toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' }))}
-      </Text>
+      <Text accessibilityRole="header" style={[S.h1, { marginBottom: 0 }]}>{oggiScritto}</Text>
     </View>
   );
 
-  return (
-    <View style={S.screen}>
-      {/* Le cucine: restano ferme in alto, il resto scorre sotto (trascinare sulla scena la fa ruotare) */}
-      {conCucine && (
-        <View style={{ paddingHorizontal: 16, paddingTop: 20 }}>
-          {intestazione}
-          <View style={{ height: altoScena, borderRadius: 28, overflow: 'hidden', backgroundColor: COLORS.contenitore }}>
-            <RiparoCucine suRotto={senzaCucine}>
-              <Cucine dati={dati} suPosto={suPosto} suPavimento={suPavimento} suStato={setScena} />
-            </RiparoCucine>
-            {scena === 'ok' && cucina.collegamenti.length === 0 && (
-              <View pointerEvents="none" style={{ position: 'absolute', left: 10, right: 10, bottom: 10, alignItems: 'center' }}>
-                <Text style={{
-                  fontSize: 13, fontWeight: '700', color: COLORS.text, backgroundColor: COLORS.card, borderRadius: 14,
-                  paddingHorizontal: 14, paddingVertical: 8, overflow: 'hidden', textAlign: 'center',
-                }}>Tocca un frigorifero o un banco per collegarlo ai controlli</Text>
-              </View>
-            )}
-          </View>
-        </View>
-      )}
-
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: conCucine ? 12 : 20, paddingBottom: 96 }}>
-        {!conCucine && intestazione}
-
-        {/* Controlli di oggi: con le cucine in vista basta una riga, senza resta il riquadro grande */}
-        {conCucine ? (
-          <TouchableOpacity onPress={pulsante ? pulsante.vai : undefined} disabled={!pulsante} activeOpacity={0.8}
-            accessibilityRole="button" accessibilityLabel={`Controlli di oggi: ${titolo}. ${dettaglio}${pulsante ? `. ${pulsante.testo}` : ''}`}
-            style={{
-              backgroundColor: COLORS.eroe, borderRadius: 24, padding: 14, marginBottom: 12, minHeight: 76,
-              flexDirection: 'row', alignItems: 'center',
-            }}>
-            {totali > 0 && (
-              <Anello fatti={fatti} totali={totali} lato={48} spessore={6} colore={COLORS.suEroeTenue} traccia={COLORS.eroeTraccia}>
-                {mancanti === 0
-                  ? <Icona nome="check-bold" size={20} colore={COLORS.suEroe} />
-                  : <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.suEroe }}>{fatti}/{totali}</Text>}
-              </Anello>
-            )}
-            <View style={{ flex: 1, marginLeft: totali > 0 ? 14 : 4 }}>
-              <Text style={{ fontSize: 18, fontWeight: '700', color: COLORS.suEroe }}>{titolo}</Text>
-              <Text style={{ fontSize: 14, color: COLORS.suEroeTenue }}>{pulsante && mancanti > 0 ? `${dettaglio} · inizia il giro` : dettaglio}</Text>
-            </View>
-            {!!pulsante && (
-              <View style={{
-                width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.eroePulsante, alignItems: 'center', justifyContent: 'center',
-              }}>
-                <Icona nome="arrow-right" size={22} colore={COLORS.suEroePulsante} />
-              </View>
-            )}
-          </TouchableOpacity>
-        ) : (
-        <View style={{ backgroundColor: COLORS.eroe, borderRadius: 28, padding: 24, marginBottom: 12 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <View style={{ flex: 1, paddingRight: 12 }}>
-              <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.suEroeTenue }}>Controlli di oggi</Text>
-              <Text style={{ fontSize: 28, fontWeight: '700', color: COLORS.suEroe, letterSpacing: -0.6, marginTop: 2 }}>{titolo}</Text>
-              <Text style={{ fontSize: 16, color: COLORS.suEroeTenue, marginTop: 2 }}>{dettaglio}</Text>
-            </View>
-            {totali > 0 && (
-              <Anello fatti={fatti} totali={totali} colore={COLORS.suEroeTenue} traccia={COLORS.eroeTraccia}>
-                {mancanti === 0
-                  ? <Icona nome="check-bold" size={30} colore={COLORS.suEroe} />
-                  : <Text style={{ fontSize: 20, fontWeight: '700', color: COLORS.suEroe }}>{fatti}/{totali}</Text>}
-              </Anello>
-            )}
-          </View>
-          {!!pulsante && (
-            <TouchableOpacity onPress={pulsante.vai} activeOpacity={0.8} accessibilityRole="button"
-              style={{
-                marginTop: 20, minHeight: 52, borderRadius: 26, backgroundColor: COLORS.eroePulsante,
-                flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16,
-              }}>
-              <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.suEroePulsante, marginRight: 8 }}>{pulsante.testo}</Text>
-              <Icona nome="arrow-right" size={20} colore={COLORS.suEroePulsante} />
-            </TouchableOpacity>
-          )}
-        </View>
-        )}
-
+  // temperature, pulizie, scadenze, cose da sistemare, prossimo menù: sotto il riquadro (senza mappa) o nel pannello (con la mappa)
+  const dettagli = (
+    <>
         {/* Stato di temperature, pulizie e scadenze */}
         <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
           <Riquadro icona="thermometer" etichetta="Temperature"
@@ -404,22 +324,148 @@ export default function HomeScreen({ navigation }) {
             })}
           </TouchableOpacity>
         )}
-      </ScrollView>
+    </>
+  );
+  const daSistemare = [avvisi.length ? plurale(avvisi.length, 'cosa da sistemare', 'cose da sistemare') : '',
+    scaduti ? plurale(scaduti, 'lotto scaduto', 'lotti scaduti') : scadenze.length ? plurale(scadenze.length, 'scadenza vicina', 'scadenze vicine') : '']
+    .filter(Boolean).join(' · ') || 'Temperature, pulizie, scadenze, prossimo menù';
 
-      {/* Pulsante "Registra" */}
-      <TouchableOpacity onPress={() => setRegistra(true)} activeOpacity={0.85} accessibilityRole="button"
-        accessibilityLabel="Registra"
-        style={{
-          position: 'absolute', right: 16, bottom: 16, height: 56, borderRadius: 18, paddingLeft: 18, paddingRight: 22,
-          backgroundColor: COLORS.terra, flexDirection: 'row', alignItems: 'center', elevation: 4,
-        }}>
-        <Icona nome="plus" size={24} colore={COLORS.suTerra} />
-        <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.suTerra, marginLeft: 8 }}>Registra</Text>
-      </TouchableOpacity>
+  const pulsanteRegistra = (stile) => (
+    <TouchableOpacity onPress={() => setRegistra(true)} activeOpacity={0.85} accessibilityRole="button"
+      accessibilityLabel="Registra"
+      style={[{
+        position: 'absolute', right: 16, bottom: 16, height: 56, borderRadius: 18, paddingLeft: 18, paddingRight: 22,
+        backgroundColor: COLORS.terra, flexDirection: 'row', alignItems: 'center', elevation: 4,
+      }, stile]}>
+      <Icona nome="plus" size={24} colore={COLORS.suTerra} />
+      <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.suTerra, marginLeft: 8 }}>Registra</Text>
+    </TouchableOpacity>
+  );
+
+  return (
+    <View style={S.screen}>
+      {conCucine ? (
+        <>
+          {/* La mappa delle cucine riempie la schermata: sopra solo la data, sotto la riga dei controlli e il pannello dei dettagli */}
+          <View style={{ paddingHorizontal: 20, paddingTop: 14, paddingBottom: 10, flexDirection: 'row', alignItems: 'baseline' }}>
+            <Text accessibilityRole="header" style={{ flex: 1, fontSize: 22, fontWeight: '700', color: COLORS.text, letterSpacing: -0.4 }}>
+              {oggiScritto}
+            </Text>
+            <Text style={{ fontSize: 12, fontWeight: '700', letterSpacing: 1.2, color: COLORS.muted }}>TENUTA COPPA</Text>
+          </View>
+          <View style={{ flex: 1, backgroundColor: COLORS.contenitore }}>
+            <RiparoCucine suRotto={senzaCucine}>
+              <Cucine dati={dati} suPosto={suPosto} suPavimento={suPavimento} suStato={setScena} />
+            </RiparoCucine>
+            {scena === 'ok' && cucina.collegamenti.length === 0 && (
+              <View pointerEvents="none" style={{ position: 'absolute', left: 12, right: 150, bottom: 44 }}>
+                <Text style={{
+                  fontSize: 13, fontWeight: '700', color: COLORS.text, backgroundColor: COLORS.card, borderRadius: 14,
+                  paddingHorizontal: 14, paddingVertical: 8, overflow: 'hidden',
+                }}>Tocca un frigorifero per dargli il nome</Text>
+              </View>
+            )}
+            {pulsanteRegistra({ bottom: 36 })}
+          </View>
+          <View style={{
+            backgroundColor: COLORS.bg, borderTopLeftRadius: 28, borderTopRightRadius: 28, marginTop: -24,
+            paddingHorizontal: 16, paddingBottom: 12,
+          }}>
+            <TouchableOpacity onPress={() => setPannello(true)} activeOpacity={0.7} accessibilityRole="button"
+              accessibilityLabel={`Apri i dettagli di oggi. ${daSistemare}`}
+              style={{ minHeight: 52, alignItems: 'center', justifyContent: 'center', paddingTop: 8 }}>
+              <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: COLORS.bordoCampo, marginBottom: 6 }} />
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text numberOfLines={1} style={{ fontSize: 14, fontWeight: '700', color: avvisi.some((x) => x.grave) || scaduti ? COLORS.danger : COLORS.muted, flexShrink: 1 }}>
+                  {daSistemare}
+                </Text>
+                <Icona nome="chevron-up" size={20} colore={COLORS.muted} style={{ marginLeft: 4 }} />
+              </View>
+            </TouchableOpacity>
+          <TouchableOpacity onPress={pulsante ? pulsante.vai : undefined} disabled={!pulsante} activeOpacity={0.8}
+            accessibilityRole="button" accessibilityLabel={`Controlli di oggi: ${titolo}. ${dettaglio}${pulsante ? `. ${pulsante.testo}` : ''}`}
+            style={{
+              backgroundColor: COLORS.eroe, borderRadius: 24, padding: 14, marginTop: 6, minHeight: 76,
+              flexDirection: 'row', alignItems: 'center',
+            }}>
+            {totali > 0 && (
+              <Anello fatti={fatti} totali={totali} lato={48} spessore={6} colore={COLORS.suEroeTenue} traccia={COLORS.eroeTraccia}>
+                {mancanti === 0
+                  ? <Icona nome="check-bold" size={20} colore={COLORS.suEroe} />
+                  : <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.suEroe }}>{fatti}/{totali}</Text>}
+              </Anello>
+            )}
+            <View style={{ flex: 1, marginLeft: totali > 0 ? 14 : 4 }}>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: COLORS.suEroe }}>{titolo}</Text>
+              <Text style={{ fontSize: 14, color: COLORS.suEroeTenue }}>{pulsante && mancanti > 0 ? `${dettaglio} · inizia il giro` : dettaglio}</Text>
+            </View>
+            {!!pulsante && (
+              <View style={{
+                width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.eroePulsante, alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Icona nome="arrow-right" size={22} colore={COLORS.suEroePulsante} />
+              </View>
+            )}
+          </TouchableOpacity>
+          </View>
+        </>
+      ) : (
+        <>
+          <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 20, paddingBottom: 96 }}>
+            {intestazione}
+        <View style={{ backgroundColor: COLORS.eroe, borderRadius: 28, padding: 24, marginBottom: 12 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <View style={{ flex: 1, paddingRight: 12 }}>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.suEroeTenue }}>Controlli di oggi</Text>
+              <Text style={{ fontSize: 28, fontWeight: '700', color: COLORS.suEroe, letterSpacing: -0.6, marginTop: 2 }}>{titolo}</Text>
+              <Text style={{ fontSize: 16, color: COLORS.suEroeTenue, marginTop: 2 }}>{dettaglio}</Text>
+            </View>
+            {totali > 0 && (
+              <Anello fatti={fatti} totali={totali} colore={COLORS.suEroeTenue} traccia={COLORS.eroeTraccia}>
+                {mancanti === 0
+                  ? <Icona nome="check-bold" size={30} colore={COLORS.suEroe} />
+                  : <Text style={{ fontSize: 20, fontWeight: '700', color: COLORS.suEroe }}>{fatti}/{totali}</Text>}
+              </Anello>
+            )}
+          </View>
+          {!!pulsante && (
+            <TouchableOpacity onPress={pulsante.vai} activeOpacity={0.8} accessibilityRole="button"
+              style={{
+                marginTop: 20, minHeight: 52, borderRadius: 26, backgroundColor: COLORS.eroePulsante,
+                flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16,
+              }}>
+              <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.suEroePulsante, marginRight: 8 }}>{pulsante.testo}</Text>
+              <Icona nome="arrow-right" size={20} colore={COLORS.suEroePulsante} />
+            </TouchableOpacity>
+          )}
+        </View>
+
+{dettagli}
+          </ScrollView>
+          {pulsanteRegistra()}
+        </>
+      )}
+
+      {/* Pannello dei dettagli di oggi, sopra la mappa */}
+      <Modal visible={pannello && conCucine} transparent animationType="slide" onRequestClose={() => setPannello(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(27,29,23,0.55)' }}>
+          <Pressable style={{ flex: 1, minHeight: 90 }} onPress={() => setPannello(false)} accessibilityLabel="Chiudi" />
+          <View style={{ backgroundColor: COLORS.bg, borderTopLeftRadius: 28, borderTopRightRadius: 28, maxHeight: '82%' }}>
+            <TouchableOpacity onPress={() => setPannello(false)} accessibilityRole="button" accessibilityLabel="Chiudi i dettagli"
+              style={{ minHeight: 48, alignItems: 'center', justifyContent: 'center' }}>
+              <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: COLORS.bordoCampo }} />
+            </TouchableOpacity>
+            <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 28 }}>
+              <Text accessibilityRole="header" style={[S.h1, { marginLeft: 4, marginBottom: 12 }]}>Oggi</Text>
+              {dettagli}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       {/* Scheda dell'attrezzatura toccata nella scena */}
       {!!scelto && (
-        <SchedaPosto posto={POSTI.find((p) => p.id === scelto)} stato={stati[scelto]} punti={cucina.punti} aree={cucina.aree}
+        <SchedaPosto posto={FREDDI.find((p) => p.id === scelto)} stato={stati[scelto]} punti={cucina.punti} collegamenti={cucina.collegamenti}
           onChiudi={() => setScelto(null)} onCambiato={carica}
           apri={(rotta, parametri) => { setScelto(null); apri(rotta, parametri); }} />
       )}

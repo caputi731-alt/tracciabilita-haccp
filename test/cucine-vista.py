@@ -18,10 +18,10 @@ IMMAGINI = sys.argv[1] if len(sys.argv) > 1 else None
 PREPARA = """
 import { statiCucine, datiScena } from './cucine.js';
 const frigo = (id, nome) => ({ id, nome, temp_min: 0, temp_max: 4 });
-const base = { collegamenti: [{ posto: 'g9', punto_controllo_id: 1 }, { posto: 'p1', punto_controllo_id: 2 }, { posto: 'g17', area_id: 5 }, { posto: 'g1', punto_controllo_id: 3 }],
-  punti: [frigo(1, 'A'), frigo(2, 'B'), frigo(3, 'C')], aree: [{ id: 5, nome: 'Banchi', daFare: true }] };
+const base = { collegamenti: [{ posto: 'g9', punto_controllo_id: 1 }, { posto: 'p1', punto_controllo_id: 2 }, { posto: 'g1', punto_controllo_id: 3 }],
+  punti: [frigo(1, 'Frigo carni'), frigo(2, 'Frigo verdure della cucina piccola'), frigo(3, 'Bibite')] };
 const prima = statiCucine({ ...base, temperatureOggi: [{ punto_controllo_id: 1, temperatura: 3.5 }, { punto_controllo_id: 2, temperatura: 9 }] });
-const dopo = statiCucine({ ...base, aree: [{ id: 5, nome: 'Banchi', daFare: false }], temperatureOggi: [{ punto_controllo_id: 1, temperatura: 3.5 }, { punto_controllo_id: 2, temperatura: 2 }] });
+const dopo = statiCucine({ ...base, temperatureOggi: [{ punto_controllo_id: 1, temperatura: 3.5 }, { punto_controllo_id: 2, temperatura: 2 }] });
 console.log(JSON.stringify({ prima: datiScena(prima), dopo: datiScena(dopo, { scuro: true, scelto: 'p1' }) }));
 """
 DATI = json.loads(subprocess.run(['node', '--input-type=module', '-e', PREPARA], cwd=RADICE, capture_output=True, text=True, check=True).stdout)
@@ -38,7 +38,7 @@ def ok(cond, msg):
 
 with sync_playwright() as p:
     b = p.chromium.launch(args=['--allow-file-access-from-files', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'])
-    for nome, largo, alto in (('telefono', 380, 330), ('largo', 900, 500)):
+    for nome, largo, alto in (('telefono', 412, 560), ('largo', 900, 500)):
         c = b.new_context(viewport={'width': largo, 'height': alto}, device_scale_factor=2)
         c.add_init_script(FINTA)
         pg = c.new_page()
@@ -58,8 +58,17 @@ with sync_playwright() as p:
         pg.wait_for_timeout(600); ferma()
         s = pg.evaluate("window.__scena()")
         ok(s['posti'] == 19, f"{nome}: 19 attrezzature in scena ({s['posti']})")
-        ok(sorted(s['etichette']) == sorted(['g9:3,5°C', 'p1:9°C', 'g17:da pulire', 'g1:da registrare']), f"{nome}: etichette giuste {s['etichette']}")
+        ok(sorted(s['etichette']) == sorted(['g9:Frigo carni|3,5°C', 'p1:Frigo verdure della cucina piccola|9°C', 'g1:Bibite|da registrare', 'g8:dai un nome']), f"{nome}: ogni frigorifero e congelatore ha il suo tag {s['etichette']}")
         ok(ricevuti() == [], f'{nome}: nessun messaggio prima di un tocco')
+        # i tag non si coprono fra loro: ognuno si può toccare al suo centro
+        liberi = 0
+        for pid in ('g9', 'p1', 'g1', 'g8'):
+            x, y = pg.evaluate("id=>window.__schermoTag(id)", pid)
+            pg.evaluate("([x,y])=>window.__tocca(x,y)", [x, y])
+            if ricevuti()[-1] == {'tipo': 'posto', 'id': pid}: liberi += 1
+            else: print('     tag coperto:', pid, ricevuti()[-1])
+        ok(liberi == 4, f'{nome}: i quattro tag sono tutti visibili e toccabili ({liberi}/4)')
+        pg.evaluate("window.__cucine(Object.assign({}, window.__ultimi, {scelto: null})); window.__ricevuti.length = 1")
         if IMMAGINI:
             pg.screenshot(path=os.path.join(IMMAGINI, f'cucine-{nome}-chiaro.png'))
 
@@ -74,16 +83,26 @@ with sync_playwright() as p:
         r = ricevuti()
         ok(r and r[-1] == {'tipo': 'posto', 'id': 'g9'}, f'{nome}: toccare il frigo apre la sua scheda {r[-1:]}')
         ok(pg.evaluate("window.__scena().scelto") == 'g9', f'{nome}: il frigo toccato resta evidenziato')
-        tocchi = 0
-        for pid in ('g17', 'g10a', 'g1', 'p1', 'p78'):
-            if pid == 'p1':   # la cucina piccola da vicino: in un riquadro stretto il suo frigo sta in parte dietro quello grande
-                pg.click('#v-piccola'); ferma()
+        # il congelatore senza nome apre la sua scheda; tavoli, fuochi e lavandini aprono il Magazzino
+        x, y = pg.evaluate("window.__schermo('g8')")
+        pg.evaluate("([x,y])=>window.__tocca(x,y)", [x, y])
+        ok(ricevuti()[-1] == {'tipo': 'posto', 'id': 'g8'}, f'{nome}: il congelatore senza nome apre la sua scheda')
+        magazzino = 0
+        for pid in ('g5', 'g10a', 'g4'):
             x, y = pg.evaluate("id=>window.__schermo(id)", pid)
             pg.evaluate("([x,y])=>window.__tocca(x,y)", [x, y])
-            if ricevuti()[-1] == {'tipo': 'posto', 'id': pid}: tocchi += 1
-            else: print('     non risponde:', pid, ricevuti()[-1])
-        ok(tocchi == 5, f'{nome}: ogni attrezzatura risponde al tocco ({tocchi}/5)')
-
+            if ricevuti()[-1] == {'tipo': 'pavimento', 'cucina': 'grande'}: magazzino += 1
+            else: print('     non apre il Magazzino:', pid, ricevuti()[-1])
+        ok(magazzino == 3, f'{nome}: tavoli e fuochi aprono il Magazzino ({magazzino}/3)')
+        ok(pg.evaluate("window.__scena().scelto") == 'g8', f'{nome}: un tavolo toccato non viene evidenziato')
+        pg.click('#v-piccola'); ferma()
+        x, y = pg.evaluate("window.__schermoTag('p1')")
+        pg.mouse.click(x, y)
+        pg.wait_for_timeout(200)
+        ok(ricevuti()[-1] == {'tipo': 'posto', 'id': 'p1'}, f'{nome}: toccare il tag del frigo della cucina piccola apre la sua scheda')
+        x, y = pg.evaluate("window.__schermo('p78')")
+        pg.evaluate("([x,y])=>window.__tocca(x,y)", [x, y])
+        ok(ricevuti()[-1] == {'tipo': 'pavimento', 'cucina': 'piccola'}, f'{nome}: il lavandino apre il Magazzino')
         x, y = pg.evaluate("window.__schermoPavimento('piccola', 2, 2)")
         pg.evaluate("([x,y])=>window.__tocca(x,y)", [x, y])
         ok(ricevuti()[-1] == {'tipo': 'pavimento', 'cucina': 'piccola'}, f'{nome}: il pavimento della cucina piccola risponde')
@@ -106,7 +125,7 @@ with sync_playwright() as p:
         pg.evaluate("d=>window.__cucine(d)", DATI['dopo'])
         ferma()
         s = pg.evaluate("window.__scena()")
-        ok(sorted(s['etichette']) == sorted(['g9:3,5°C', 'p1:2°C', 'g1:da registrare']), f"{nome}: le etichette seguono i nuovi stati {s['etichette']}")
+        ok('p1:Frigo verdure della cucina piccola|2°C' in s['etichette'] and len(s['etichette']) == 4, f"{nome}: i tag seguono i nuovi stati {s['etichette']}")
         ok(s['scelto'] == 'p1' and pg.evaluate("document.documentElement.classList.contains('scuro')"), f'{nome}: scelta e tema scuro applicati')
         pg.click('#v-piccola'); ferma()
         ok(pg.get_attribute('#v-piccola', 'aria-pressed') == 'true', f'{nome}: il pulsante "Piccola" inquadra la cucina piccola')
