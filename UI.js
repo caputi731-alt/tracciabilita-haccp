@@ -63,7 +63,7 @@ export function useErrori() {
 export function Segmenti({ opzioni, valore, onChange }) {
   return (
     <View style={{
-      flexDirection: 'row', backgroundColor: '#DCE3E0', borderRadius: 14, padding: 4, marginTop: 10,
+      flexDirection: 'row', backgroundColor: COLORS.contenitore, borderRadius: 26, padding: 4, marginTop: 10,
     }}>
       {opzioni.map((o) => {
         const attivo = o === valore;
@@ -71,12 +71,11 @@ export function Segmenti({ opzioni, valore, onChange }) {
           <TouchableOpacity key={o} onPress={() => onChange(o)} activeOpacity={0.8}
             accessibilityRole="tab" accessibilityState={{ selected: attivo }}
             style={{
-              flex: 1, minHeight: 48, borderRadius: 11, alignItems: 'center', justifyContent: 'center',
-              paddingHorizontal: 4, backgroundColor: attivo ? '#fff' : 'transparent',
-              elevation: attivo ? 2 : 0,
+              flex: 1, minHeight: 48, borderRadius: 22, alignItems: 'center', justifyContent: 'center',
+              paddingHorizontal: 4, backgroundColor: attivo ? COLORS.azioneSoft : 'transparent',
             }}>
             <Text numberOfLines={1} style={{
-              fontSize: 14, fontWeight: attivo ? '800' : '600', color: attivo ? COLORS.azione : COLORS.muted,
+              fontSize: 14, fontWeight: attivo ? '700' : '500', color: attivo ? COLORS.azioneDark : COLORS.muted,
             }}>{o}</Text>
           </TouchableOpacity>
         );
@@ -522,7 +521,7 @@ export function useAvviso() {
   const avviso = (
     <Animated.View pointerEvents={attivo && azione ? 'box-none' : 'none'} style={{
       position: 'absolute', left: 16, right: 16, bottom: 80, opacity: opacita,
-      backgroundColor: '#1F2A26', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 16,
+      backgroundColor: '#30322B', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 16,
       elevation: 8, flexDirection: 'row', alignItems: 'center', minHeight: 56,
     }}>
       <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700', flex: 1, textAlign: azione ? 'left' : 'center' }}>
@@ -531,7 +530,7 @@ export function useAvviso() {
       {!!azione && (
         <TouchableOpacity onPress={() => { if (timer.current) clearTimeout(timer.current); nascondi(); azione.onPress(); }}
           style={{ paddingHorizontal: 14, paddingVertical: 10, marginLeft: 8, borderRadius: 10, backgroundColor: '#ffffff22' }}>
-          <Text style={{ color: '#9CC8FF', fontSize: 16, fontWeight: '800' }}>{azione.testo}</Text>
+          <Text style={{ color: COLORS.primarySoft, fontSize: 16, fontWeight: '700' }}>{azione.testo}</Text>
         </TouchableOpacity>
       )}
     </Animated.View>

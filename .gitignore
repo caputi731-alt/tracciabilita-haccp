@@ -4,3 +4,4 @@ ios/
 dist/
 .expo/
 *.keystore
+dist-web/

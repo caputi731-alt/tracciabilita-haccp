@@ -198,8 +198,8 @@ export default function BackupScreen() {
       </Text>
 
       <View style={[S.card, {
-        borderLeftWidth: 5,
-        borderLeftColor: !stato?.cartella || stato?.errore ? COLORS.danger : stato.giorni <= 2 ? COLORS.ok : COLORS.warning,
+        borderWidth: 1.5,
+        borderColor: !stato?.cartella || stato?.errore ? COLORS.danger : stato.giorni <= 2 ? COLORS.ok : COLORS.warning,
       }]}>
         <Text style={S.h2}>Backup automatico</Text>
         {stato?.cartella ? (
@@ -227,8 +227,8 @@ export default function BackupScreen() {
       </View>
 
       <View style={[S.card, {
-        borderLeftWidth: 5,
-        borderLeftColor: giorniEsterno === null ? COLORS.danger : giorniEsterno <= 7 ? COLORS.ok : COLORS.warning,
+        borderWidth: 1.5,
+        borderColor: giorniEsterno === null ? COLORS.danger : giorniEsterno <= 7 ? COLORS.ok : COLORS.warning,
       }]}>
         <Text style={S.h2}>Copia fuori dal telefono</Text>
         <Text style={{ fontSize: 15, color: COLORS.text, fontWeight: '700' }}>

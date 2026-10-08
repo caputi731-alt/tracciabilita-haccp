@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {
   nomeFilePulito, scriptRisposta, scriptAvviso, scriptSalvato, leggiMessaggio, rispondiArchivio,
-  destinazione, numeroWhatsApp, tipoComune,
+  destinazione, numeroWhatsApp, tipoComune, prossimoMenu,
 } from '../menuPonte.js';
 
 test('nomi di file puliti', () => {
@@ -78,4 +78,22 @@ test('numero di WhatsApp e tipo dei file', () => {
   assert.equal(numeroWhatsApp('123'), '');
   assert.equal(tipoComune([{ mime: 'application/pdf' }, { mime: 'application/pdf' }]), 'application/pdf');
   assert.equal(tipoComune([{ mime: 'application/pdf' }, { mime: 'image/jpeg' }]), '*/*');
+});
+
+test('prossimo menù in calendario', () => {
+  const stato = JSON.stringify({
+    templates: [{ id: 't1', heading: 'Menù di domenica' }],
+    menus: [
+      { id: 'a', templateId: 't1', date: '2026-10-01', client: 'Passato' },
+      { id: 'b', templateId: 't1', date: '2026-10-25', client: 'Verdi', guests: 30, status: 'bozza' },
+      { id: 'c', templateId: 't1', date: '2026-10-17', client: 'Rossi', status: 'rifiutata' },
+      { id: 'd', templateId: 't1', date: '2026-10-17', client: 'Bianchi', heading: ' Battesimo ', guests: '50', guestsKids: 10, status: 'confermata' },
+      { id: 'e', templateId: 't1', date: '', client: 'Senza data' },
+    ],
+  });
+  assert.deepEqual(prossimoMenu(stato, '2026-10-08'), { data: '2026-10-17', titolo: 'Battesimo', cliente: 'Bianchi', ospiti: 60, stato: 'confermata' });
+  assert.deepEqual(prossimoMenu(stato, '2026-10-18'), { data: '2026-10-25', titolo: 'Menù di domenica', cliente: 'Verdi', ospiti: 30, stato: 'bozza' });
+  assert.equal(prossimoMenu(stato, '2026-11-01'), null);
+  assert.equal(prossimoMenu(null, '2026-10-08'), null);
+  assert.equal(prossimoMenu('non json', '2026-10-08'), null);
 });

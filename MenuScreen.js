@@ -6,6 +6,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, BackHandler, Linking, PixelRatio, ActivityIndicator } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, S } from './theme';
 import { Vuoto } from './UI';
 import { BUILD } from './build';
@@ -20,6 +21,7 @@ const invio = () => require('./menuInvio');
 
 export default function MenuScreen({ navigation }) {
   const web = useRef(null);
+  const margini = useSafeAreaInsets();
   const caricata = useRef(false);
   const uscita = useRef(null); // { azione, timer } mentre la pagina scrive le ultime modifiche
   const [giro, setGiro] = useState(0);
@@ -93,14 +95,14 @@ export default function MenuScreen({ navigation }) {
 
   if (errore) {
     return (
-      <View style={[S.screen, { justifyContent: 'center' }]}>
+      <View style={[S.screen, { justifyContent: 'center', paddingTop: margini.top }]}>
         <Vuoto icona="alert-circle-outline" titolo="Il menù non si è aperto" testo={errore} azione="Riprova" onAzione={ricarica} />
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#FAFAF6' }}>
+    <View style={{ flex: 1, backgroundColor: '#FAFAF6', paddingTop: margini.top, paddingBottom: margini.bottom }}>
       <WebView
         key={giro}
         ref={web}

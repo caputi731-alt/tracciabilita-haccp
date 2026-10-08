@@ -5,28 +5,34 @@ export {
   aNumero, numeroPerCampo, oggiLocale, isoLocale, piuGiorni, giornoDi, arrotonda, escHtml,
 } from './utile';
 
+// Tavolozza della suite (Material Design 3, dal mockup approvato l'8/10/2026): verdi oliva e un accento terracotta.
 export const COLORS = {
-  bg: '#EEF2F0',
+  bg: '#F6F5EC',            // fondo delle schermate
   card: '#FFFFFF',
-  primary: '#12795A',
-  primaryDark: '#0C5A43',
-  primarySoft: '#E3F1EC',
-  text: '#13211C',
-  muted: '#4E5A55',
-  border: '#E1E7E4',
+  contenitore: '#ECEBDD',   // superfici in secondo piano: barra in basso, tasti neutri, selettori
+  primary: '#2F4F23',
+  primaryDark: '#1A3310',
+  primarySoft: '#D7E8C6',
+  text: '#1B1D17',
+  muted: '#5B5F52',
+  border: '#E4E3D6',
   danger: '#B3261E',
   dangerSoft: '#FBE9E7',
-  warning: '#9A5B00',
-  warningSoft: '#FBF0DC',
-  ok: '#12795A',
-  accent: '#1E9E76',
+  warning: '#8A4B00',
+  warningSoft: '#FBEBD5',
+  ok: '#2F6B2A',
+  accent: '#6B8F54',
   // bordo dei campi (visibile: contrasto 3:1 sul bianco) e testo dei segnaposto
-  bordoCampo: '#84908A',
-  segnaposto: '#66726C',
-  // colore delle azioni (pulsanti, collegamenti, scelte attive): distinto dal verde degli stati "ok"
-  azione: '#1B5E9E',
-  azioneDark: '#144A7D',
-  azioneSoft: '#E5EEF8',
+  bordoCampo: '#8A8E7E',
+  segnaposto: '#6A6E60',
+  // colore delle azioni (pulsanti, collegamenti, scelte attive): il verde oliva principale
+  azione: '#2F4F23',
+  azioneDark: '#1A3310',
+  azioneSoft: '#D7E8C6',
+  // accento terracotta: il pulsante "Registra" e le cose che chiedono attenzione senza essere un errore
+  terra: '#9C4524',
+  terraSoft: '#FBDDCF',
+  terraScuro: '#5C2410',
 };
 
 export const ALLERGENI = [
@@ -85,57 +91,47 @@ export const S = StyleSheet.create({
 
   card: {
     backgroundColor: COLORS.card,
-    borderRadius: 16,
+    borderRadius: 24,
     padding: 16,
     marginBottom: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    shadowColor: '#0B2A20',
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 2,
   },
 
-  h1: { fontSize: 26, fontWeight: '800', color: COLORS.text, marginBottom: 4, letterSpacing: -0.4 },
-  h2: { fontSize: 18, fontWeight: '800', color: COLORS.text, marginBottom: 10, letterSpacing: -0.2 },
+  h1: { fontSize: 28, fontWeight: '700', color: COLORS.text, marginBottom: 4, letterSpacing: -0.6 },
+  h2: { fontSize: 18, fontWeight: '700', color: COLORS.text, marginBottom: 10, letterSpacing: -0.2 },
 
   label: {
     fontSize: 13, fontWeight: '700', color: COLORS.muted, marginBottom: 6, marginTop: 14,
-    textTransform: 'uppercase', letterSpacing: 0.4,
   },
   input: {
-    borderWidth: 1, borderColor: COLORS.bordoCampo, borderRadius: 12, paddingHorizontal: 14,
+    borderWidth: 1, borderColor: COLORS.bordoCampo, borderRadius: 14, paddingHorizontal: 14,
     paddingVertical: 13, fontSize: 16, backgroundColor: '#fff', color: COLORS.text,
   },
 
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
 
   btn: {
-    backgroundColor: COLORS.azione, borderRadius: 14, paddingVertical: 16, minHeight: 52,
+    backgroundColor: COLORS.azione, borderRadius: 26, paddingVertical: 14, paddingHorizontal: 20, minHeight: 52,
     alignItems: 'center', justifyContent: 'center', marginTop: 14,
-    shadowColor: COLORS.azioneDark, shadowOpacity: 0.25, shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 }, elevation: 3,
   },
-  btnText: { color: '#fff', fontSize: 16, fontWeight: '800', letterSpacing: 0.3 },
+  btnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   btnGhost: {
-    borderWidth: 1.5, borderColor: COLORS.azione, borderRadius: 14, minHeight: 50,
-    paddingVertical: 14, alignItems: 'center', justifyContent: 'center', marginTop: 10, backgroundColor: '#fff',
+    borderWidth: 1, borderColor: COLORS.bordoCampo, borderRadius: 26, minHeight: 50,
+    paddingVertical: 13, paddingHorizontal: 20, alignItems: 'center', justifyContent: 'center', marginTop: 10,
   },
-  btnGhostText: { color: COLORS.azione, fontSize: 15, fontWeight: '800' },
+  btnGhostText: { color: COLORS.azione, fontSize: 15, fontWeight: '700' },
 
   chip: {
     paddingHorizontal: 16, paddingVertical: 12, minHeight: 46, justifyContent: 'center',
-    borderRadius: 23, borderWidth: 1,
-    borderColor: COLORS.bordoCampo, marginRight: 8, marginBottom: 8, backgroundColor: '#fff',
+    borderRadius: 12, borderWidth: 1,
+    borderColor: COLORS.bordoCampo, marginRight: 8, marginBottom: 8, backgroundColor: COLORS.card,
   },
-  chipOn: { backgroundColor: COLORS.azione, borderColor: COLORS.azione },
+  chipOn: { backgroundColor: COLORS.azioneSoft, borderColor: COLORS.azione },
   chipText: { color: COLORS.text, fontSize: 15 },
-  chipTextOn: { color: '#fff', fontWeight: '700' },
+  chipTextOn: { color: COLORS.azioneDark, fontWeight: '700' },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 6 },
 
   muted: { color: COLORS.muted, fontSize: 15, lineHeight: 21 },
-  link: { color: COLORS.azione, fontWeight: '800', fontSize: 15 },
+  link: { color: COLORS.azione, fontWeight: '700', fontSize: 15 },
   inputErrore: { borderColor: COLORS.danger, borderWidth: 2, backgroundColor: '#FFF8F7' },
   testoErrore: { color: COLORS.danger, fontSize: 14, fontWeight: '700', marginTop: 5 },
   empty: { textAlign: 'center', color: COLORS.muted, marginTop: 44, fontSize: 15 },
@@ -147,14 +143,12 @@ export const S = StyleSheet.create({
     borderRadius: 20, overflow: 'hidden', marginBottom: 10,
   },
   sectionTitle: {
-    fontSize: 13, fontWeight: '800', color: COLORS.muted, textTransform: 'uppercase',
-    letterSpacing: 0.6, marginTop: 22, marginBottom: 8, marginLeft: 4,
+    fontSize: 13, fontWeight: '700', color: COLORS.muted, textTransform: 'uppercase',
+    letterSpacing: 1, marginTop: 22, marginBottom: 8, marginLeft: 4,
   },
   tile: {
-    backgroundColor: COLORS.card, borderRadius: 14, padding: 15, marginBottom: 10,
-    borderWidth: 1, borderColor: COLORS.border, flexDirection: 'row', alignItems: 'center',
-    shadowColor: '#0B2A20', shadowOpacity: 0.05, shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 }, elevation: 1,
+    backgroundColor: COLORS.card, borderRadius: 20, padding: 16, marginBottom: 10,
+    flexDirection: 'row', alignItems: 'center',
   },
   tileAccent: { width: 4, borderRadius: 4, alignSelf: 'stretch', marginRight: 12, backgroundColor: COLORS.primary },
   tileTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text },

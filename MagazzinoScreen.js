@@ -398,7 +398,7 @@ export default function MagazzinoScreen({ route, navigation }) {
               <Vuoto icona="magnify" titolo="Nessun lotto trovato" testo={cerca ? 'Prova a cercare con un\'altra parola.' : 'Qui compariranno tutti i lotti ricevuti.'} />
             )}
             {tutti.map((l) => (
-              <TouchableOpacity key={l.id} style={[S.card, { borderLeftWidth: 4, borderLeftColor: coloreStato(l.stato) }]}
+              <TouchableOpacity key={l.id} style={[S.card, { borderWidth: 1.5, borderColor: coloreStato(l.stato) }]}
                 onPress={() => apriLotto(l)} activeOpacity={0.7}>
                 <View style={S.row}>
                   <Text style={{ fontSize: 16, fontWeight: '800', color: COLORS.text, flex: 1, paddingRight: 8 }}>
@@ -434,7 +434,7 @@ export default function MagazzinoScreen({ route, navigation }) {
           const primo = g.lotti[0];
           const aperto = !!aperti[g.chiave];
           return (
-            <View key={g.chiave} style={[S.card, { borderLeftWidth: 4, borderLeftColor: coloreScadenza(primo.data_scadenza) }]}>
+            <View key={g.chiave} style={[S.card, { borderWidth: 1.5, borderColor: coloreScadenza(primo.data_scadenza) }]}>
               <TouchableOpacity activeOpacity={0.7}
                 onPress={() => setAperti((s) => ({ ...s, [g.chiave]: !s[g.chiave] }))}>
                 <View style={S.row}>

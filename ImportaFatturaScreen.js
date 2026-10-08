@@ -251,7 +251,7 @@ export default function ImportaFatturaScreen({ navigation }) {
           Funziona senza internet.
         </Text>
         {!!bozza && !lettura && (
-          <View style={[S.card, { borderLeftWidth: 5, borderLeftColor: COLORS.azione }]}>
+          <View style={[S.card, { borderWidth: 1.5, borderColor: COLORS.azione }]}>
             <Text style={{ fontSize: 17, fontWeight: '800', color: COLORS.text }}>Hai una fattura lasciata a metà</Text>
             <Text style={S.muted}>
               {bozza.doc.numero ? `Fattura n. ${bozza.doc.numero}` : bozza.doc.nomeFile || 'Fattura'} · {bozza.righe.length} righe.
@@ -365,8 +365,8 @@ export default function ImportaFatturaScreen({ navigation }) {
         return (
           <View key={r.key} style={[S.card, {
             opacity: r.includi ? 1 : 0.5,
-            borderLeftColor: r.errori && r.includi ? COLORS.danger : !r.includi ? COLORS.border : r.prodotto_id ? COLORS.ok : COLORS.warning,
-            borderLeftWidth: r.errori && r.includi ? 6 : 4,
+            borderColor: r.errori && r.includi ? COLORS.danger : !r.includi ? COLORS.border : r.prodotto_id ? COLORS.ok : COLORS.warning,
+            borderWidth: r.errori && r.includi ? 2.5 : 1.5,
           }]}>
             <TouchableOpacity onPress={() => setAperta(espansa ? null : r.key)} activeOpacity={0.7}>
               <View style={S.row}>

@@ -77,3 +77,28 @@ export const tipoComune = (file) => {
   const tipi = [...new Set((file || []).map((f) => f.mime || '*/*'))];
   return tipi.length === 1 ? tipi[0] : '*/*';
 };
+
+/**
+ * Prossimo menù in calendario (da oggi in poi, esclusi i rifiutati), letto dallo stato salvato dall'app web
+ * (chiave 'state' di menu_dati). null se non ce n'è nessuno o se lo stato non si legge.
+ */
+export function prossimoMenu(testoStato, oggi) {
+  try {
+    const stato = JSON.parse(testoStato);
+    const futuri = (stato.menus || [])
+      .filter((m) => m && typeof m.date === 'string' && m.date >= oggi && m.status !== 'rifiutata')
+      .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    const m = futuri[0];
+    if (!m) return null;
+    const modello = (stato.templates || []).find((t) => t && t.id === m.templateId);
+    return {
+      data: m.date,
+      titolo: String(m.heading || '').trim() || (modello && modello.heading) || 'Menù',
+      cliente: String(m.client || '').trim(),
+      ospiti: (Number(m.guests) || 0) + (Number(m.guestsKids) || 0),
+      stato: m.status || 'bozza',
+    };
+  } catch (e) {
+    return null;
+  }
+}

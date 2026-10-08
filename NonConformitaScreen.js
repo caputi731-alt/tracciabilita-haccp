@@ -82,7 +82,7 @@ export default function NonConformitaScreen() {
 
   const Card = ({ n }) => (
     <TouchableOpacity
-      style={[S.card, { borderLeftWidth: 4, borderLeftColor: n.stato === 'aperta' ? COLORS.danger : COLORS.ok }]}
+      style={[S.card, { borderWidth: 1.5, borderColor: n.stato === 'aperta' ? COLORS.danger : COLORS.ok }]}
       onPress={() => (n.stato === 'aperta' ? setSel(n) : setInModifica(n))}
     >
       <View style={S.row}>

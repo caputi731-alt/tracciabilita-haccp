@@ -23,7 +23,7 @@ export default function CaricoMerceScreen({ navigation }) {
 
       {SCELTE.map((s) => (
         <TouchableOpacity key={s.rotta} activeOpacity={0.8} onPress={() => navigation.navigate(s.rotta)}
-          style={[S.card, { borderLeftWidth: 5, borderLeftColor: s.consigliato ? COLORS.azione : COLORS.border }]}>
+          style={[S.card, { borderWidth: 1.5, borderColor: s.consigliato ? COLORS.azione : COLORS.border }]}>
           <View style={S.row}>
             <Icona nome={s.icona} size={34} colore={s.consigliato ? COLORS.primary : COLORS.accent} style={{ marginRight: 12 }} />
             <View style={{ flex: 1 }}>

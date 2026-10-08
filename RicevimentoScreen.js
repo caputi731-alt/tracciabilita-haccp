@@ -121,7 +121,7 @@ export default function RicevimentoScreen({ navigation }) {
 
   return (
     <ScrollView style={S.screen} contentContainerStyle={S.content}>
-      <TouchableOpacity style={[S.card, { borderLeftWidth: 4, borderLeftColor: COLORS.azione }]}
+      <TouchableOpacity style={[S.card, { borderWidth: 1.5, borderColor: COLORS.azione }]}
         onPress={() => navigation.navigate('ImportaFattura')} activeOpacity={0.7}>
         <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.azione }}>Hai la fattura in PDF? →</Text>
         <Text style={S.muted}>Importala e carica tutte le righe insieme, senza compilare prodotto per prodotto.</Text>

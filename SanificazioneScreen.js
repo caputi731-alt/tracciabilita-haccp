@@ -148,7 +148,7 @@ export default function SanificazioneScreen() {
           const quando = a.giorniFa === null ? 'mai registrata' : a.giorniFa === 0 ? 'oggi' : a.giorniFa === 1 ? 'ieri' : `${a.giorniFa} giorni fa`;
           return (
             <TouchableOpacity key={a.id} style={[S.card, !a.daFare && {
-              borderLeftWidth: 4, borderLeftColor: COLORS.ok,
+              borderWidth: 1.5, borderColor: COLORS.ok,
             }, selezione && selezione.includes(a.id) && {
               borderWidth: 2, borderColor: COLORS.azione,
             }]} onPress={() => toccaArea(a)} onLongPress={() => !selezione && setFormArea({ ...a })}

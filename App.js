@@ -7,8 +7,10 @@ import { initDatabase } from './database';
 import { backupAutomaticoSeServe, mettiAlSicuroFoto, pulisciFotoInutili } from './backupAutomatico';
 import { COLORS, S } from './theme';
 import { aggiornaPromemoria, ascoltaToccoNotifica } from './notifiche';
+import { useFonts } from 'expo-font';
+import { CARATTERI, usaCaratteri } from './caratteri';
 
-import HomeScreen from './HomeScreen';
+import PrincipaleScreen from './PrincipaleScreen';
 import FornitoriScreen from './FornitoriScreen';
 import ProdottiScreen from './ProdottiScreen';
 import RicevimentoScreen from './RicevimentoScreen';
@@ -40,6 +42,9 @@ function apriDaNotifica(rotta) {
 export default function App() {
   const [pronto, setPronto] = useState(false);
   const [errore, setErrore] = useState(null);
+  // carattere della suite: se i file non si caricano si prosegue con quello di sistema
+  const [caratteriPronti, erroreCaratteri] = useFonts(CARATTERI);
+  if (caratteriPronti) usaCaratteri();
 
   useEffect(() => {
     let scollega = () => {};
@@ -69,7 +74,7 @@ export default function App() {
     );
   }
 
-  if (!pronto) {
+  if (!pronto || (!caratteriPronti && !erroreCaratteri)) {
     return (
       <View style={[S.screen, { justifyContent: 'center', alignItems: 'center' }]}>
         <ActivityIndicator size="large" color={COLORS.primary} />
@@ -80,16 +85,17 @@ export default function App() {
   return (
     <NavigationContainer ref={navigazione}
       onReady={() => { if (rottaInAttesa) { const r = rottaInAttesa; rottaInAttesa = null; apriDaNotifica(r); } }}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.primaryDark} />
+      <StatusBar barStyle="dark-content" backgroundColor={COLORS.bg} />
       <Stack.Navigator
         screenOptions={{
-          headerStyle: { backgroundColor: COLORS.primary },
-          headerTintColor: '#fff',
-          headerTitleStyle: { fontWeight: '700' },
+          headerStyle: { backgroundColor: COLORS.bg },
+          headerTintColor: COLORS.text,
+          headerTitleStyle: { fontFamily: 'Manrope_700Bold', fontSize: 20 },
+          headerShadowVisible: false,
           contentStyle: { backgroundColor: COLORS.bg },
         }}
       >
-        <Stack.Screen name="Home" component={HomeScreen} options={{ title: 'Tracciabilità HACCP' }} />
+        <Stack.Screen name="Home" component={PrincipaleScreen} options={{ headerShown: false }} />
         <Stack.Screen name="CaricoMerce" component={CaricoMerceScreen} options={{ title: 'Carico merce' }} />
         <Stack.Screen name="Ricevimento" component={RicevimentoScreen} options={{ title: 'Carico a mano' }} />
         <Stack.Screen name="ImportaFattura" component={ImportaFatturaScreen} options={{ title: 'Importa fattura PDF' }} />
@@ -111,7 +117,7 @@ export default function App() {
         <Stack.Screen name="Ricette" component={RicetteScreen} options={{ title: 'Ricette' }} />
         <Stack.Screen name="Produzioni" component={ProduzioniScreen} options={{ title: 'Produzioni' }} />
         {/* il modulo Menù si carica solo quando lo si apre: un suo problema non tocca il resto dell'app */}
-        <Stack.Screen name="Menu" getComponent={() => require('./MenuScreen').default} options={{ title: 'Menù' }} />
+        <Stack.Screen name="Menu" getComponent={() => require('./MenuScreen').default} options={{ headerShown: false }} />
       </Stack.Navigator>
     </NavigationContainer>
   );

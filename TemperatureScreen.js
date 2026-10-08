@@ -222,7 +222,7 @@ export default function TemperatureScreen({ navigation, route }) {
             const fuori = fatte.some((f) => f.esito !== 'conforme');
             return (
               <View key={p.id} style={[S.card, fatte.length > 0 && {
-                borderLeftWidth: 4, borderLeftColor: fuori ? COLORS.danger : COLORS.ok,
+                borderWidth: 1.5, borderColor: fuori ? COLORS.danger : COLORS.ok,
               }]}>
                 <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.text }}>{p.nome}</Text>
                 <Text style={S.muted}>Limiti {p.temp_min}°C / {p.temp_max}°C</Text>
@@ -244,7 +244,7 @@ export default function TemperatureScreen({ navigation, route }) {
 
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 10 }}>
                   <TextInput
-                    style={[S.input, { flex: 1 }]}
+                    style={[S.input, { flex: 1, minWidth: 0 }]}
                     placeholder={fatte.length ? 'Altra rilevazione °C' : '°C'}
                     accessibilityLabel={`Temperatura di ${p.nome} in gradi`}
                     keyboardType="numbers-and-punctuation"

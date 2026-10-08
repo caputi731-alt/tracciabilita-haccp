@@ -1,6 +1,7 @@
-# Istruzioni per Claude — Tracciabilità HACCP
+# Istruzioni per Claude — Suite Tenuta Coppa (ex Tracciabilità HACCP)
 
-App Android (Expo / React Native) per HACCP e rintracciabilità di un piccolo ristorante.
+App Android (Expo / React Native) del ristorante Tenuta Coppa: HACCP e rintracciabilità, più il modulo Menù.
+Sul telefono si chiama "Tenuta Coppa"; pacchetto e chiave di firma restano quelli dell'app HACCP.
 Funziona completamente offline con SQLite locale. L'APK viene compilato da GitHub Actions
 a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixel e lo testa.
 
@@ -86,13 +87,28 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
 - Struttura schermate: Magazzino contiene anche la rintracciabilità (modalità "In giacenza" / "Tutti i lotti"); la rotta `Rintracciabilita` punta a MagazzinoScreen per compatibilità. `CaricoMerce` è l'ingresso unico verso ImportaFattura e Ricevimento. PDF del lotto in `schedaLotto.js`.
 - Anagrafiche (Prodotti/Fornitori/Ricette/Frigoriferi) e Documenti e dati (Registri PDF/Backup) sono contenitori a linguette: le schermate interne restano file separati e si aprono anche da rotta diretta con `{ scheda: '...' }`.
 
-## Modulo Menù (suite Tenuta Coppa, tappa 1: prototipo)
+## Aspetto e navigazione della suite (tappa 2)
+- Mockup approvato da Luca l'8/10/2026 (Material Design 3, verdi oliva e terracotta): artifact "Suite Tenuta Coppa — Mockup".
+- `PrincipaleScreen.js` è la rotta `Home`: barra in basso con Oggi (`HomeScreen.js`), Magazzino (`MagazzinoScreen.js`),
+  Menù (apre la rotta `Menu` a tutto schermo) e Altro (`AltroScreen.js`, tutte le altre funzioni). Il tasto indietro da
+  Magazzino/Altro torna a Oggi. Quando arriverà la sezione Conti prenderà un posto nella barra.
+- `HomeScreen.js`: riquadro dei controlli di oggi (anello disegnato con due mezzi cerchi, senza librerie grafiche),
+  stato di temperature/pulizie/scadenze, cose da sistemare, prossimo menù (`prossimoMenu` in menuPonte.js) e pulsante "Registra".
+- Carattere Manrope: `caratteri.js` aggancia `Text` e `TextInput` e sceglie il file in base a `fontWeight` (500/700/800).
+  Negli stili si continua a scrivere solo `fontWeight`; non mettere `fontFamily` a mano (tranne nelle intestazioni di navigazione).
+- Schermate interne: intestazione chiara (`COLORS.bg`), senza ombra.
+- Anteprima nel browser per controllare l'aspetto senza telefono: `test/anteprima/vedi.py` (istruzioni nel file).
+  `metro.config.js` serve solo a quello (piattaforma "web") e non cambia l'APK. Usarla prima di ogni modifica visibile.
+- Tema scuro: non ancora fatto (previsto nella tappa 2b). `COLORS` è fisso all'avvio.
+
+## Modulo Menù (suite Tenuta Coppa)
 - La suite nasce da questa app: il Menù (prima app a parte, repository `menu-tenuta-coppa`) entra come modulo.
   Piano completo nel progetto Claude "Suite Tenuta Coppa".
 - `menu/` è l'app web del Menù copiata com'è (HTML/JS puro, niente import: script caricati in ordine da `menu/index.html`).
   Da qui in poi le modifiche al Menù si fanno in questa cartella. `npm run lint` non la controlla.
 - `plugins/conMenu.js` (in `app.json`) copia `menu/` negli asset dell'APK a ogni prebuild e dichiara WhatsApp nel manifest.
-- `MenuScreen.js` mostra `file:///android_asset/menu/index.html` in una WebView (`react-native-webview`). La rotta `Menu`
+- PDF dei menù verticali: `verticaleA4` in `menu/js/03-pagine.js` ricompone la pagina 9:16 nelle proporzioni dell'A4.
+- `MenuScreen.js` mostra `file:///android_asset/menu/index.html` in una WebView (`react-native-webview`), a tutto schermo. La rotta `Menu`
   si carica con `getComponent`, e `menuInvio.js` con `require` al momento dell'uso: un problema del modulo non ferma il resto dell'app.
 - Ponte pagina ↔ suite: `menu/js/00-suite.js` (lato pagina, caricato per primo) e `menuPonte.js` (lato suite, senza dipendenze
   dal telefono, provato in `test/menuPonte.test.mjs`). La pagina manda messaggi JSON `{ tipo, ... }`; la suite risponde
@@ -106,7 +122,9 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
 - Se la compilazione Android fallisce, il passo "Compila l'APK" scrive le righe d'errore nel riepilogo della build.
 
 ## Linee guida UX (pacchetto build 60)
-- Colori: `COLORS.azione` (blu) per pulsanti, collegamenti e scelte attive; il verde (`primary`/`ok`) solo per intestazione e stati positivi.
+- Colori (tavolozza della suite, vedi `theme.js`): `COLORS.azione` è il verde oliva di pulsanti, collegamenti e scelte attive;
+  `COLORS.terra` (terracotta) è l'accento del pulsante "Registra" e delle cose da sistemare; gli stati usano `ok`/`warning`/`danger`
+  e sono sempre scritti anche a parole. Niente bordo colorato solo a sinistra sulle schede: lo stato si mostra con un contorno intero.
 - Testi: `S.muted` 15pt, etichette 13pt; pulsanti ≥ 50px, chip ≥ 46px.
 - Errori di compilazione: `useErrori()` + prop `errore` su `Campo`/`Selettore` + `{riepilogo}` sopra il pulsante. Niente `Alert` per dati mancanti.
 - Registrazioni frequenti (scarico, temperatura, pulizia): nessuna conferma preventiva, avviso con "Annulla" (`mostra(testo, { testo: 'Annulla', onPress })`) e funzioni `annullaUscita` / `annullaTemperatura` / `annullaSanificazione`.
