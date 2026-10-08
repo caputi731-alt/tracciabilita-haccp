@@ -129,13 +129,15 @@ jobs:
       - name: Mostra con quale chiave è firmato l'APK
         run: |
           APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
-          "$APKSIGNER" verify --print-certs dist/*.apk | grep -E "Signer #1 certificate (DN|SHA-256)" | tee firma.txt
+          "$APKSIGNER" verify --print-certs dist/*.apk > firma-completa.txt 2>&1 || true
+          # le righe cambiano con la versione di apksigner ("Signer #1 ..." oppure "Signer (minSdkVersion=...) ..."):
+          # si cercano quelle del certificato, comunque inizino
+          grep -E "certificate (DN|SHA-256 digest)" firma-completa.txt | tee firma.txt || true
           # l'impronta deve essere quella dell'app: altrimenti l'APK non si installerebbe sopra i dati esistenti
-          # si prende la sola impronta (64 cifre esadecimali) dalla riga del certificato, qualunque sia il resto della riga
-          trovata=$(grep "certificate SHA-256" firma.txt | grep -oiE '[0-9a-f]{64}' | head -1 | tr 'A-F' 'a-f' || true)
+          trovata=$(grep "certificate SHA-256 digest" firma.txt | grep -oiE '[0-9a-f]{64}' | tr 'A-F' 'a-f' | sort -u || true)
           attesa=$(printf '%s' "$IMPRONTA_ATTESA" | tr -d ': ' | tr 'A-F' 'a-f')
-          if [ -z "$trovata" ] || [ "$trovata" != "$attesa" ]; then
-            echo "::error::Impronta della firma diversa da quella attesa: l'APK non viene pubblicato. Trovata: ${trovata:-nessuna} - Attesa: $attesa - Righe lette: $(wc -l < firma.txt)"
+          if [ "$trovata" != "$attesa" ]; then
+            echo "::error::Impronta della firma diversa da quella attesa: l'APK non viene pubblicato. Trovata: $(printf '%s' "${trovata:-nessuna}" | tr '\n' ' ') - Attesa: $attesa - Risposta di apksigner: $(head -c 400 firma-completa.txt | tr '\n' '|')"
             exit 1
           fi
           echo "Impronta corretta."
