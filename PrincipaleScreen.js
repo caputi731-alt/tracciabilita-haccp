@@ -1,5 +1,5 @@
 /**
- * Schermata principale della suite: le sezioni "Oggi", "Magazzino", "Menù" e "Altro" con la barra in basso.
+ * Schermata principale della suite: le sezioni "Oggi", "Magazzino", "Sale", "Menù" e "Altro" con la barra in basso.
  * Il Menù (MenuScreen.js, una pagina web) si carica la prima volta che lo si apre e poi resta pronto, nascosto,
  * quando si passa a un'altra sezione: tornandoci lo si ritrova com'era.
  */
@@ -12,10 +12,12 @@ import { Icona, Vuoto } from './UI';
 import HomeScreen from './HomeScreen';
 import MagazzinoScreen from './MagazzinoScreen';
 import AltroScreen from './AltroScreen';
+import SaleScreen from './SaleScreen';
 
 const SEZIONI = [
   { id: 'oggi', titolo: 'Oggi', icona: 'home-variant-outline', iconaAttiva: 'home-variant' },
   { id: 'magazzino', titolo: 'Magazzino', icona: 'package-variant-closed', iconaAttiva: 'package-variant-closed' },
+  { id: 'sale', titolo: 'Sale', icona: 'table-furniture', iconaAttiva: 'table-furniture' },
   { id: 'menu', titolo: 'Menù', icona: 'calendar-month-outline', iconaAttiva: 'calendar-month' },
   { id: 'altro', titolo: 'Altro', icona: 'dots-horizontal', iconaAttiva: 'dots-horizontal' },
 ];
@@ -116,6 +118,15 @@ export default function PrincipaleScreen({ navigation, route }) {
             <MagazzinoScreen navigation={naviga} route={route} />
           </>
         )}
+        {sezione === 'sale' && (
+          <>
+            <Text accessibilityRole="header" style={{
+              fontSize: 28, fontWeight: '700', color: COLORS.text, letterSpacing: -0.6,
+              paddingHorizontal: 20, paddingTop: 20,
+            }}>Sale</Text>
+            <SaleScreen navigation={naviga} route={route} />
+          </>
+        )}
         {menuAperto && (
           <Riparo visibile={sezione === 'menu'}>
             {Menu
@@ -143,7 +154,7 @@ export default function PrincipaleScreen({ navigation, route }) {
                 accessibilityRole="tab" accessibilityState={{ selected: attiva }} accessibilityLabel={s.titolo}
                 style={{ flex: 1, alignItems: 'center', minHeight: 56, justifyContent: 'center' }}>
                 <View style={{
-                  width: 64, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center',
+                  width: 56, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center',
                   backgroundColor: attiva ? COLORS.primarySoft : 'transparent',
                 }}>
                   <Icona nome={attiva ? s.iconaAttiva : s.icona} size={24} colore={attiva ? COLORS.primaryDark : COLORS.muted} />

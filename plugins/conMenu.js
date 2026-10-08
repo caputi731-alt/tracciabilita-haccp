@@ -1,7 +1,7 @@
 /**
  * Plugin di configurazione Expo per il modulo Menù e per la vista delle cucine.
  * Gira durante "expo prebuild" (cioè a ogni build su GitHub) e fa due cose:
- *  1. copia negli asset dell'APK le cartelle menu/ (l'app web del Menù) e cucine/ (la scena 3D delle cucine),
+ *  1. copia negli asset dell'APK le cartelle menu/ (l'app web del Menù), cucine/ e sale/ (le scene 3D di cucine e sale),
  *     dove le WebView le leggono come file:///android_asset/menu/index.html e .../cucine/index.html;
  *  2. dichiara nel manifest che l'app chiede ad Android se WhatsApp è installato
  *     (da Android 11 senza questa dichiarazione la risposta è sempre "no").
@@ -10,8 +10,8 @@ const fs = require('fs');
 const path = require('path');
 const { withDangerousMod, withAndroidManifest } = require('expo/config-plugins');
 
-// cucine/index.html prende il carattere Manrope da ../menu/vendor/fonts: le due cartelle stanno affiancate
-const CARTELLE = ['menu', 'cucine'];
+// cucine/ e sale/ prendono il carattere Manrope da ../menu/vendor/fonts e sale/ prende three.js da ../cucine: le cartelle stanno affiancate
+const CARTELLE = ['menu', 'cucine', 'sale'];
 const PACCHETTI = ['com.whatsapp', 'com.whatsapp.w4b'];
 
 function copiaMenu(config) {

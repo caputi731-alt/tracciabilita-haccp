@@ -1,5 +1,6 @@
 import * as Print from 'expo-print';
 import { fmtData, fmtDataOra, ALLERGENI } from './theme';
+import { disponi, LARGO as LARGO_TAVOLO } from './sale';
 
 const esc = (v) => {
   if (v === null || v === undefined) return '';
@@ -219,6 +220,39 @@ export function htmlPacchettoASL({ temperature, carichi, sanificazioni, nonConfo
   const corpo = indice + sezioni.map(([t, c]) =>
     `<div style="page-break-before: always"></div><h1>${esc(t)}</h1>${c}`).join('');
   return wrapDoc('Documentazione autocontrollo HACCP', corpo, imp, periodoTxt);
+}
+
+/**
+ * Disposizione dei tavoli per i camerieri: una pianta per ogni sala usata (vista dall'alto, in scala) e l'elenco delle tavolate.
+ * sale = [{ sala, piano }] (vedi sale.js).
+ */
+export function htmlDisposizioneSale({ data, servizio, sale = [] }, imp = {}) {
+  const PX = 46; // punti per metro nella pianta
+  const blocchi = sale.map(({ sala, piano }) => ({ sala, d: disponi(sala, piano) })).filter((b) => b.d.tavolate.length > 0);
+  const corpo = blocchi.map(({ sala, d }) => {
+    const w = sala.L * PX, h = sala.W * PX;
+    const tavoli = d.tavolate.map((t) => {
+      const x = (t.x - t.len / 2 + sala.L / 2) * PX, y = (t.z - LARGO_TAVOLO / 2 + sala.W / 2) * PX, tw = t.len * PX, th = LARGO_TAVOLO * PX;
+      const giunti = []; let a = 0;
+      t.pezzi.slice(0, -1).forEach((p) => { a += p; giunti.push(`<line x1="${x + a * PX}" y1="${y}" x2="${x + a * PX}" y2="${y + th}" stroke="#999" stroke-width="1"/>`); });
+      const chi = t.prenotata ? `${t.numeroPersone || '?'} su ${t.posti}` : `${t.posti} posti`;
+      return `<rect x="${x}" y="${y}" width="${tw}" height="${th}" rx="3" fill="${t.prenotata ? '#DCEBD2' : '#fff'}" stroke="${t.troppi ? '#C0392B' : '#222'}" stroke-width="${t.troppi ? 2.5 : 1.3}"/>${giunti.join('')}
+        <text x="${x + tw / 2}" y="${y + th / 2 - 3}" text-anchor="middle" font-size="13" font-weight="700">${esc(t.sigla)}</text>
+        <text x="${x + tw / 2}" y="${y + th / 2 + 11}" text-anchor="middle" font-size="9">${esc(chi)}</text>
+        ${t.nome.trim() ? `<text x="${x + tw / 2}" y="${y - 5}" text-anchor="middle" font-size="10" font-weight="700">${esc(t.nome.trim().slice(0, Math.max(8, Math.round(t.len * 9))))}</text>` : ''}`;
+    }).join('');
+    const tot = d.tavolate.reduce((s, t) => ({ posti: s.posti + t.posti, persone: s.persone + t.numeroPersone, t180: s.t180 + t.t180, t90: s.t90 + t.t90 }), { posti: 0, persone: 0, t180: 0, t90: 0 });
+    const righe = d.tavolate.map((t) => `<tr><td><b>${esc(t.sigla)}</b></td><td>${[t.t180 ? `${t.t180} × 180` : '', t.t90 ? `${t.t90} × 90` : ''].filter(Boolean).join(' + ')}</td>
+      <td>${t.posti}</td><td>${esc(t.nome)}</td><td${t.troppi ? ' class="nc"' : ''}>${t.numeroPersone || ''}</td><td>${esc(t.ora)}</td><td>${esc(t.note)}</td></tr>`).join('');
+    return `<div class="sala"><h2>${esc(sala.nome)}</h2>
+      <div class="kv">${d.tavolate.length} tavolate · ${tot.posti} posti · ${tot.persone} persone prenotate · tavoli: ${tot.t180} da 180, ${tot.t90} da 90</div>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="-6 -16 ${w + 12} ${h + 26}" style="width:${Math.min(100, Math.round(sala.L / 16 * 100))}%;max-height:105mm;display:block;margin:6px auto 8px">
+        <rect x="0" y="0" width="${w}" height="${h}" fill="#F7F5EC" stroke="#222" stroke-width="3"/>${tavoli}</svg>
+      <table><thead><tr><th>Tavolo</th><th>Tavoli uniti</th><th>Posti</th><th>Prenotazione</th><th>Persone</th><th>Ora</th><th>Note</th></tr></thead><tbody>${righe}</tbody></table>
+      ${d.problemi.length ? `<div class="avvisoGiorni"><b>Da controllare:</b> ${d.problemi.map(esc).join(' · ')}</div>` : ''}</div>`;
+  }).join('');
+  const stile = '<style>.sala{page-break-inside:avoid;margin-bottom:14px} h2{font-size:15px;margin:10px 0 2px} .firma{display:none}</style>';
+  return wrapDoc('Disposizione dei tavoli', stile + (corpo || '<p>Nessun tavolo disposto.</p>'), imp, `${fmtData(data)} · ${servizio}`);
 }
 
 export { esc, fmtData, fmtDataOra };

@@ -13,7 +13,7 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
 
 ## Regole vincolanti
 - Struttura piatta: nessuna sottocartella per il codice dell'app (eccezioni: `.github/workflows/`, `test/`,
-  `menu/` con l'app web del Menù, `cucine/` con la scena 3D delle cucine e `plugins/` con i plugin di configurazione Expo).
+  `menu/` con l'app web del Menù, `cucine/` e `sale/` con le scene 3D di cucine e sale, e `plugins/` con i plugin di configurazione Expo).
 - Nomi file in PascalCase esatto (es. `RicevimentoScreen.js`): Linux distingue maiuscole/minuscole.
 - Kotlin resta fissato a 1.9.25 tramite `expo-build-properties` in `app.json`. Non rimuoverlo.
 - `database.js`: prima di ogni commit verificare che non esistano funzioni dichiarate due volte
@@ -104,7 +104,7 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
 ## Aspetto e navigazione della suite (tappa 2)
 - Mockup approvato da Luca l'8/10/2026 (Material Design 3, verdi oliva e terracotta): artifact "Suite Tenuta Coppa — Mockup".
 - `PrincipaleScreen.js` è la rotta `Home`: barra in basso con Oggi (`HomeScreen.js`), Magazzino (`MagazzinoScreen.js`),
-  Menù (`MenuScreen.js`) e Altro (`AltroScreen.js`, tutte le altre funzioni). Il tasto indietro da
+  Sale (`SaleScreen.js`), Menù (`MenuScreen.js`) e Altro (`AltroScreen.js`, tutte le altre funzioni). Il tasto indietro da
   Magazzino/Menù/Altro torna a Oggi. Quando arriverà la sezione Conti prenderà un posto nella barra.
   La barra si nasconde con la tastiera aperta e nelle schermate interne del Menù. Non esiste più la rotta `Menu`:
   le sezioni ricevono una `navigation` in cui `navigate('Menu')` porta alla linguetta.
@@ -142,10 +142,26 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
   8 secondi o dà errore, torna la Home senza mappa con il riquadro grande: deve sempre restare utilizzabile.
 - Prova della pagina: `python3 test/cucine-vista.py [cartella immagini]` (Playwright; gira anche su GitHub prima della build).
   Nell'anteprima del browser (`vedi.py`) la scena si vede davvero, dentro un iframe.
-- Sale (prossimo passo, scelte di Luca): nuova voce "Sale" nella barra in basso; solo gli spazi "sala mensa" delle due piante (sala panoramica
-  e sala antica stalla), niente zone esterne; tavoli 90×90 e 180×90 di solito su due file parallele, con stima realistica dei posti anche per
-  i tavoli uniti; prenotazione scritta sul tavolo (nome, persone, ora); disposizioni come modelli con nome da applicare a data e servizio;
-  per i camerieri dispositivo in sala oppure immagine/PDF su WhatsApp.
+- `Vista3D.js` è la WebView comune alle due scene (cucine e sale): manda i dati, riceve i messaggi, gestisce "il 3D non parte".
+
+## Sale e tavoli (scelte di Luca dell'8/10/2026)
+- Sezione "Sale" nella barra in basso (`SaleScreen.js`): disposizione dei tavoli nelle due sale mensa per un giorno e un servizio
+  (Pranzo/Cena), con la prenotazione scritta sul tavolo (nome, persone, ora, note). Niente anagrafica clienti, niente elenco prenotazioni.
+- `sale.js` (puro, `test/sale.test.mjs`): solo gli spazi "sala mensa" delle due piante, come rettangoli (`SALE`: sala panoramica e sala
+  antica stalla; misure ricavate dalle piante, approssimate, che Luca corregge da "Misure": `salaCon`). Niente zone esterne.
+- Disposizione GUIDATA, non libera (quella libera sarebbe confusionaria): file parallele al lato lungo, in ogni fila delle tavolate
+  (tavoli 180×90 e 90×90 uniti in linea). Luca sceglie quante file, quante tavolate e da quali tavoli sono fatte; le posizioni le calcola
+  `disponi`. Regole fisse: nessun tavolo a meno di 80 cm da un muro (`DAL_MURO`, passano i camerieri: non si può forzare), 1,2 m fra file e
+  fra tavolate (`TRA_TAVOLI`). Il numero di tavoli posseduti non si conosce: nessun limite, si mostra solo quanti ne servono.
+- Posti (`posti`): 80 cm a persona sui lati lunghi più i capotavola; un 90 da solo fa al massimo 3. Più persone dei posti = segnalato
+  in rosso, non bloccato.
+- Tabella `disposizioni` (nel backup, in `TABELLE_NUOVE`), tre tipi di riga: `giorno` (data + servizio, con prenotazioni; ogni modifica
+  si salva subito), `modello` (disposizione con un nome, senza prenotazioni, da applicare a un giorno) e `misure`.
+- `sale/index.html`: la sala in 3D (usa `../cucine/three.min.js`), una sedia per ogni posto stimato, tag con sigla (P1, S3…), nome e
+  persone; vista di sbieco o dall'alto. Riceve `window.__sala(datiScenaSala(...))`, manda `{ tipo: 'tavolata', id }`. Se il 3D non parte
+  la schermata funziona lo stesso dall'elenco. Prova: `python3 test/sale-vista.py` (anche su GitHub prima della build).
+- Per i camerieri: `htmlDisposizioneSale` (report.js) → PDF con pianta dall'alto ed elenco, condiviso con `condividiPdf` (WhatsApp);
+  oppure lo stesso dispositivo tenuto in sala. I telefoni non si sincronizzano fra loro.
 
 ## Modulo Menù (suite Tenuta Coppa)
 - La suite nasce da questa app: il Menù (prima app a parte, repository `menu-tenuta-coppa`) entra come modulo.

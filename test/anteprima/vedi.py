@@ -16,7 +16,7 @@ import shutil
 dist, out = sys.argv[1], sys.argv[2]
 RADICE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # la vista delle cucine (cucine/index.html) e i caratteri che usa, dove li cerca la finta WebView
-for cartella, cosa in (('cucine', ''), ('menu', 'vendor/fonts')):
+for cartella, cosa in (('cucine', ''), ('sale', ''), ('menu', 'vendor/fonts')):
     shutil.copytree(os.path.join(RADICE, cartella, cosa), os.path.join(dist, 'asset', cartella, cosa), dirs_exist_ok=True)
 class Q(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a): pass

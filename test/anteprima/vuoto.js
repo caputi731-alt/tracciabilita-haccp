@@ -8,7 +8,7 @@ const WebView = React.forwardRef(({ source, onMessage, style }, ref) => {
   const ascolta = React.useRef(onMessage); ascolta.current = onMessage;
   React.useImperativeHandle(ref, () => ({ injectJavaScript: (js) => { try { el.current.contentWindow.eval(js); } catch (e) { /* pagina non pronta */ } } }));
   const uri = String((source && source.uri) || '');
-  if (!uri.includes('/cucine/')) return null;
+  if (!uri.includes('/cucine/') && !uri.includes('/sale/')) return null;
   return React.createElement('iframe', {
     ref: el, src: uri.replace('file:///android_asset/', '/asset/'), style: { border: 0, width: '100%', height: '100%' },
     onLoad: () => {

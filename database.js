@@ -1,5 +1,6 @@
 import * as SQLite from 'expo-sqlite';
 import { oggiLocale, piuGiorni, limitiGiorni, giornoDi, daIsoLocale, arrotonda, ALLERGENI } from './utile';
+import { ID_SALE, SERVIZI, pianoPulito, senzaPrenotazioni, totali as totaliSale } from './sale';
 
 let apertura = null;
 
@@ -220,6 +221,16 @@ async function preparaSchema() {
       posto TEXT PRIMARY KEY,
       punto_controllo_id INTEGER REFERENCES punti_controllo(id),
       area_id INTEGER REFERENCES aree_pulizia(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS disposizioni (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tipo TEXT NOT NULL,
+      nome TEXT,
+      data TEXT,
+      servizio TEXT,
+      dati TEXT NOT NULL,
+      aggiornato TEXT
     );
 
     CREATE TABLE IF NOT EXISTS registro_modifiche (
@@ -686,7 +697,7 @@ async function elencoTabelle() {
 const TABELLE_LOCALI = ['preferenze'];
 
 /** Tabelle aggiunte dopo i primi backup: se il backup da ripristinare non le contiene, non vengono svuotate. */
-const TABELLE_NUOVE = ['menu_dati', 'cucina_posti'];
+const TABELLE_NUOVE = ['menu_dati', 'cucina_posti', 'disposizioni'];
 
 export async function esportaTutto() {
   const tabelle = (await elencoTabelle()).filter((t) => !TABELLE_LOCALI.includes(t));
@@ -768,6 +779,80 @@ export async function collegaPosto(posto, { punto_controllo_id = null, area_id =
     `INSERT INTO cucina_posti (posto, punto_controllo_id, area_id) VALUES (?, ?, ?)
      ON CONFLICT(posto) DO UPDATE SET punto_controllo_id = excluded.punto_controllo_id, area_id = excluded.area_id`,
     [id, punto_controllo_id || null, area_id || null]);
+}
+
+/* ---------- sale e tavoli ----------
+   Tabella `disposizioni`, tre tipi di riga: 'giorno' (la disposizione di una data e di un servizio, con le prenotazioni),
+   'modello' (una disposizione con un nome, senza prenotazioni) e 'misure' (le misure delle sale corrette da Luca).
+   `dati` è il JSON { panoramica: piano, stalla: piano } (vedi sale.js). */
+
+const leggiJson = (testo, vuoto) => { try { return JSON.parse(testo); } catch (e) { return vuoto; } };
+const pianiPuliti = (dati, prepara) => {
+  const out = {};
+  ID_SALE.forEach((id) => { out[id] = prepara((dati && dati[id]) || null); });
+  return out;
+};
+
+/** La disposizione salvata per quel giorno e quel servizio, o null se non c'è ancora. */
+export async function disposizioneGiorno(data, servizio) {
+  const r = await queryOne("SELECT dati FROM disposizioni WHERE tipo = 'giorno' AND data = ? AND servizio = ?", [data, servizio]);
+  return r ? pianiPuliti(leggiJson(r.dati, {}), pianoPulito) : null;
+}
+
+export async function salvaDisposizioneGiorno(data, servizio, dati) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(data))) throw new Error('Data non valida');
+  if (!SERVIZI.includes(servizio)) throw new Error('Servizio non valido');
+  const testo = JSON.stringify(pianiPuliti(dati, pianoPulito));
+  const d = await getDb();
+  await d.withTransactionAsync(async () => {
+    const r = await queryOne("SELECT id FROM disposizioni WHERE tipo = 'giorno' AND data = ? AND servizio = ?", [data, servizio]);
+    if (r) await exec('UPDATE disposizioni SET dati = ?, aggiornato = ? WHERE id = ?', [testo, new Date().toISOString(), r.id]);
+    else await exec("INSERT INTO disposizioni (tipo, data, servizio, dati, aggiornato) VALUES ('giorno', ?, ?, ?, ?)", [data, servizio, testo, new Date().toISOString()]);
+  });
+}
+
+/** I giorni (da una data in poi) che hanno una disposizione con almeno una prenotazione: [{ data, servizio, persone, prenotate }]. */
+export async function giorniConPrenotazioni(da) {
+  const righe = await query("SELECT data, servizio, dati FROM disposizioni WHERE tipo = 'giorno' AND data >= ? ORDER BY data, servizio DESC", [da]);
+  return righe.map((r) => {
+    const t = totaliSale(Object.values(pianiPuliti(leggiJson(r.dati, {}), pianoPulito)));
+    return { data: r.data, servizio: r.servizio, persone: t.persone, prenotate: t.prenotate };
+  }).filter((r) => r.prenotate > 0);
+}
+
+/** I modelli salvati, in ordine di nome: [{ id, nome, dati }]. */
+export async function modelliSale() {
+  const righe = await query("SELECT id, nome, dati FROM disposizioni WHERE tipo = 'modello' ORDER BY nome COLLATE NOCASE");
+  return righe.map((r) => ({ id: r.id, nome: r.nome, dati: pianiPuliti(leggiJson(r.dati, {}), pianoPulito) }));
+}
+
+/** Salva la disposizione come modello (senza le prenotazioni); un modello con lo stesso nome viene sostituito. */
+export async function salvaModelloSale(nome, dati) {
+  const n = String(nome || '').trim();
+  if (!n) throw new Error('Scrivi il nome del modello');
+  const testo = JSON.stringify(pianiPuliti(dati, senzaPrenotazioni));
+  const d = await getDb();
+  await d.withTransactionAsync(async () => {
+    await exec("DELETE FROM disposizioni WHERE tipo = 'modello' AND lower(nome) = lower(?)", [n]);
+    await exec("INSERT INTO disposizioni (tipo, nome, dati, aggiornato) VALUES ('modello', ?, ?, ?)", [n, testo, new Date().toISOString()]);
+  });
+}
+
+export const eliminaModelloSale = (id) => exec("DELETE FROM disposizioni WHERE tipo = 'modello' AND id = ?", [id]);
+
+/** Misure delle sale corrette da Luca: { panoramica: { L, W }, stalla: { L, W } } (solo quelle cambiate). */
+export async function misureSale() {
+  const r = await queryOne("SELECT dati FROM disposizioni WHERE tipo = 'misure'");
+  return r ? leggiJson(r.dati, {}) : {};
+}
+
+export async function salvaMisureSale(misure) {
+  const testo = JSON.stringify(misure || {});
+  const d = await getDb();
+  await d.withTransactionAsync(async () => {
+    await exec("DELETE FROM disposizioni WHERE tipo = 'misure'");
+    await exec("INSERT INTO disposizioni (tipo, dati, aggiornato) VALUES ('misure', ?, ?)", [testo, new Date().toISOString()]);
+  });
 }
 
 /* ---------- dati del modulo Menù ----------

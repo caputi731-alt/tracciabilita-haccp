@@ -41,6 +41,9 @@ jobs:
       - name: Prova la vista 3D delle cucine in un browser (attrezzature, etichette, tocchi)
         run: python3 test/cucine-vista.py
 
+      - name: Prova la vista 3D delle sale in un browser (tavolate, sedie, tocchi)
+        run: python3 test/sale-vista.py
+
       - name: Prova a impacchettare tutte le schermate (trova gli errori in un minuto, prima della build Android)
         run: npx expo export --platform android --output-dir "$RUNNER_TEMP/esportazione"
         env:
