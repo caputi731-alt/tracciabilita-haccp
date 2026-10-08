@@ -28,7 +28,7 @@ function renderSheet(){
     const mm=getMenu(ui.editId),have=new Set(mm.sections.map(x=>x.name)),miss=state.categories.filter(c=>!have.has(c));
     h=head('Aggiungi una sezione')+(miss.length?`<div class="list" style="margin-bottom:12px">${miss.map(c=>`<button class="drow" data-a="addSecPick" data-v="${esc(c)}"><span>${esc(c)}</span>${I.plus}</button>`).join('')}</div>`:'')+`
     <div class="pk-new"><input class="inp" id="secnew" placeholder="${miss.length?'Oppure un altro nome':'es. Contorni'}" enterkeyhint="done" autocomplete="off"><button class="btn" data-a="addSecNew">Aggiungi</button></div>
-    <p class="hint">Vale solo per questo menù. Le sezioni dei nuovi menù si decidono in Altro.</p>`;
+    <p class="hint">Vale solo per questo menù. Le sezioni dei nuovi menù si decidono nelle Impostazioni.</p>`;
   }else if(sh.type==='dish'){
     const d=sh.id?state.dishes.find(x=>x.id===sh.id):{name:'',cat:state.categories[0]};
     h=head(sh.id?'Modifica portata':'Nuova portata')+`
@@ -84,6 +84,7 @@ function render(keep){
   const y=window.scrollY;
   const V={cal:vCal,list:vList,dishes:vDishes,settings:vSettings,edit:vEdit,preview:vPreview,tpl:vTpl,ostie:vOstie,didattica:vDidattica};
   $('#app').innerHTML=(V[ui.view]||vCal)();
+  if(window.suiteVista)window.suiteVista(); // dentro la suite: titolo, linguette e barra in basso
   window.scrollTo(0,keep?y:0);
   mountPreviews();
   if(ui.view==='ostie')ui.stampa==='sp'?paintSp():paintOstia();

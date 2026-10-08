@@ -47,7 +47,7 @@ function flush(){
   const{lite,todo}=dehydrate(state);
   return idb.setMany([...[...todo].map(([id,v])=>['blob:'+id,v]),['state',lite]])
     .then(()=>{todo.forEach((v,id)=>blobSaved.add(id));return true})
-    .catch(()=>{if(Date.now()-saveErrT>8000){saveErrT=Date.now();toast('Salvataggio non riuscito: memoria del telefono piena? Fai subito un backup da Altro.')}return false});
+    .catch(()=>{if(Date.now()-saveErrT>8000){saveErrT=Date.now();toast('Salvataggio non riuscito: memoria del telefono piena? Fai subito un backup dalle Impostazioni.')}return false});
 }
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&saveT)flush()});
 // elimina immagini e file non più usati da nessun template

@@ -90,8 +90,10 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
 ## Aspetto e navigazione della suite (tappa 2)
 - Mockup approvato da Luca l'8/10/2026 (Material Design 3, verdi oliva e terracotta): artifact "Suite Tenuta Coppa — Mockup".
 - `PrincipaleScreen.js` è la rotta `Home`: barra in basso con Oggi (`HomeScreen.js`), Magazzino (`MagazzinoScreen.js`),
-  Menù (apre la rotta `Menu` a tutto schermo) e Altro (`AltroScreen.js`, tutte le altre funzioni). Il tasto indietro da
-  Magazzino/Altro torna a Oggi. Quando arriverà la sezione Conti prenderà un posto nella barra.
+  Menù (`MenuScreen.js`) e Altro (`AltroScreen.js`, tutte le altre funzioni). Il tasto indietro da
+  Magazzino/Menù/Altro torna a Oggi. Quando arriverà la sezione Conti prenderà un posto nella barra.
+  La barra si nasconde con la tastiera aperta e nelle schermate interne del Menù. Non esiste più la rotta `Menu`:
+  le sezioni ricevono una `navigation` in cui `navigate('Menu')` porta alla linguetta.
 - `HomeScreen.js`: riquadro dei controlli di oggi (anello disegnato con due mezzi cerchi, senza librerie grafiche),
   stato di temperature/pulizie/scadenze, cose da sistemare, prossimo menù (`prossimoMenu` in menuPonte.js) e pulsante "Registra".
 - Carattere Manrope: `caratteri.js` aggancia `Text` e `TextInput` e sceglie il file in base a `fontWeight` (500/700/800).
@@ -107,9 +109,16 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
 - `menu/` è l'app web del Menù copiata com'è (HTML/JS puro, niente import: script caricati in ordine da `menu/index.html`).
   Da qui in poi le modifiche al Menù si fanno in questa cartella. `npm run lint` non la controlla.
 - `plugins/conMenu.js` (in `app.json`) copia `menu/` negli asset dell'APK a ogni prebuild e dichiara WhatsApp nel manifest.
-- PDF dei menù verticali: `verticaleA4` in `menu/js/03-pagine.js` ricompone la pagina 9:16 nelle proporzioni dell'A4.
-- `MenuScreen.js` mostra `file:///android_asset/menu/index.html` in una WebView (`react-native-webview`), a tutto schermo. La rotta `Menu`
-  si carica con `getComponent`, e `menuInvio.js` con `require` al momento dell'uso: un problema del modulo non ferma il resto dell'app.
+- PDF dei menù verticali: `verticaleA4` in `menu/js/03-pagine.js` ricompone la pagina 9:16 nelle proporzioni dell'A4: larga quanto
+  l'immagine (niente spazio in più ai lati), illustrazione in basso scesa in fondo al foglio, portate almeno il 5% più grandi di prima
+  (se serve stringe spazi e interlinea con `--sp` e `--lh`).
+- `MenuScreen.js` mostra `file:///android_asset/menu/index.html` in una WebView (`react-native-webview`) come sezione di
+  `PrincipaleScreen` (proprietà `attiva`, `comandi`, `suEsci`, `suVista`); una volta aperta resta caricata e nascosta.
+  Si carica con `require` alla prima apertura dentro il riparo `Riparo`, e `menuInvio.js` al momento dell'uso: un problema del modulo non ferma il resto dell'app.
+- Aspetto del Menù nella suite: `menu/css/suite.css` (vale con la classe `suite` su `<html>`, messa da `00-suite.js`): colori, Manrope
+  e forme di `theme.js`; la barra delle sezioni del Menù diventa una riga di linguette in alto (Calendario, Proposte, Stampe, Didattica,
+  Impostazioni). Se cambia la tavolozza in `theme.js` va aggiornata anche lì. Le pagine dei menù (`.pg`) non devono cambiare:
+  lo controlla `test/menu-suite.py`. Dopo ogni disegno la pagina chiama `window.suiteVista()` e manda `{ tipo: 'vista', profonda }`.
 - Ponte pagina ↔ suite: `menu/js/00-suite.js` (lato pagina, caricato per primo) e `menuPonte.js` (lato suite, senza dipendenze
   dal telefono, provato in `test/menuPonte.test.mjs`). La pagina manda messaggi JSON `{ tipo, ... }`; la suite risponde
   eseguendo `window.__suiteRisposta(id, ok, valore)`.

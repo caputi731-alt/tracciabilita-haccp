@@ -202,7 +202,7 @@ async function applyBackup(text){
     if(!obj||!Array.isArray(obj.menus)||!Array.isArray(obj.dishes))throw new Error('Il file non è un backup di questa app.');
     if(obj.v!==2&&obj.v!==3)throw new Error("Questo backup viene da una versione diversa dell'app: aggiorna l'app e riprova.");
   }catch(err){toast(err instanceof SyntaxError?'Il file non è un backup di questa app.':(err.message||'File non valido'));return}
-  if(!await ask({title:'Importare il backup?',text:`Contiene ${obj.menus.length} menù e ${obj.dishes.length} portate e sostituisce i dati attuali.\n\nQuelli di adesso vengono messi da parte: puoi riprenderli da Altro → Backup.`,ok:'Importa'}))return;
+  if(!await ask({title:'Importare il backup?',text:`Contiene ${obj.menus.length} menù e ${obj.dishes.length} portate e sostituisce i dati attuali.\n\nQuelli di adesso vengono messi da parte: puoi riprenderli da Impostazioni → Backup.`,ok:'Importa'}))return;
   await swapState(obj,'Backup importato');
 }
 // sostituisce i dati tenendo da parte quelli attuali (un solo livello di "annulla")

@@ -1,13 +1,14 @@
 /**
- * Schermata principale della suite: le sezioni "Oggi", "Magazzino" e "Altro" con la barra in basso.
- * "Menù" apre il modulo Menù a tutto schermo (ha già la sua barra in basso).
+ * Schermata principale della suite: le sezioni "Oggi", "Magazzino", "Menù" e "Altro" con la barra in basso.
+ * Il Menù (MenuScreen.js, una pagina web) si carica la prima volta che lo si apre e poi resta pronto, nascosto,
+ * quando si passa a un'altra sezione: tornandoci lo si ritrova com'era.
  */
-import React, { useCallback, useState } from 'react';
-import { View, Text, TouchableOpacity, BackHandler } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, TouchableOpacity, BackHandler, Keyboard } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { COLORS } from './theme';
-import { Icona } from './UI';
+import { COLORS, S } from './theme';
+import { Icona, Vuoto } from './UI';
 import HomeScreen from './HomeScreen';
 import MagazzinoScreen from './MagazzinoScreen';
 import AltroScreen from './AltroScreen';
@@ -19,65 +20,137 @@ const SEZIONI = [
   { id: 'altro', titolo: 'Altro', icona: 'dots-horizontal', iconaAttiva: 'dots-horizontal' },
 ];
 
+/** Un problema del modulo Menù (file mancante, errore nel disegno) resta chiuso qui: il resto dell'app continua a funzionare. */
+class Riparo extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { rotto: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { rotto: true };
+  }
+
+  render() {
+    if (!this.state.rotto) return this.props.children;
+    if (!this.props.visibile) return null;
+    return (
+      <View style={[S.screen, { justifyContent: 'center' }]}>
+        <Vuoto icona="alert-circle-outline" titolo="Il menù non si è aperto"
+          testo="Le altre sezioni funzionano normalmente." azione="Riprova" onAzione={() => this.setState({ rotto: false })} />
+      </View>
+    );
+  }
+}
+
+/** Il modulo si legge solo quando serve; se manca qualcosa, null. */
+function moduloMenu() {
+  try {
+    return require('./MenuScreen').default;
+  } catch (e) {
+    return null;
+  }
+}
+
 export default function PrincipaleScreen({ navigation, route }) {
   const [sezione, setSezione] = useState('oggi');
+  const [menuAperto, setMenuAperto] = useState(false); // il Menù è stato aperto almeno una volta
+  const [menuProfondo, setMenuProfondo] = useState(false); // schermata interna del Menù (modifica, anteprima...)
+  const [tastiera, setTastiera] = useState(false);
+  const comandiMenu = useRef(null);
+  const mostrata = useRef('oggi');
   const margini = useSafeAreaInsets();
 
-  // tasto indietro di Android: da Magazzino o Altro si torna a Oggi, da Oggi si esce dall'app
+  const vai = useCallback(async (id) => {
+    if (id === 'menu') setMenuAperto(true);
+    // uscendo dal Menù le ultime modifiche vengono scritte prima di mostrare il resto
+    else if (mostrata.current === 'menu' && comandiMenu.current) await comandiMenu.current.salva();
+    mostrata.current = id;
+    setSezione(id);
+  }, []);
+
+  // tasto indietro di Android: nel Menù chiude prima quello che è aperto lì; dalle altre sezioni si torna a Oggi,
+  // da Oggi si esce dall'app
   useFocusEffect(useCallback(() => {
     const ascolto = BackHandler.addEventListener('hardwareBackPress', () => {
       if (sezione === 'oggi') return false;
-      setSezione('oggi');
+      if (sezione === 'menu' && comandiMenu.current && comandiMenu.current.indietro()) return true;
+      vai('oggi');
       return true;
     });
     return () => ascolto.remove();
-  }, [sezione]));
+  }, [sezione, vai]));
 
-  const scegli = (id) => {
-    if (id === 'menu') navigation.navigate('Menu');
-    else setSezione(id);
-  };
+  // con la tastiera aperta la barra in basso lascia il posto a quello che si sta scrivendo
+  useEffect(() => {
+    const su = Keyboard.addListener('keyboardDidShow', () => setTastiera(true));
+    const giu = Keyboard.addListener('keyboardDidHide', () => setTastiera(false));
+    return () => { su.remove(); giu.remove(); };
+  }, []);
+
+  // per le sezioni la rotta "Menu" è la linguetta del Menù
+  const naviga = useMemo(() => ({
+    ...navigation,
+    navigate: (rotta, parametri) => (rotta === 'Menu' ? vai('menu') : navigation.navigate(rotta, parametri)),
+  }), [navigation, vai]);
+
+  const esciDalMenu = useCallback(() => vai('oggi'), [vai]);
+  const Menu = menuAperto ? moduloMenu() : null;
+  const barra = !tastiera && !(sezione === 'menu' && menuProfondo);
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.bg }}>
-      <View style={{ flex: 1, paddingTop: margini.top }}>
-        {sezione === 'oggi' && <HomeScreen navigation={navigation} route={route} />}
+      <View style={{ flex: 1, paddingTop: margini.top, paddingBottom: barra || tastiera ? 0 : margini.bottom }}>
+        {sezione === 'oggi' && <HomeScreen navigation={naviga} route={route} />}
         {sezione === 'magazzino' && (
           <>
             <Text accessibilityRole="header" style={{
               fontSize: 28, fontWeight: '700', color: COLORS.text, letterSpacing: -0.6,
               paddingHorizontal: 20, paddingTop: 20, paddingBottom: 4,
             }}>Magazzino</Text>
-            <MagazzinoScreen navigation={navigation} route={route} />
+            <MagazzinoScreen navigation={naviga} route={route} />
           </>
         )}
-        {sezione === 'altro' && <AltroScreen navigation={navigation} route={route} />}
+        {menuAperto && (
+          <Riparo visibile={sezione === 'menu'}>
+            {Menu
+              ? <Menu attiva={sezione === 'menu'} comandi={comandiMenu} suEsci={esciDalMenu} suVista={setMenuProfondo} />
+              : sezione === 'menu' && (
+                <View style={[S.screen, { justifyContent: 'center' }]}>
+                  <Vuoto icona="alert-circle-outline" titolo="Il menù non si è aperto" testo="Le altre sezioni funzionano normalmente." />
+                </View>
+              )}
+          </Riparo>
+        )}
+        {sezione === 'altro' && <AltroScreen navigation={naviga} route={route} />}
       </View>
 
-      <View accessibilityRole="tablist" style={{
-        flexDirection: 'row', backgroundColor: COLORS.contenitore, paddingTop: 12,
-        paddingBottom: 12 + margini.bottom,
-      }}>
-        {SEZIONI.map((s) => {
-          const attiva = s.id === sezione;
-          return (
-            <TouchableOpacity key={s.id} onPress={() => scegli(s.id)} activeOpacity={0.7}
-              accessibilityRole="tab" accessibilityState={{ selected: attiva }} accessibilityLabel={s.titolo}
-              style={{ flex: 1, alignItems: 'center', minHeight: 56, justifyContent: 'center' }}>
-              <View style={{
-                width: 64, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center',
-                backgroundColor: attiva ? COLORS.primarySoft : 'transparent',
-              }}>
-                <Icona nome={attiva ? s.iconaAttiva : s.icona} size={24} colore={attiva ? COLORS.primaryDark : COLORS.muted} />
-              </View>
-              <Text style={{
-                fontSize: 13, marginTop: 4, fontWeight: attiva ? '700' : '500',
-                color: attiva ? COLORS.primaryDark : COLORS.muted,
-              }}>{s.titolo}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+      {barra && (
+        <View accessibilityRole="tablist" style={{
+          flexDirection: 'row', backgroundColor: COLORS.contenitore, paddingTop: 12,
+          paddingBottom: 12 + margini.bottom,
+        }}>
+          {SEZIONI.map((s) => {
+            const attiva = s.id === sezione;
+            return (
+              <TouchableOpacity key={s.id} onPress={() => vai(s.id)} activeOpacity={0.7}
+                accessibilityRole="tab" accessibilityState={{ selected: attiva }} accessibilityLabel={s.titolo}
+                style={{ flex: 1, alignItems: 'center', minHeight: 56, justifyContent: 'center' }}>
+                <View style={{
+                  width: 64, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center',
+                  backgroundColor: attiva ? COLORS.primarySoft : 'transparent',
+                }}>
+                  <Icona nome={attiva ? s.iconaAttiva : s.icona} size={24} colore={attiva ? COLORS.primaryDark : COLORS.muted} />
+                </View>
+                <Text style={{
+                  fontSize: 13, marginTop: 4, fontWeight: attiva ? '700' : '500',
+                  color: attiva ? COLORS.primaryDark : COLORS.muted,
+                }}>{s.titolo}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
     </View>
   );
 }

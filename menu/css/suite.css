@@ -1,0 +1,61 @@
+/* Aspetto del Menù dentro la suite Tenuta Coppa: stessi colori, carattere e forme delle altre sezioni (vedi theme.js).
+   Vale solo con la classe "suite" su <html>, messa da js/00-suite.js; le pagine dei menù (.pg) non cambiano. */
+@font-face{font-family:Manrope;font-style:normal;font-weight:100 500;font-display:swap;src:url(../vendor/fonts/Manrope_500Medium.ttf) format('truetype')}
+@font-face{font-family:Manrope;font-style:normal;font-weight:600 700;font-display:swap;src:url(../vendor/fonts/Manrope_700Bold.ttf) format('truetype')}
+@font-face{font-family:Manrope;font-style:normal;font-weight:800 900;font-display:swap;src:url(../vendor/fonts/Manrope_800ExtraBold.ttf) format('truetype')}
+
+html.suite{--paper:#F6F5EC;--ink:#1B1D17;--muted:#5B5F52;--line:#E4E3D6;--olive:#2F4F23;--olive-2:#1A3310;--olive-soft:#D7E8C6;--wine:#B3261E;--r:20px;
+  --cont:#ECEBDD;--campo:#8A8E7E;--terra:#9C4524;--alto:60px}
+html.suite,html.suite body{font-family:Manrope,system-ui,sans-serif}
+/* le pagine dei menù restano com'erano: carattere e colore di partenza dell'app originale */
+/* (:where non aggiunge peso alla regola: i caratteri propri di ogni tipo di pagina, .pg-v .pg-c .pg-l, continuano a vincere) */
+:where(html.suite .pg,html.suite #rh){font-family:Figtree,system-ui,sans-serif;color:#22281F}
+
+/* intestazione: titolo come nelle altre sezioni, senza riga sotto */
+html.suite .top{background:var(--paper);-webkit-backdrop-filter:none;backdrop-filter:none;border-bottom:0;height:var(--alto);min-height:var(--alto);padding:8px 12px 8px 20px}
+html.suite .top h1{font:700 28px/1.15 Manrope,sans-serif;letter-spacing:-.6px}
+html.suite.profonda .top h1{font-size:20px;letter-spacing:-.2px}
+html.suite .tb{border:0;background:var(--cont);color:var(--olive-2);font-weight:700;min-height:44px;padding:10px 18px}
+
+/* le sezioni del Menù diventano linguette in alto: la barra in basso è quella della suite */
+html.suite .nav{top:var(--alto);bottom:auto;background:var(--paper);border-top:0;padding:2px 16px 10px;gap:8px;overflow-x:auto;scrollbar-width:none}
+html.suite .nav::-webkit-scrollbar{display:none}
+html.suite .nav button{flex:none;flex-direction:row;min-height:46px;padding:0 18px;border-radius:23px;background:var(--cont);font-size:14px;font-weight:500;color:var(--muted)}
+html.suite .nav button.on{background:var(--olive-soft);color:var(--olive-2);font-weight:700}
+html.suite .nav svg{display:none}
+html.suite .main{padding-bottom:100px}
+html.suite.con-nav .main{padding-top:66px}
+html.suite .fab{bottom:18px;border-radius:18px;background:var(--terra);box-shadow:0 4px 12px rgba(92,36,16,.3)}
+html.suite .toast{bottom:92px;border-radius:14px;font-weight:500}
+html.suite .toast button{color:var(--olive-soft)}
+html.suite .busy{background:rgba(246,245,236,.94)}
+
+/* titoli: Manrope al posto del corsivo */
+html.suite .grp>h2{font:700 13px/1.2 Manrope,sans-serif;letter-spacing:.3px}
+html.suite .calh h2{font:700 20px/1.2 Manrope,sans-serif;letter-spacing:-.2px}
+html.suite .dh,html.suite .dcat{font:700 18px/1.25 Manrope,sans-serif}
+html.suite .sec-h h3{font:700 17px/1.2 Manrope,sans-serif}
+html.suite .sh-h h3,html.suite .dlg h3{font:700 20px/1.2 Manrope,sans-serif;letter-spacing:-.2px}
+html.suite .mc-date b{font:800 24px/1 Manrope,sans-serif}
+html.suite .mc-t,html.suite .pk.on,html.suite .tchip.on{font-weight:700}
+
+/* schede senza contorno, pulsanti e campi come nel resto della suite */
+html.suite .card,html.suite .mcard,html.suite .sec,html.suite .list,html.suite .fcard{border-color:transparent}
+html.suite .mcard{padding:14px;margin-bottom:10px}
+html.suite .day{border-color:transparent;border-radius:14px}
+html.suite .day.sel{border-color:var(--olive);background:var(--olive-soft)}
+html.suite .day.today .dn{color:var(--terra);font-weight:800}
+html.suite .btn{min-height:50px;border-radius:26px;border-color:var(--campo);font-weight:700;color:var(--olive);padding:12px 18px}
+html.suite .btn.pri{background:var(--olive);border-color:var(--olive);color:#fff}
+html.suite .btn.danger{color:var(--wine)}
+html.suite .btn.danger-f{background:var(--wine);border-color:var(--wine);color:#fff}
+html.suite .inp{border-color:var(--campo);border-radius:14px;min-height:50px;padding:12px 14px}
+html.suite .inp:focus{border-color:var(--olive)}
+html.suite .seg{background:var(--cont);border-radius:26px;padding:4px;gap:0}
+html.suite .seg button{min-height:48px;border-radius:22px;font-weight:500;color:var(--muted);padding:6px}
+html.suite .seg button.on{background:var(--olive-soft);box-shadow:none;color:var(--olive-2);font-weight:700}
+html.suite .add{font-weight:700}
+html.suite .stat button,html.suite .chips button,html.suite .algs button{border-color:var(--campo);min-height:46px}
+html.suite .algs button.on{border-color:var(--olive)}
+html.suite .sheet{border-radius:28px 28px 0 0}
+html.suite .dlg{border-radius:28px}

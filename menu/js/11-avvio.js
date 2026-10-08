@@ -10,7 +10,7 @@
     if(s&&s.v!==2&&s.v!==3){
       // dati di una versione che questa app non conosce: li metto da parte invece di cancellarli
       await idb.set('scartato-'+Date.now(),s);s=null;
-      setTimeout(()=>toast('I dati salvati non sono leggibili da questa versione: ne ho tenuta una copia in Altro → Backup'),600);
+      setTimeout(()=>toast('I dati salvati non sono leggibili da questa versione: ne ho tenuta una copia in Impostazioni → Backup'),600);
     }else s=await hydrate(s);
     const ks=await idb.keys();
     ui.scartati=ks.filter(k=>String(k).startsWith('scartato-')).sort();ui.preImport=ks.includes('prima-importazione');

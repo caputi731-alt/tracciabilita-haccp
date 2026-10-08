@@ -116,8 +116,6 @@ export default function App() {
         <Stack.Screen name="NonConformita" component={NonConformitaScreen} options={{ title: 'Non conformità' }} />
         <Stack.Screen name="Ricette" component={RicetteScreen} options={{ title: 'Ricette' }} />
         <Stack.Screen name="Produzioni" component={ProduzioniScreen} options={{ title: 'Produzioni' }} />
-        {/* il modulo Menù si carica solo quando lo si apre: un suo problema non tocca il resto dell'app */}
-        <Stack.Screen name="Menu" getComponent={() => require('./MenuScreen').default} options={{ headerShown: false }} />
       </Stack.Navigator>
     </NavigationContainer>
   );

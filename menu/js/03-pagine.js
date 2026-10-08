@@ -151,9 +151,11 @@ function fitPageRaw(pg){
     while(ti.scrollWidth>ti.clientWidth+1&&fs>26){fs--;ti.style.fontSize=fs+'px'}
     const f=pg.querySelector('.v-flow'),inn=f.firstElementChild,a4=pg.classList.contains('a4');
     const stringi=()=>{let k=1,n=0;inn.style.fontSize='19px';while(inn.offsetHeight>f.clientHeight&&k>.45&&n++<90){k*=.97;inn.style.fontSize=(19*k)+'px'}return k};
-    inn.style.removeProperty('--sp');let k=stringi();
-    // Sul foglio A4 (PDF) un menù lungo stringe prima gli stacchi fra le sezioni di un quinto, e solo dopo rimpicciolisce le scritte.
+    inn.style.removeProperty('--sp');inn.style.removeProperty('--lh');let k=stringi();
+    // Sul foglio A4 (PDF) un menù lungo stringe prima gli stacchi fra le sezioni e l'interlinea, e solo dopo
+    // rimpicciolisce le scritte: così la pagina può essere ingrandita fino a riempire la larghezza del foglio.
     if(k<1&&a4){inn.style.setProperty('--sp','.8');k=stringi()}
+    if(k<1&&a4){inn.style.setProperty('--sp','.6');inn.style.setProperty('--lh','1.3');k=stringi()}
     // Menù che non riempie la pagina: il testo cresce (al massimo del 30%) finché occupa lo spazio libero sopra
     // l'illustrazione. Se a spaziatura normale non arriva al massimo, gli stacchi fra le sezioni si stringono
     // di un quinto e riprova: a quel punto conta di più la grandezza delle scritte.
@@ -165,8 +167,12 @@ function fitPageRaw(pg){
     // riuscirci il testo scende fino al limite previsto dal template, accanto all'illustrazione.
     if(a4&&f._prima&&parseFloat(inn.style.fontSize)<f._prima-.05){const era=inn.style.fontSize,sp=inn.style.getPropertyValue('--sp');
       inn.style.fontSize=f._prima+'px';
-      if(inn.offsetHeight>f.clientHeight){inn.style.setProperty('--sp','.8');
-        if(inn.offsetHeight>f.clientHeight){inn.style.fontSize=era;if(sp)inn.style.setProperty('--sp',sp);else inn.style.removeProperty('--sp')}}}
+      const lh=inn.style.getPropertyValue('--lh');
+      if(inn.offsetHeight>f.clientHeight)inn.style.setProperty('--sp','.8');
+      if(inn.offsetHeight>f.clientHeight){inn.style.setProperty('--sp','.6');inn.style.setProperty('--lh','1.3')}
+      if(inn.offsetHeight>f.clientHeight){inn.style.fontSize=era;
+        if(sp)inn.style.setProperty('--sp',sp);else inn.style.removeProperty('--sp');
+        if(lh)inn.style.setProperty('--lh',lh);else inn.style.removeProperty('--lh')}}
   }else{
     const cols=[...pg.querySelectorAll('.e-col')];
     cols.forEach(c=>{const h=c.querySelector('.e-h');let fs=19.5;h.style.whiteSpace='nowrap';h.style.top='103px';h.style.fontSize=fs+'px';
@@ -244,8 +250,9 @@ async function makeBookletSheet(m,holes){
 // Menù verticale su foglio A4. Il verticale (9:16) è più stretto dell'A4: messo sul foglio a tutta altezza lascia due fasce
 // vuote ai lati, e scritte e illustrazione vengono piccole rispetto alla carta. Per il PDF la pagina viene quindi ricomposta
 // nelle proporzioni dell'A4: si recupera lo spazio bianco (in alto, e fra il testo e l'illustrazione) e si ingrandisce tutto
-// insieme — titolo, portate, illustrazione — finché le portate ci stanno senza diventare più piccole di prima.
-// Un menù corto arriva a occupare tutta la larghezza del foglio (+26%); uno lungo cresce di meno. L'immagine JPG non cambia.
+// insieme — titolo, portate, illustrazione — fino a occupare tutta la larghezza del foglio (+26%), come nell'immagine.
+// Un menù lungo, per starci, stringe stacchi e interlinea; la pagina si allarga solo finché le portate restano
+// almeno il 5% più grandi di prima sul foglio. L'immagine JPG non cambia.
 // Restituisce l'ingrandimento applicato (1 = pagina invariata).
 const A4_R=210/297,A4_SU=55; // A4_SU: quanto sale l'intestazione, che nel 9:16 ha molto bianco sopra
 // riga (su 1440) da cui parte il disegno in fondo a ogni illustrazione: sopra quella riga il testo non la tocca
@@ -261,7 +268,7 @@ function verticaleA4(pg,t){
     const u=bg.style.backgroundImage.replace(/"/g,"'"),pezzo=()=>`<div style="position:absolute;width:${L.w}px;overflow:hidden"><div class="pg-bg" style="height:${L.h}px;background-image:${u}"></div></div>`;
     bg.insertAdjacentHTML('afterend',pezzo()+pezzo());alto=bg.nextElementSibling;basso=alto.nextElementSibling;bg.remove();
   }
-  pg.classList.add('a4');f._prima=prima;
+  pg.classList.add('a4');
   pg.querySelectorAll('.v-venue,.v-title,.v-date,.v-flow').forEach(e=>{e.style.top=(parseFloat(getComputedStyle(e).top)-A4_SU)+'px'});
   const ti=pg.querySelector('.v-title'),su=parseFloat(f.style.top);
   const posa=sc=>{const H=L.h/sc,W=H*A4_R,x=(W-L.w)/2;
@@ -270,10 +277,15 @@ function verticaleA4(pg,t){
       basso.style.cssText+=`;left:${x}px;top:${H-sotto}px;height:${sotto}px`;basso.firstElementChild.style.top=(sotto-L.h)+'px'}
     if(ti){ti.style.left=(x+24)+'px';ti.style.right=(x+24)+'px'}
     f.style.left=(x+40)+'px';f.style.right=(x+40)+'px';f.style.height=(H-su-(L.h-lim))+'px';f._pulito=H-su-(L.h-arte);
-    fitPageRaw(pg);return parseFloat(inn.style.fontSize)>=prima-.05&&inn.offsetHeight<=f.clientHeight};
+    // va bene se sul foglio le portate escono almeno il 5% più grandi di prima (sc ingrandisce anche loro);
+    // f._prima è la grandezza a cui fitPageRaw porta il testo anche scendendo accanto all'illustrazione
+    f._prima=Math.min(prima*(piu||1.05)/sc,19*V_GROW);
+    fitPageRaw(pg);return parseFloat(inn.style.fontSize)>=f._prima-.05&&inn.offsetHeight<=f.clientHeight};
+  let piu=0;
   if(posa(sMax))return sMax;
-  let lo=1,hi=sMax;for(let i=0;i<7;i++){const mid=(lo+hi)/2;if(posa(mid))lo=mid;else hi=mid}
-  posa(lo);return lo;
+  let lo=1,hi=sMax,ok=false;for(let i=0;i<7;i++){const mid=(lo+hi)/2;if(posa(mid)){lo=mid;ok=true}else hi=mid}
+  if(ok){posa(lo);return lo}
+  piu=1;posa(1);return 1; // nessun ingrandimento possibile: foglio A4 con le portate grandi come prima
 }
 // forPrint: risoluzione più alta (circa 290–370 dpi sul foglio) per i PDF da stampare; per WhatsApp resta quella leggera
 async function makePDF(m,mode,asCanvas,forPrint){

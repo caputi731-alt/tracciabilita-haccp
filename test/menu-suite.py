@@ -143,14 +143,39 @@ with sync_playwright() as p:
         ok(a4 and abs(r['img'][0] - 595.28) < 0.5 and abs(r['img'][1] - 841.89) < 0.5 and r['img'][2] < 0.5 and not r['over'],
            f"menù verticale {nome}: il PDF è un A4 e il menù lo occupa tutto, senza fasce ai lati")
         ok(r['jpg'] == [1620, 2880], f"menù verticale {nome}: l'immagine JPG resta nel formato 9:16 di sempre")
-    ok(abs(corto['sc'] - 1.257) < 0.005 and corto['dopo'] > corto['prima'] * 1.25,
-       f"menù corto: scritte e illustrazione ingrandite del {round((corto['sc'] - 1) * 100)}% sul foglio")
-    ok(lungo['sc'] > 1.03 and lungo['dopo'] > lungo['prima'] * 1.03,
-       f"menù lungo: scritte più grandi di prima anche a pagina piena (+{round((lungo['dopo'] / lungo['prima'] - 1) * 100)}%)")
+    # il foglio ricomposto è largo quanto l'immagine 9:16 (ingrandimento 1,257 = niente spazio in più ai lati)
+    # e le portate escono comunque più grandi di prima
+    for nome, r in (('corto', corto), ('lungo', lungo)):
+        ok(abs(r['sc'] - 1.257) < 0.005 and r['dopo'] > r['prima'] * 1.045,
+           f"menù {nome}: pagina larga come l'immagine e portate più grandi di prima (+{round((r['dopo'] / r['prima'] - 1) * 100)}%)")
     mio = pg.evaluate("""async()=>{const t={...getTpl('tpl-pecore'),id:'tpl-foto',builtIn:false,bgImage:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII='};
       state.templates.push(t);const m={...getMenu('m1'),templateId:'tpl-foto'},h=document.getElementById('rh');h.innerHTML=pageHTML(m,t,'tavolo','it');
       const sc=verticaleA4(h.firstElementChild,t);h.innerHTML='';state.templates.pop();return sc}""")
     ok(mio == 1, 'template con uno sfondo caricato da te: la pagina resta quella di sempre')
+
+    # ---------- aspetto della suite: linguette in alto, barra della suite nascosta nelle schermate interne ----------
+    pg.evaluate("ui.view='cal';render()")
+    asp = pg.evaluate("""()=>{const n=document.querySelector('.nav').getBoundingClientRect(),c=getComputedStyle(document.body);
+      return{suite:document.documentElement.classList.contains('suite'),alto:n.top,basso:innerHeight-n.bottom,carattere:c.fontFamily,
+        titolo:document.querySelector('.top h1').textContent,voci:[...document.querySelectorAll('.nav button')].map(b=>b.textContent)}}""")
+    ok(asp['suite'] and asp['carattere'].startswith('Manrope') and asp['titolo'] == 'Menù', 'dentro la suite: carattere e titolo come le altre sezioni')
+    ok(asp['alto'] < 80 and asp['basso'] > 300 and asp['voci'] == ['Calendario', 'Proposte', 'Stampe', 'Didattica', 'Impostazioni'],
+       'le sezioni del Menù sono linguette in alto (in basso resta solo la barra della suite)')
+    pg.evaluate("window.__ricevuti.length=0;openEditor('m1')")
+    dentro = pg.evaluate("window.__ricevuti.filter(m=>m.tipo==='vista').map(m=>m.profonda)")
+    pg.evaluate("window.__ricevuti.length=0;window.appBack()")
+    fuori = pg.evaluate("window.__ricevuti.filter(m=>m.tipo==='vista').map(m=>m.profonda)")
+    ok(dentro == [True] and fuori == [False], 'modifica di un menù: la suite viene avvisata di nascondere e poi rimostrare la barra in basso')
+    # le pagine dei menù (quello che si stampa e si invia) non devono cambiare di una virgola con il nuovo aspetto
+    STILI = """()=>{const out=[],h=document.getElementById('rh');
+      for(const t of state.templates)for(const mode of ['tavolo','proposta']){const m={...getMenu('m1'),templateId:t.id};h.innerHTML=pageHTML(m,tplOf(m),mode,'it');
+        h.querySelectorAll('.pg,.pg *').forEach(e=>{const c=getComputedStyle(e);out.push([e.className,c.fontFamily,c.fontWeight,c.fontSize,c.lineHeight,c.color].join('|'))})}
+      h.innerHTML='';return out}"""
+    con = pg.evaluate(STILI)
+    pg.evaluate("document.documentElement.classList.remove('suite')")
+    senza = pg.evaluate(STILI)
+    pg.evaluate("document.documentElement.classList.add('suite')")
+    ok(len(con) > 300 and con == senza, f'pagine dei menù identiche a prima in tutti i template ({len(con)} elementi confrontati)')
 
     ricevuti.clear()
     pg.evaluate("""async()=>{const m=getMenu('m1');const f=[await waFile(m,'proposta','pdf'),await waFile(m,'proposta','jpg')];

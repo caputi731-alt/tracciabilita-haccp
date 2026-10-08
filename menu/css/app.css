@@ -168,7 +168,7 @@ select.inp{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.
 .v-sec-t{font-size:1.5105em;font-weight:700;line-height:1.174;margin-bottom:calc(.54em*var(--sp,1))}
 .v-sec+.v-sec .v-sec-t{margin-top:calc(1.36em*var(--sp,1))}
 .v-sec+.v-sec.nt{margin-top:calc(2.05em*var(--sp,1))}
-.v-it{line-height:1.421;margin-bottom:calc(.3em*var(--sp,1));white-space:pre-line;text-wrap:balance}
+.v-it{line-height:var(--lh,1.421);margin-bottom:calc(.3em*var(--sp,1));white-space:pre-line;text-wrap:balance}
 .v-foot{margin-top:calc(2.25em*var(--sp,1));font-size:.926em;line-height:1.364;white-space:pre-line}
 .v-notes{margin-top:.8em;font-size:.9em;font-style:italic}
 .v-empty,.e-empty{opacity:.45;font-style:italic}

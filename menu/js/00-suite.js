@@ -72,6 +72,26 @@
     });
   };
 
+  // Aspetto: dentro la suite la pagina prende colori, carattere e forme delle altre sezioni (css/suite.css)
+  document.documentElement.classList.add('suite');
+  window.NELLA_SUITE = true;
+  // Chiamata dopo ogni disegno della pagina (render in 09-fogli.js). Nelle schermate principali il titolo è "Menù" e
+  // le sezioni stanno nelle linguette; in quelle interne (modifica, anteprima...) la suite nasconde la sua barra in basso.
+  let ultima = null;
+  window.suiteVista = () => {
+    const nav = document.querySelector('.nav');
+    const cl = document.documentElement.classList;
+    cl.toggle('con-nav', !!nav);
+    cl.toggle('profonda', !nav);
+    if (nav) {
+      const h = document.querySelector('.top h1');
+      if (h) h.textContent = 'Menù';
+      const on = nav.querySelector('.on');
+      if (on && on.scrollIntoView) on.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
+    if (ultima !== !nav) { ultima = !nav; invia('vista', { profonda: !nav }); }
+  };
+
   // tasto indietro di Android: la suite chiede se l'app web lo ha gestito
   window.__suiteIndietro = () => {
     let gestito = false;

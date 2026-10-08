@@ -4,7 +4,8 @@
 /* ---------- Componenti ---------- */
 const topbar=inner=>`<header class="top">${inner}</header>`;
 function navbar(){
-  const it=[['cal','Calendario',I.cal],['list','Menù',I.list],['ostie','Stampe',I.ost],['didattica','Didattica',I.farm],['settings','Altro',I.gear]];
+  // dentro la suite "Menù" e "Altro" sono già nomi della barra in basso: qui le linguette si chiamano in un altro modo
+  const S=window.NELLA_SUITE,it=[['cal','Calendario',I.cal],['list',S?'Proposte':'Menù',I.list],['ostie','Stampe',I.ost],['didattica','Didattica',I.farm],['settings',S?'Impostazioni':'Altro',I.gear]];
   const cur=ui.view==='dishes'?'settings':ui.view;
   return`<nav class="nav">${it.map(([v,l,ic])=>`<button class="${cur===v?'on':''}" data-a="nav" data-v="${v}">${ic}<span>${l}</span></button>`).join('')}</nav>`;
 }
@@ -156,7 +157,7 @@ function vEdit(){
     <button class="btn wide" style="margin:2px 0 10px" data-a="addSec">${I.plus}Aggiungi una sezione</button>
     ${ev?'':`<label class="tog"><input type="checkbox" data-fc="showSections" ${m.showSections!==false?'checked':''}>Stampa i titoli (Antipasti, Primi Piatti…)</label>`}
     <label class="tog"><input type="checkbox" data-fc="allergens" ${m.allergens?'checked':''}>Indica gli allergeni accanto alle portate</label>
-    <p class="hint">Le sezioni vuote non compaiono. Tocca una portata per modificarla solo in questo menù. Gli allergeni si impostano nell'archivio portate (Altro → Archivio portate).</p>
+    <p class="hint">Le sezioni vuote non compaiono. Tocca una portata per modificarla solo in questo menù. Gli allergeni si impostano nell'archivio portate (Impostazioni → Archivio portate).</p>
   </section>
   ${ev||lb?`<section class="grp"><h2>Menù bambini</h2>
     <label class="tog"><input type="checkbox" data-fc="kids" data-re="1" ${m.kids!==false?'checked':''}>Includi il menù bambini</label>
