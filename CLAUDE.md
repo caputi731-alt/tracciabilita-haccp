@@ -13,7 +13,7 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
 
 ## Regole vincolanti
 - Struttura piatta: nessuna sottocartella per il codice dell'app (eccezioni: `.github/workflows/`, `test/`,
-  `menu/` con l'app web del Menù e `plugins/` con i plugin di configurazione Expo).
+  `menu/` con l'app web del Menù, `cucine/` con la scena 3D delle cucine e `plugins/` con i plugin di configurazione Expo).
 - Nomi file in PascalCase esatto (es. `RicevimentoScreen.js`): Linux distingue maiuscole/minuscole.
 - Kotlin resta fissato a 1.9.25 tramite `expo-build-properties` in `app.json`. Non rimuoverlo.
 - `database.js`: prima di ogni commit verificare che non esistano funzioni dichiarate due volte
@@ -121,6 +121,24 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
   `caratteri.js` dà `COLORS.text` ai testi senza colore (non a quelli dentro un altro testo). PDF, etichette e pagine dei menù restano chiari.
   Il Menù riceve `scuro` dalla suite e usa la parte "Tema scuro" di `menu/css/suite.css`. Controllare sempre entrambi i temi:
   `SCHEMI=dark,light python3 test/anteprima/vedi.py …`. Finestre di sistema (Alert, barra di navigazione di Android) non ancora adattate.
+
+## Cucine in 3D nella sezione Oggi (scelta di Luca dell'8/10/2026: è la schermata principale)
+- `cucine.js` (puro, `test/cucine.test.mjs`): `CUCINE` = pianta delle due cucine dallo schizzo di Luca (misure in metri), `POSTI` = le
+  attrezzature, ognuna con un id fisso (`g9`, `p1`…): non cambiarli, sono la chiave dei collegamenti salvati. `statiCucine` calcola per
+  ogni attrezzatura colore ed etichetta (`crit` temperatura fuori limite, `fare` temperatura di oggi mancante o pulizia da fare, `ok`, `neutro`).
+- Tabella `cucina_posti` (posto → `punto_controllo_id` e/o `area_id`; `collegamentiCucina`, `collegaPosto`): è nel backup e in `TABELLE_NUOVE`.
+  Per ora solo temperature, pulizie e non conformità: il contenuto dei frigoriferi (lotti per posizione) è rimandato, scelta di Luca.
+- `cucine/index.html` + `cucine/three.min.js` (three r128, copiato da npm): la scena, pagina a sé copiata negli asset da `plugins/conMenu.js`
+  (usa i caratteri di `../menu/vendor/fonts`). Riceve `window.__cucine(datiScena(...))` e manda `{ tipo: 'pronta' | 'senza3d' | 'errore' |
+  'posto', id | 'pavimento', cucina }`. Disegna solo quando qualcosa cambia; l'inquadratura si adatta da sola alla forma del riquadro (`adatta`).
+  I colori sono quelli di `theme.js` scritti a mano: se cambia la tavolozza vanno aggiornati anche lì.
+- `CucineVista.js` (WebView) e `SchedaPosto.js` (scheda dell'attrezzatura toccata: registra temperatura e pulizia con le funzioni di sempre,
+  collega/scollega). In `HomeScreen.js` la scena sta ferma in alto e il resto scorre sotto; toccare il pavimento o "Magazzino" apre la
+  linguetta Magazzino (`navigate('SezioneMagazzino')`, vedi PrincipaleScreen). Se il 3D non parte entro 8 secondi o dà errore, la Home torna
+  quella senza cucine con il riquadro grande dei controlli: deve sempre restare utilizzabile.
+- Prova della pagina: `python3 test/cucine-vista.py [cartella immagini]` (Playwright; gira anche su GitHub prima della build).
+  Nell'anteprima del browser (`vedi.py`) la scena si vede davvero, dentro un iframe.
+- Sale e disposizione dei tavoli: da fare quando Luca manda le piantine (anche uno schizzo a penna con le misure).
 
 ## Modulo Menù (suite Tenuta Coppa)
 - La suite nasce da questa app: il Menù (prima app a parte, repository `menu-tenuta-coppa`) entra come modulo.

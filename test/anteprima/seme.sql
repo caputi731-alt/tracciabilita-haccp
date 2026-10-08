@@ -12,3 +12,4 @@ UPDATE lotti SET prezzo_unitario = CASE prodotto_id WHEN 1 THEN 9.5 WHEN 2 THEN 
 UPDATE prodotti SET fornitore_abituale_id = 1, allergeni_verificati = 1;
 INSERT INTO ricette (nome, porzioni) VALUES ('Orecchiette con burrata', 10), ('Agnello al forno', 4);
 INSERT INTO ricetta_ingredienti (ricetta_id, prodotto_id, quantita, unita_misura) VALUES (1,2,1,'kg'),(1,1,800,'g'),(2,3,1.4,'kg');
+INSERT INTO cucina_posti (posto, punto_controllo_id, area_id) VALUES ('g9',1,NULL),('g1',2,NULL),('p1',3,NULL),('g8',4,NULL),('g17',NULL,2),('g11a',NULL,1);

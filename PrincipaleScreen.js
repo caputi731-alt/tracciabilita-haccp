@@ -91,10 +91,12 @@ export default function PrincipaleScreen({ navigation, route }) {
     return () => { su.remove(); giu.remove(); };
   }, []);
 
-  // per le sezioni la rotta "Menu" è la linguetta del Menù
+  // per le sezioni la rotta "Menu" è la linguetta del Menù e "SezioneMagazzino" quella del Magazzino
+  // ("Magazzino" resta la schermata a parte, con la freccia per tornare indietro)
   const naviga = useMemo(() => ({
     ...navigation,
-    navigate: (rotta, parametri) => (rotta === 'Menu' ? vai('menu') : navigation.navigate(rotta, parametri)),
+    navigate: (rotta, parametri) => (rotta === 'Menu' ? vai('menu')
+      : rotta === 'SezioneMagazzino' ? vai('magazzino') : navigation.navigate(rotta, parametri)),
   }), [navigation, vai]);
 
   const esciDalMenu = useCallback(() => vai('oggi'), [vai]);

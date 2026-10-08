@@ -216,6 +216,12 @@ async function preparaSchema() {
       valore TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS cucina_posti (
+      posto TEXT PRIMARY KEY,
+      punto_controllo_id INTEGER REFERENCES punti_controllo(id),
+      area_id INTEGER REFERENCES aree_pulizia(id)
+    );
+
     CREATE TABLE IF NOT EXISTS registro_modifiche (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       tabella TEXT NOT NULL,
@@ -680,7 +686,7 @@ async function elencoTabelle() {
 const TABELLE_LOCALI = ['preferenze'];
 
 /** Tabelle aggiunte dopo i primi backup: se il backup da ripristinare non le contiene, non vengono svuotate. */
-const TABELLE_NUOVE = ['menu_dati'];
+const TABELLE_NUOVE = ['menu_dati', 'cucina_posti'];
 
 export async function esportaTutto() {
   const tabelle = (await elencoTabelle()).filter((t) => !TABELLE_LOCALI.includes(t));
@@ -747,6 +753,22 @@ export async function leggiPreferenza(chiave) {
 export const salvaPreferenza = (chiave, valore) =>
   exec(`INSERT INTO preferenze (chiave, valore) VALUES (?, ?)
         ON CONFLICT(chiave) DO UPDATE SET valore = excluded.valore`, [chiave, valore]);
+
+/* ---------- vista delle cucine ----------
+   Ogni attrezzatura della pianta (i "posti" di cucine.js) può essere collegata a un frigorifero e/o a un'area di pulizia. */
+
+export const collegamentiCucina = () => query('SELECT * FROM cucina_posti');
+
+/** Collega un'attrezzatura a un frigorifero e/o a un'area di pulizia; senza nessuno dei due il collegamento si toglie. */
+export async function collegaPosto(posto, { punto_controllo_id = null, area_id = null } = {}) {
+  const id = String(posto || '').trim();
+  if (!id) throw new Error('Attrezzatura non valida');
+  if (!punto_controllo_id && !area_id) return exec('DELETE FROM cucina_posti WHERE posto = ?', [id]);
+  return exec(
+    `INSERT INTO cucina_posti (posto, punto_controllo_id, area_id) VALUES (?, ?, ?)
+     ON CONFLICT(posto) DO UPDATE SET punto_controllo_id = excluded.punto_controllo_id, area_id = excluded.area_id`,
+    [id, punto_controllo_id || null, area_id || null]);
+}
 
 /* ---------- dati del modulo Menù ----------
    L'app web del Menù salva qui il suo archivio (prima stava in IndexedDB): coppie chiave → testo JSON.

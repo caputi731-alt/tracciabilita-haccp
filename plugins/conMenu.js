@@ -1,8 +1,8 @@
 /**
- * Plugin di configurazione Expo per il modulo Menù.
+ * Plugin di configurazione Expo per il modulo Menù e per la vista delle cucine.
  * Gira durante "expo prebuild" (cioè a ogni build su GitHub) e fa due cose:
- *  1. copia la cartella menu/ (l'app web del Menù) negli asset dell'APK, dove la WebView la legge
- *     come file:///android_asset/menu/index.html;
+ *  1. copia negli asset dell'APK le cartelle menu/ (l'app web del Menù) e cucine/ (la scena 3D delle cucine),
+ *     dove le WebView le leggono come file:///android_asset/menu/index.html e .../cucine/index.html;
  *  2. dichiara nel manifest che l'app chiede ad Android se WhatsApp è installato
  *     (da Android 11 senza questa dichiarazione la risposta è sempre "no").
  */
@@ -10,18 +10,22 @@ const fs = require('fs');
 const path = require('path');
 const { withDangerousMod, withAndroidManifest } = require('expo/config-plugins');
 
+// cucine/index.html prende il carattere Manrope da ../menu/vendor/fonts: le due cartelle stanno affiancate
+const CARTELLE = ['menu', 'cucine'];
 const PACCHETTI = ['com.whatsapp', 'com.whatsapp.w4b'];
 
 function copiaMenu(config) {
   return withDangerousMod(config, ['android', async (cfg) => {
-    const origine = path.join(cfg.modRequest.projectRoot, 'menu');
-    const destinazione = path.join(cfg.modRequest.platformProjectRoot, 'app', 'src', 'main', 'assets', 'menu');
-    if (!fs.existsSync(path.join(origine, 'index.html'))) {
-      throw new Error('Modulo Menù: manca menu/index.html, la cartella menu/ non è completa.');
+    for (const cartella of CARTELLE) {
+      const origine = path.join(cfg.modRequest.projectRoot, cartella);
+      const destinazione = path.join(cfg.modRequest.platformProjectRoot, 'app', 'src', 'main', 'assets', cartella);
+      if (!fs.existsSync(path.join(origine, 'index.html'))) {
+        throw new Error(`Manca ${cartella}/index.html: la cartella ${cartella}/ non è completa.`);
+      }
+      fs.rmSync(destinazione, { recursive: true, force: true });
+      fs.mkdirSync(destinazione, { recursive: true });
+      fs.cpSync(origine, destinazione, { recursive: true });
     }
-    fs.rmSync(destinazione, { recursive: true, force: true });
-    fs.mkdirSync(destinazione, { recursive: true });
-    fs.cpSync(origine, destinazione, { recursive: true });
     return cfg;
   }]);
 }

@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Cucine</title>
+<style>
+/* Scena 3D delle cucine, mostrata dentro la suite da CucineVista.js. Colori di theme.js: se cambia la tavolozza va aggiornata anche qui. */
+@font-face{font-family:Manrope;font-weight:100 500;src:url(../menu/vendor/fonts/Manrope_500Medium.ttf) format('truetype')}
+@font-face{font-family:Manrope;font-weight:600 900;src:url(../menu/vendor/fonts/Manrope_800ExtraBold.ttf) format('truetype')}
+:root{--a:#EEF1E4;--b:#D9DECB;--carta:#FFFFFF;--testo:#1B1D17;--tenue:#5B5F52;--attivo:#D7E8C6}
+:root.scuro{--a:#262A1F;--b:#171A13;--carta:#1D2017;--testo:#E6E5D9;--tenue:#B0B3A4;--attivo:#2C4721}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overflow:hidden;background:linear-gradient(var(--a),var(--b));font-family:Manrope,system-ui,sans-serif;-webkit-user-select:none;user-select:none}
+canvas{display:block;width:100%;height:100%;touch-action:none}
+.vista{position:fixed;left:10px;top:10px;display:flex;gap:2px;background:var(--carta);border-radius:999px;padding:4px;box-shadow:0 2px 8px rgba(0,0,0,.14)}
+.vista button{border:0;background:none;border-radius:999px;padding:0 14px;min-height:40px;font:700 14px Manrope,system-ui,sans-serif;color:var(--tenue)}
+.vista button[aria-pressed="true"]{background:var(--attivo);color:var(--testo)}
+.zoom{position:fixed;right:10px;top:10px;display:flex;flex-direction:column;gap:6px}
+.zoom button{width:44px;height:44px;border-radius:14px;border:0;background:var(--carta);color:var(--testo);font:700 20px Manrope,system-ui,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.14)}
+</style>
+</head>
+<body>
+<div class="vista" role="group" aria-label="Inquadratura">
+  <button type="button" id="v-tutte" aria-pressed="true">Tutte</button>
+  <button type="button" id="v-grande" aria-pressed="false">Grande</button>
+  <button type="button" id="v-piccola" aria-pressed="false">Piccola</button>
+</div>
+<div class="zoom">
+  <button type="button" id="z-piu" aria-label="Avvicina">+</button>
+  <button type="button" id="z-meno" aria-label="Allontana">−</button>
+</div>
+<script src="three.min.js"></script>
+<script>
+'use strict';
+/* La suite manda disposizione e stati con window.__cucine(dati) (vedi datiScena in cucine.js) e riceve:
+   { tipo:'pronta' } · { tipo:'senza3d' } · { tipo:'posto', id } · { tipo:'pavimento', cucina } */
+(function(){
+  window.__inviati = [];
+  const invia = (m) => { window.__inviati.push(m); const RN = window.ReactNativeWebView; if (RN && RN.postMessage) RN.postMessage(JSON.stringify(m)); };
+  const no3d = () => { document.body.innerHTML = ''; invia({ tipo: 'senza3d' }); };
+  if (!window.THREE) return no3d();
+  const canvas = document.createElement('canvas');
+  let renderer;
+  try { renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true }); } catch (e) { return no3d(); }
+  document.body.insertBefore(canvas, document.body.firstChild);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+  const scene = new THREE.Scene(), FOV = 30, cam = new THREE.PerspectiveCamera(FOV, 1.2, 0.1, 300);
+  const S = (c, o) => new THREE.MeshStandardMaterial(Object.assign({ color: c, metalness: .15, roughness: .55 }, o || {}));
+  const m = { steel: S(0xc3c8cc), top: S(0xe2e5e7, { roughness: .35 }), plinth: S(0x5a5f58, { metalness: 0 }), dark: S(0x33372f, { metalness: 0, roughness: .6 }),
+    glass: S(0x1c2119, { roughness: .15 }), white: S(0xf2f3ef, { metalness: 0 }), burner: S(0x141511, { metalness: 0, roughness: .8 }),
+    blueGlass: S(0xa9d4de, { emissive: 0x2f6470, roughness: .2 }), wall: S(0xf4f1e4, { metalness: 0, roughness: .9 }), wallTop: S(0x2f4f23, { metalness: 0, roughness: .7 }) };
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x9aa08c, 0.85));
+  const sun = new THREE.DirectionalLight(0xffffff, 0.6); sun.position.set(-4, 14, 9); sun.castShadow = true;
+  const sc = sun.shadow.camera; sc.left = -14; sc.right = 14; sc.top = 12; sc.bottom = -12; sc.near = 1; sc.far = 50; sun.shadow.mapSize.set(1024, 1024); sun.shadow.bias = -0.0006; scene.add(sun);
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(60, 40), new THREE.ShadowMaterial({ opacity: .16 })); ground.rotation.x = -Math.PI / 2; ground.position.y = -0.13; ground.receiveShadow = true; scene.add(ground);
+
+  function tile(base, grout, n){
+    const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d'); g.fillStyle = grout; g.fillRect(0, 0, 256, 256); const st = 256 / n;
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) { g.fillStyle = base[(i + j) % base.length]; g.fillRect(i * st + 1.5, j * st + 1.5, st - 3, st - 3); }
+    const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
+  }
+  function wallSegs(len, doors){ const ds = doors.map(d => [d.a0, d.a1]).sort((a, b) => a[0] - b[0]); const out = []; let p = 0; ds.forEach(([a, b]) => { if (a > p + 1e-6) out.push([p, a]); p = b; }); if (p < len - 1e-6) out.push([p, len]); return out; }
+
+  function buildUnit(it, w, t){
+    const g = new THREE.Group(); let h = 0.9;
+    const B = (W, H, T, mat, x, y, z, par) => { const me = new THREE.Mesh(new THREE.BoxGeometry(W, H, T), mat); me.position.set(x, y, z); me.castShadow = me.receiveShadow = true; (par || g).add(me); return me; };
+    const Cy = (r, H, mat, x, y, z, par) => { const me = new THREE.Mesh(new THREE.CylinderGeometry(r, r, H, 20), mat); me.position.set(x, y, z); me.castShadow = true; (par || g).add(me); return me; };
+    const f = t / 2;
+    const table = (W, par) => { B(W - 0.06, 0.1, t - 0.08, m.plinth, 0, 0.05, 0, par); B(W, 0.74, t - 0.02, m.steel, 0, 0.47, 0, par); B(W + 0.02, 0.05, t + 0.02, m.top, 0, 0.865, 0, par);
+      const n = Math.max(1, Math.round(W / 0.65)); for (let i = 0; i < n; i++) { if (i) B(0.012, 0.68, 0.012, m.plinth, -W / 2 + i * W / n, 0.47, f - 0.006, par); B(0.14, 0.02, 0.02, m.dark, -W / 2 + (i + .5) * W / n, 0.74, f, par); } };
+    const basins = (W, k, par) => { const bw = Math.min(0.45, W / k * 0.72); for (let i = 0; i < k; i++) B(bw, 0.02, t * 0.55, m.dark, -W / 2 + (i + .5) * W / k, 0.885, 0.02, par);
+      B(W, 0.12, 0.02, m.top, 0, 0.95, -f + 0.01, par); Cy(0.016, 0.3, m.top, 0, 1.04, -f + 0.09, par); B(0.022, 0.022, 0.2, m.top, 0, 1.19, -f + 0.18, par); };
+    switch (it.type) {
+      case 'table': table(w); break;
+      case 'sink': table(w); basins(w, 2); h = 1.2; break;
+      case 'sinkdw': { const ws = w * 0.55, wd = w - ws, a = new THREE.Group(), b = new THREE.Group(); a.position.x = -w / 2 + ws / 2; b.position.x = w / 2 - wd / 2; g.add(a, b);
+        table(ws, a); basins(ws, 1, a); B(wd, 0.85, t - 0.02, m.steel, 0, 0.445, 0, b); B(wd + 0.02, 0.05, t + 0.02, m.top, 0, 0.895, 0, b);
+        B(wd - 0.1, 0.55, 0.012, m.top, 0, 0.38, f - 0.006, b); B(wd - 0.1, 0.1, 0.012, m.dark, 0, 0.77, f - 0.006, b); h = 1.2; break; }
+      case 'range': { B(w - 0.06, 0.1, t - 0.08, m.plinth, 0, 0.05, 0); B(w, 0.8, t - 0.02, m.steel, 0, 0.5, 0); B(w, 0.04, t, m.dark, 0, 0.92, 0);
+        const dx = Math.min(w / 4, 0.5), dz = t / 4.4, r = Math.min(0.12, t / 6.5); [-dx, dx].forEach(x => [-dz, dz].forEach(z => { Cy(r, 0.03, m.burner, x, 0.955, z); Cy(r * 0.45, 0.04, m.top, x, 0.955, z); }));
+        B(w - 0.06, 0.07, 0.012, m.dark, 0, 0.85, f - 0.006); if (it.oven) { const ow = Math.min(w - 0.2, 0.85); B(ow, 0.42, 0.012, m.glass, 0, 0.5, f - 0.006); B(ow * 0.9, 0.02, 0.03, m.top, 0, 0.76, f + 0.01); } h = 0.98; break; }
+      case 'griddle': B(w - 0.06, 0.1, t - 0.08, m.plinth, 0, 0.05, 0); B(w, 0.78, t - 0.02, m.steel, 0, 0.49, 0); B(w, 0.05, t, m.top, 0, 0.9, 0);
+        B(w - 0.12, 0.03, t - 0.2, m.dark, 0, 0.94, 0.03); B(w - 0.1, 0.1, 0.02, m.steel, 0, 0.97, -f + 0.06); h = 1.02; break;
+      case 'tower': B(w, 1.75, t - 0.02, m.steel, 0, 0.875, 0); B(w - 0.1, 0.08, 0.012, m.dark, 0, 1.65, f - 0.006); B(w - 0.2, 0.5, 0.012, m.glass, 0, 1.3, f - 0.006);
+        B(w - 0.3, 0.02, 0.03, m.top, 0, 1.58, f + 0.01); B(w - 0.12, 0.7, 0.012, m.top, 0, 0.5, f - 0.006); B(0.02, 0.4, 0.03, m.dark, w / 2 - 0.14, 0.5, f + 0.01); h = 1.75; break;
+      case 'vetrina': B(w, 2.0, t - 0.02, m.dark, 0, 1.0, 0); B(w - 0.1, 1.5, 0.012, m.blueGlass, 0, 0.95, f - 0.006); B(w - 0.1, 0.18, 0.012, m.white, 0, 1.86, f - 0.006);
+        for (let i = 0; i < 4; i++) B(w - 0.1, 0.015, 0.016, m.dark, 0, 0.45 + i * 0.33, f - 0.004); h = 2.0; break;
+      case 'fridge': B(w, 2.05, t - 0.02, m.steel, 0, 1.025, 0); B(w - 0.06, 0.2, 0.012, m.dark, 0, 1.92, f - 0.006);
+        if (w > 1.1) { B(0.012, 1.7, 0.012, m.plinth, 0, 0.93, f - 0.006); [-0.07, 0.07].forEach(x => B(0.02, 0.5, 0.03, m.dark, x, 1.0, f + 0.01)); } else B(0.02, 0.5, 0.03, m.dark, w / 2 - 0.1, 1.0, f + 0.01); h = 2.05; break;
+      case 'chest': B(w, 0.8, t - 0.02, m.white, 0, 0.42, 0); B(w + 0.01, 0.07, t, m.top, 0, 0.855, 0); B(0.3, 0.03, 0.03, m.dark, 0, 0.855, f + 0.01); h = 0.9; break;
+    }
+    return { g, h };
+  }
+
+  const TINTE = { ok: '#2F6B2A', crit: '#B3261E', fare: '#9C4524', neutro: '#5B5F52' };
+  function etichetta(testo, c, icona){
+    const cv = document.createElement('canvas'); cv.width = 512; cv.height = 112; const g = cv.getContext('2d');
+    g.font = '800 50px Manrope, system-ui, sans-serif'; const tw = g.measureText(testo).width, w = Math.min(500, tw + 96), x0 = 256 - w / 2, r = 44;
+    g.beginPath(); g.moveTo(x0 + r, 12); g.arcTo(x0 + w, 12, x0 + w, 100, r); g.arcTo(x0 + w, 100, x0, 100, r); g.arcTo(x0, 100, x0, 12, r); g.arcTo(x0, 12, x0 + w, 12, r); g.closePath();
+    const pieno = c === 'crit' || icona;
+    g.fillStyle = pieno ? (icona ? '#2F4F23' : TINTE.crit) : '#ffffff'; g.fill(); g.lineWidth = 5; g.strokeStyle = icona ? '#2F4F23' : TINTE[c]; g.stroke();
+    g.fillStyle = pieno ? '#ffffff' : TINTE[c]; g.beginPath(); g.arc(x0 + 40, 56, 13, 0, 7); g.fill();
+    g.fillStyle = pieno ? '#ffffff' : '#1B1D17'; g.textBaseline = 'middle'; g.fillText(testo, x0 + 64, 59, w - 80);
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthTest: false, transparent: true })); sp.renderOrder = 10;
+    sp.userData.base = [3.2, 0.7]; sp.scale.set(3.2, 0.7, 1); return sp;
+  }
+  function targa(testo, scuro){
+    const cv = document.createElement('canvas'); cv.width = 512; cv.height = 96; const g = cv.getContext('2d');
+    g.font = '800 54px Manrope, system-ui, sans-serif'; g.fillStyle = scuro ? '#C9E0B5' : '#2F4F23'; g.textBaseline = 'middle'; g.fillText(testo.toUpperCase(), 8, 52, 496);
+    const me = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 0.79), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true })); me.rotation.x = -Math.PI / 2; return me;
+  }
+
+  let bersagli = [], perId = {}, centri = {}, gruppi = [], scelto = null, costruita = false, sporco = true;
+  const rot = { up: Math.PI, down: 0, right: Math.PI / 2, left: -Math.PI / 2 };
+  function costruisci(cucine, scuro){
+    Object.keys(cucine).forEach(k => {
+      const K = cucine[k], L = K.L, D = K.D, G = new THREE.Group(); G.position.set(K.ox + L / 2, 0, 0); scene.add(G); gruppi.push(G); centri[k] = new THREE.Vector3(K.ox + L / 2, 0.6, 0);
+      const base = new THREE.Mesh(new THREE.BoxGeometry(L + 0.4, 0.12, D + 0.4), S(0x4a4f45, { metalness: 0 })); base.position.y = -0.065; base.castShadow = true; G.add(base);
+      const ft = tile(['#b9bdb0', '#b2b6a9'], '#9a9e92', 2); ft.repeat.set(L, D);
+      const floor = new THREE.Mesh(new THREE.PlaneGeometry(L, D), new THREE.MeshStandardMaterial({ map: ft, roughness: .85 })); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; floor.userData.cucina = k; G.add(floor); bersagli.push(floor);
+      const WH = 1.05, TH = 0.12;
+      ['front', 'back', 'left', 'right'].forEach(wn => {
+        const horiz = wn === 'front' || wn === 'back', len = horiz ? L : D, h = (wn === 'front' || wn === 'right') ? 0.45 : WH;
+        wallSegs(len, K.doors.filter(d => d.wall === wn)).forEach(([a, b]) => {
+          const l = b - a, mid = (a + b) / 2;
+          const w = new THREE.Mesh(new THREE.BoxGeometry(horiz ? l : TH, h, horiz ? TH : l), m.wall), c = new THREE.Mesh(new THREE.BoxGeometry(horiz ? l : TH + 0.02, 0.06, horiz ? TH + 0.02 : l), m.wallTop);
+          const px = horiz ? mid - L / 2 : (wn === 'left' ? -L / 2 - TH / 2 : L / 2 + TH / 2), pz = horiz ? (wn === 'front' ? D / 2 + TH / 2 : -D / 2 - TH / 2) : D / 2 - mid;
+          w.position.set(px, h / 2, pz); c.position.set(px, h + 0.03, pz); w.castShadow = w.receiveShadow = true; G.add(w, c);
+        });
+      });
+      const t = targa(K.nome, scuro); t.position.set(-L / 2 + 2.2, 0.005, D / 2 + 0.75); G.add(t);
+      if (K.magazzino) { // il magazzino si apre toccando il pavimento: l'etichetta al centro lo ricorda
+        const sp = etichetta('Magazzino', 'ok', true); sp.position.set(K.magazzino.x - L / 2, 0.75, D / 2 - K.magazzino.d); sp.userData.cucina = k; G.add(sp); bersagli.push(sp);
+        perId['magazzino-' + k] = { sp, fisso: true };
+      }
+      K.items.forEach(it => {
+        const along = it.face === 'up' || it.face === 'down', w = along ? it.x[1] - it.x[0] : it.d[1] - it.d[0], th = along ? it.d[1] - it.d[0] : it.x[1] - it.x[0];
+        const u = buildUnit(it, w, th), cx = (it.x[0] + it.x[1]) / 2 - L / 2, cz = D / 2 - (it.d[0] + it.d[1]) / 2;
+        u.g.position.set(cx, 0, cz); u.g.rotation.y = rot[it.face]; G.add(u.g);
+        u.g.traverse(o => { if (o.isMesh) { o.userData.id = it.id; bersagli.push(o); } });
+        const box = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(it.x[1] - it.x[0] + 0.12, u.h + 0.12, it.d[1] - it.d[0] + 0.12)), new THREE.LineBasicMaterial({ color: 0x9C4524 }));
+        box.position.set(cx, u.h / 2, cz); box.visible = false; G.add(box);
+        const alone = new THREE.Mesh(new THREE.PlaneGeometry(it.x[1] - it.x[0] + 0.5, it.d[1] - it.d[0] + 0.5), new THREE.MeshBasicMaterial({ color: 0x9C4524, transparent: true, opacity: .28 }));
+        alone.rotation.x = -Math.PI / 2; alone.position.set(cx, 0.012, cz); alone.visible = false; G.add(alone);
+        perId[it.id] = { G, sp: null, box, alone, pos: [cx, u.h + 0.55, cz], breve: undefined, c: undefined };
+      });
+    });
+    const tutti = Object.keys(cucine).map(k => cucine[k]);
+    Object.keys(cucine).forEach(k => { const K = cucine[k]; scatole[k] = [K.ox - 0.3, K.ox + K.L + 0.3, -K.D / 2 - 0.3, K.D / 2 + 1.2]; });
+    scatole.tutte = [Math.min(...tutti.map(K => K.ox)) - 0.3, Math.max(...tutti.map(K => K.ox + K.L)) + 0.3, -Math.max(...tutti.map(K => K.D)) / 2 - 0.3, Math.max(...tutti.map(K => K.D)) / 2 + 1.2];
+    TUTTO.set((scatole.tutte[0] + scatole.tutte[1]) / 2, 0.6, 0.3);
+    costruita = true; resize();
+  }
+  /* le etichette si rifanno solo dove lo stato è cambiato */
+  function aggiornaStati(stati){
+    Object.keys(stati || {}).forEach(id => {
+      const o = perId[id], s = stati[id]; if (!o || o.fisso) return;
+      if (o.breve === s.breve && o.c === s.c) return;
+      if (o.sp) { o.G.remove(o.sp); o.sp.material.map.dispose(); o.sp.material.dispose(); o.sp = null; }
+      if (s.breve) { o.sp = etichetta(s.breve, s.c === 'neutro' ? 'fare' : s.c); o.sp.position.set(o.pos[0], o.pos[1], o.pos[2]); o.sp.userData.id = id; o.G.add(o.sp); }
+      o.breve = s.breve; o.c = s.c;
+    });
+    bersagli = bersagli.filter(b => !b.isSprite || b.userData.cucina); Object.keys(perId).forEach(id => { if (perId[id].sp && !perId[id].fisso) bersagli.push(perId[id].sp); });
+  }
+  function evidenzia(id){ scelto = id; Object.keys(perId).forEach(k => { const o = perId[k]; if (o.box) o.box.visible = o.alone.visible = (k === id); }); sporco = true; }
+
+  /* inquadratura: la distanza si calcola in modo che tutto stia nel riquadro, qualunque forma abbia */
+  const TUTTO = new THREE.Vector3(0.1, 0.6, 0), clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+  let T0 = -0.28, P0 = 0.82, raggio = 26, scatole = {}, vistaOra = 'tutte';
+  const st = { theta: T0, phi: P0, zoom: 1, target: TUTTO.clone() }, mira = { theta: T0, phi: P0, zoom: 1, target: TUTTO.clone() };
+  const metti = (t, th, ph, r) => { cam.position.set(t.x + r * Math.sin(ph) * Math.sin(th), t.y + r * Math.cos(ph), t.z + r * Math.sin(ph) * Math.cos(th)); cam.lookAt(t); cam.updateMatrixWorld(); };
+  /* da dove guardare la scatola [x0,x1,z0,z1] perché si veda intera e più grande possibile, centrata nel riquadro
+     (in alto resta libero lo spazio dei pulsanti): → { r: distanza, t: punto da guardare } */
+  function adatta(sc, centro, th, ph){
+    const alto = 1 - 2 * Math.min(0.3, 62 / Math.max(1, window.innerHeight)), basso = -0.94, lato = 0.95, v = new THREE.Vector3(), t = centro.clone();
+    const limiti = (r) => { metti(t, th, ph, r); const o = [9, -9, 9, -9]; for (let i = 0; i < 8; i++) { v.set(sc[i & 1], (i & 2) ? 2.5 : 0, sc[2 + ((i >> 2) & 1)]).project(cam); o[0] = Math.min(o[0], v.x); o[1] = Math.max(o[1], v.x); o[2] = Math.min(o[2], v.y); o[3] = Math.max(o[3], v.y); } return o; };
+    const dentro = (r) => { const o = limiti(r); return o[0] >= -lato && o[1] <= lato && o[2] >= basso && o[3] <= alto; };
+    const cerca = () => { let a = 2, b = 200; for (let i = 0; i < 22; i++) { const c = (a + b) / 2; if (dentro(c)) b = c; else a = c; } return b; };
+    let r = cerca();
+    for (let n = 0; n < 5; n++) {   // si sposta il punto guardato finché la scatola è al centro, poi ci si avvicina
+      const o = limiti(r), mezzo = r * Math.tan(FOV * Math.PI / 360), dx = (o[0] + o[1]) / 2, dy = (o[2] + o[3]) / 2 - (alto + basso) / 2;
+      const destra = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 0), su = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 1);
+      t.addScaledVector(destra, dx * mezzo * cam.aspect).addScaledVector(su, dy * mezzo); r = cerca();
+    }
+    return { r, t };
+  }
+  function inquadra(k, subito){
+    vistaOra = k; const sc = scatole[k]; if (!sc) return;
+    const a = adatta(sc, k === 'tutte' ? TUTTO : centri[k], T0, P0);
+    mira.theta = T0; mira.phi = P0; mira.target.copy(a.t); mira.zoom = a.r / raggio;
+    if (subito) { st.theta = T0; st.phi = P0; st.zoom = mira.zoom; st.target.copy(a.t); }
+    sporco = true;
+  }
+  /* a ogni cambio di misura: in un riquadro stretto le cucine si guardano più di sbieco, così restano grandi */
+  let toccata = false;
+  function resize(){
+    const w = window.innerWidth, h = window.innerHeight; if (!w || !h) return; renderer.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix();
+    if (scatole.tutte) {
+      let meglio = null; [-0.28, -0.5, -0.72, -0.95, -1.15].forEach(th => { const r = adatta(scatole.tutte, TUTTO, th, th < -0.6 ? 0.9 : 0.82).r; if (!meglio || r < meglio.r * 0.97) meglio = { th, r }; });
+      T0 = meglio.th; P0 = T0 < -0.6 ? 0.9 : 0.82; raggio = meglio.r;
+      if (!toccata) inquadra(vistaOra, true);
+    }
+    sporco = true;
+  }
+  window.addEventListener('resize', resize); resize();
+  let prima = 0, ferma = false;
+  function passo(ora){
+    const dt = Math.min(100, Math.max(1, (ora || 0) - prima)); prima = ora || 0;
+    const d = Math.abs(mira.theta - st.theta) + Math.abs(mira.phi - st.phi) + Math.abs(mira.zoom - st.zoom) + st.target.distanceTo(mira.target);
+    if (d > 0.0005 || sporco) {   // si ridisegna solo quando qualcosa cambia: a scena ferma il telefono non lavora
+      const k = 1 - Math.exp(-dt / 95); st.theta += (mira.theta - st.theta) * k; st.phi += (mira.phi - st.phi) * k; st.zoom += (mira.zoom - st.zoom) * k; st.target.lerp(mira.target, k);
+      const r = raggio * st.zoom;
+      cam.position.set(st.target.x + r * Math.sin(st.phi) * Math.sin(st.theta), st.target.y + r * Math.cos(st.phi), st.target.z + r * Math.sin(st.phi) * Math.cos(st.theta)); cam.lookAt(st.target);
+      // le etichette restano leggibili a ogni distanza: alte sempre circa uguali sullo schermo (mai più di un metro e mezzo nella scena)
+      const pxAlta = window.innerWidth < 520 ? 27 : 31, perPx = 2 * Math.tan(FOV * Math.PI / 360) / Math.max(1, window.innerHeight), w = new THREE.Vector3();
+      Object.keys(perId).forEach(id => { const o = perId[id]; if (o.sp) { o.sp.getWorldPosition(w); const a = Math.min(1.5, pxAlta * perPx * w.distanceTo(cam.position)) * (id === scelto ? 1.15 : 1); o.sp.scale.set(a * o.sp.userData.base[0] / o.sp.userData.base[1], a, 1); } });
+      renderer.render(scene, cam); sporco = false; ferma = false;
+    } else ferma = true;
+    requestAnimationFrame(passo);
+  }
+  requestAnimationFrame(passo);
+
+  /* dito: trascinare ruota, due dita avvicinano, un tocco sceglie */
+  const dita = new Map(); let mosso = 0, pizzico = 0;
+  const ray = new THREE.Raycaster(), punto = new THREE.Vector2();
+  function tocca(x, y){
+    const b = canvas.getBoundingClientRect(); punto.set((x - b.left) / b.width * 2 - 1, -((y - b.top) / b.height * 2 - 1)); ray.setFromCamera(punto, cam);
+    const hit = ray.intersectObjects(bersagli, false)[0]; if (!hit) return;
+    const u = hit.object.userData;
+    if (u.id) { evidenzia(u.id); invia({ tipo: 'posto', id: u.id }); } else if (u.cucina) invia({ tipo: 'pavimento', cucina: u.cucina });
+  }
+  canvas.addEventListener('pointerdown', ev => { dita.set(ev.pointerId, { x: ev.clientX, y: ev.clientY }); if (dita.size === 1) mosso = 0; pizzico = 0; toccata = true; try { canvas.setPointerCapture(ev.pointerId); } catch (e) {} });
+  canvas.addEventListener('pointermove', ev => {
+    const p = dita.get(ev.pointerId); if (!p) return;
+    if (dita.size === 1) { const dx = ev.clientX - p.x, dy = ev.clientY - p.y; mosso += Math.abs(dx) + Math.abs(dy); mira.theta -= dx * 0.008; mira.phi = clamp(mira.phi - dy * 0.006, 0.08, 1.4); }
+    p.x = ev.clientX; p.y = ev.clientY;
+    if (dita.size === 2) { const [a, b] = [...dita.values()], dist = Math.hypot(a.x - b.x, a.y - b.y); if (pizzico) mira.zoom = clamp(mira.zoom * pizzico / dist, 0.15, 1.6); pizzico = dist; mosso = 99; }
+  });
+  const su = ev => { const era = dita.has(ev.pointerId), solo = dita.size === 1; dita.delete(ev.pointerId); pizzico = 0; if (era && solo && mosso < 10 && ev.type === 'pointerup') tocca(ev.clientX, ev.clientY); };
+  ['pointerup', 'pointercancel'].forEach(n => canvas.addEventListener(n, su));
+  canvas.addEventListener('wheel', ev => { ev.preventDefault(); mira.zoom = clamp(mira.zoom * (ev.deltaY > 0 ? 1.1 : 0.9), 0.15, 1.6); }, { passive: false });
+
+  function vista(k){
+    ['tutte', 'grande', 'piccola'].forEach(v => document.getElementById('v-' + v).setAttribute('aria-pressed', String(v === k)));
+    toccata = false; inquadra(k, false);
+  }
+  ['tutte', 'grande', 'piccola'].forEach(k => document.getElementById('v-' + k).addEventListener('click', () => vista(k)));
+  document.getElementById('z-piu').addEventListener('click', () => { toccata = true; mira.zoom = clamp(mira.zoom / 1.25, 0.15, 1.6); });
+  document.getElementById('z-meno').addEventListener('click', () => { toccata = true; mira.zoom = clamp(mira.zoom * 1.25, 0.15, 1.6); });
+
+  /* dati dalla suite */
+  window.__cucine = (dati) => {
+    try {
+      document.documentElement.classList.toggle('scuro', !!dati.scuro);
+      if (!costruita) costruisci(dati.cucine, !!dati.scuro);
+      aggiornaStati(dati.stati);
+      evidenzia(dati.scelto || null);
+      sporco = true;
+    } catch (e) { invia({ tipo: 'errore', testo: String(e && e.message || e) }); }
+  };
+  /* per le prove automatiche: cosa c'è in scena e un tocco su un'attrezzatura per id */
+  window.__scena = () => ({ posti: Object.keys(perId).filter(k => !perId[k].fisso).length, etichette: Object.keys(perId).filter(k => perId[k].sp && !perId[k].fisso).map(k => k + ':' + perId[k].breve), scelto });
+  window.__tocca = tocca;
+  window.__ferma = () => ferma;
+  window.__schermo = (id) => { const o = perId[id], v = new THREE.Vector3(o.pos[0], o.pos[1] - 0.9, o.pos[2]); o.G.localToWorld(v); cam.updateMatrixWorld(); v.project(cam); return [(v.x + 1) / 2 * window.innerWidth, (1 - v.y) / 2 * window.innerHeight]; };
+  const sulloSchermo = (v) => { cam.updateMatrixWorld(); v.project(cam); return [(v.x + 1) / 2 * window.innerWidth, (1 - v.y) / 2 * window.innerHeight]; };
+  window.__schermoMagazzino = () => { const sp = perId['magazzino-grande'].sp, v = new THREE.Vector3(); sp.getWorldPosition(v); return sulloSchermo(v); };
+  window.__schermoPavimento = (k, x, d) => { const K = window.__ultimi.cucine[k]; return sulloSchermo(new THREE.Vector3(K.ox + x, 0, K.D / 2 - d)); };
+  // quanti colori diversi ci sono nell'immagine appena disegnata (una scena vuota ne ha uno solo)
+  window.__colori = () => { renderer.render(scene, cam); const gl = renderer.getContext(), w = gl.drawingBufferWidth, h = gl.drawingBufferHeight, px = new Uint8Array(4), s = new Set();
+    for (let i = 1; i < 24; i++) for (let j = 1; j < 24; j++) { gl.readPixels(Math.floor(w * i / 24), Math.floor(h * j / 24), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); if (px[3]) s.add((px[0] >> 4) + ',' + (px[1] >> 4) + ',' + (px[2] >> 4)); } return s.size; };
+  // le etichette usano Manrope: quando il carattere è pronto si ridisegnano
+  if (document.fonts && document.fonts.load) document.fonts.load('800 50px Manrope').then(() => { Object.keys(perId).forEach(id => { perId[id].breve = undefined; }); if (window.__ultimi) window.__cucine(window.__ultimi); }).catch(() => {});
+  const originale = window.__cucine; window.__cucine = (d) => { window.__ultimi = d; originale(d); };
+  invia({ tipo: 'pronta' });
+})();
+</script>
+</body>
+</html>

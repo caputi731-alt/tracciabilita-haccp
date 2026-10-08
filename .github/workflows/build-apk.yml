@@ -38,6 +38,9 @@ jobs:
           python3 -m playwright install --with-deps chromium
           python3 test/menu-suite.py
 
+      - name: Prova la vista 3D delle cucine in un browser (attrezzature, etichette, tocchi)
+        run: python3 test/cucine-vista.py
+
       - name: Prova a impacchettare tutte le schermate (trova gli errori in un minuto, prima della build Android)
         run: npx expo export --platform android --output-dir "$RUNNER_TEMP/esportazione"
         env:

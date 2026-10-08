@@ -7,12 +7,17 @@ Preparazione (i pacchetti servono solo qui e non vanno salvati in package.json):
 Uso:
     python3 test/anteprima/vedi.py dist-web <cartella immagini> [passo ...]
 Ogni passo è "nome:testo da toccare>altro testo" (vuoto = solo la Home); "=Testo" tocca l'ultimo elemento con quel testo esatto.
-I dati di prova sono in seme.sql; con VUOTO=1 il database parte vuoto. Limiti: il modulo Menù (WebView), la fotocamera
+I dati di prova sono in seme.sql; con VUOTO=1 il database parte vuoto. La vista 3D delle cucine si vede (pagina vera in un iframe). Limiti: il modulo Menù (WebView), la fotocamera
 e i file del telefono nel browser non ci sono; l'aspetto su Android può differire in piccoli dettagli.
 """
 import sys, os, threading, functools, http.server, json
 from playwright.sync_api import sync_playwright
+import shutil
 dist, out = sys.argv[1], sys.argv[2]
+RADICE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# la vista delle cucine (cucine/index.html) e i caratteri che usa, dove li cerca la finta WebView
+for cartella, cosa in (('cucine', ''), ('menu', 'vendor/fonts')):
+    shutil.copytree(os.path.join(RADICE, cartella, cosa), os.path.join(dist, 'asset', cartella, cosa), dirs_exist_ok=True)
 class Q(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a): pass
     def do_GET(self):

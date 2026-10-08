@@ -1,17 +1,21 @@
 /**
- * Sezione "Oggi" della suite: quanti controlli mancano, lo stato di temperature, pulizie e scadenze,
- * le cose da sistemare, il prossimo menù in calendario e il pulsante "Registra".
+ * Sezione "Oggi" della suite: in alto le due cucine in 3D con lo stato di ogni attrezzatura (CucineVista.js),
+ * sotto quanti controlli mancano, lo stato di temperature, pulizie e scadenze, le cose da sistemare,
+ * il prossimo menù in calendario e il pulsante "Registra".
+ * Se il telefono non riesce a mostrare il 3D resta la schermata senza cucine, con il riquadro grande dei controlli.
  */
-import React, { useState, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Modal, Pressable } from 'react-native';
+import React, { useState, useCallback, useMemo } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, Modal, Pressable, useWindowDimensions } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { S, COLORS, giorniAllaScadenza, oggiLocale } from './theme';
+import { S, COLORS, TEMA_SCURO, giorniAllaScadenza, oggiLocale } from './theme';
 import { daIsoLocale } from './utile';
 import { Icona } from './UI';
 import {
   lottiInScadenza, temperatureDiOggi, listaPuntiControllo, nonConformitaAperte,
-  areeConStato, prodottiDaCompletare, lottiBloccati, leggiPreferenza, menuLeggi,
+  areeConStato, prodottiDaCompletare, lottiBloccati, leggiPreferenza, menuLeggi, collegamentiCucina,
 } from './database';
+import { POSTI, statiCucine, datiScena } from './cucine';
+import SchedaPosto from './SchedaPosto';
 import { statoBackup } from './backupAutomatico';
 import { prossimoMenu } from './menuPonte';
 
@@ -57,6 +61,35 @@ function Anello({ fatti, totali, lato = 88, spessore = 9, colore, traccia, child
       {children}
     </View>
   );
+}
+
+/** Un problema della vista 3D (modulo mancante, errore nel disegno) resta chiuso qui: la Home passa alla versione senza cucine. */
+class RiparoCucine extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { rotto: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { rotto: true };
+  }
+
+  componentDidCatch() {
+    this.props.suRotto();
+  }
+
+  render() {
+    return this.state.rotto ? null : this.props.children;
+  }
+}
+
+/** Il modulo si legge solo quando serve; se manca qualcosa, null. */
+function moduloCucine() {
+  try {
+    return require('./CucineVista').default;
+  } catch (e) {
+    return null;
+  }
 }
 
 function Riquadro({ icona, valore, etichetta, tono, onPress }) {
@@ -108,10 +141,12 @@ export default function HomeScreen({ navigation }) {
   const [esterno, setEsterno] = useState(undefined); // giorni dall'ultima copia fuori dal telefono (null = mai)
   const [menu, setMenu] = useState(null);
   const [registra, setRegistra] = useState(false);
+  const [scena, setScena] = useState('attesa'); // 'attesa' | 'ok' | 'no' (il 3D non parte: Home senza cucine)
+  const [cucina, setCucina] = useState({ collegamenti: [], punti: [], temperature: [], aree: [] });
+  const [scelto, setScelto] = useState(null); // attrezzatura toccata nella scena
+  const finestra = useWindowDimensions();
 
-  useFocusEffect(
-    useCallback(() => {
-      (async () => {
+  const carica = useCallback(async () => {
         try {
           setScadenze(await lottiInScadenza(3));
           const t = await temperatureDiOggi();
@@ -123,6 +158,7 @@ export default function HomeScreen({ navigation }) {
           // pulizie di ogni frequenza: giornaliere, settimanali e mensili scadute
           const aree = await areeConStato();
           setPulizie({ fatte: aree.filter((a) => !a.daFare).length, totali: aree.length });
+          setCucina({ collegamenti: await collegamentiCucina(), punti, temperature: t, aree });
           setBackup(await statoBackup());
           const ultimaEsterna = await leggiPreferenza('backup_esterno_ultimo');
           setEsterno(ultimaEsterna ? Math.floor((Date.now() - new Date(ultimaEsterna).getTime()) / 86400000) : null);
@@ -130,9 +166,20 @@ export default function HomeScreen({ navigation }) {
           setBloccati((await lottiBloccati()).length);
           setMenu(prossimoMenu(await menuLeggi('state'), oggiLocale()));
         } catch (e) { /* la Home resta utilizzabile anche se una lettura fallisce */ }
-      })();
-    }, [])
-  );
+  }, []);
+  useFocusEffect(useCallback(() => { carica(); }, [carica]));
+
+  // stato di ogni attrezzatura delle cucine e quello che serve alla scena 3D
+  const stati = useMemo(() => statiCucine({
+    collegamenti: cucina.collegamenti, punti: cucina.punti, temperatureOggi: cucina.temperature, aree: cucina.aree,
+  }), [cucina]);
+  const dati = useMemo(() => datiScena(stati, { scuro: TEMA_SCURO, scelto }), [stati, scelto]);
+  const suPosto = useCallback((id) => { if (POSTI.some((p) => p.id === id)) setScelto(id); }, []);
+  const suPavimento = useCallback(() => navigation.navigate('SezioneMagazzino'), [navigation]);
+  const senzaCucine = useCallback(() => setScena('no'), []);
+  const Cucine = scena === 'no' ? null : moduloCucine();
+  const conCucine = !!Cucine;
+  const altoScena = Math.round(Math.min(380, Math.max(240, finestra.height * 0.38)));
 
   const tempMancanti = Math.max(0, puntiTot - tempFatte);
   const pulizieMancanti = Math.max(0, pulizie.totali - pulizie.fatte);
@@ -191,17 +238,68 @@ export default function HomeScreen({ navigation }) {
 
   const giornoMenu = menu ? daIsoLocale(menu.data) : null;
 
+  const intestazione = (
+    <View style={{ marginLeft: 4, marginBottom: conCucine ? 10 : 16 }}>
+      <Text style={{ fontSize: 13, fontWeight: '700', letterSpacing: 1.2, color: COLORS.muted }}>TENUTA COPPA</Text>
+      <Text accessibilityRole="header" style={[S.h1, { marginBottom: 0 }]}>
+        {maiuscola(new Date().toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' }))}
+      </Text>
+    </View>
+  );
+
   return (
     <View style={S.screen}>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 20, paddingBottom: 96 }}>
-        <View style={{ marginLeft: 4, marginBottom: 16 }}>
-          <Text style={{ fontSize: 13, fontWeight: '700', letterSpacing: 1.2, color: COLORS.muted }}>TENUTA COPPA</Text>
-          <Text accessibilityRole="header" style={[S.h1, { marginBottom: 0 }]}>
-            {maiuscola(new Date().toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' }))}
-          </Text>
+      {/* Le cucine: restano ferme in alto, il resto scorre sotto (trascinare sulla scena la fa ruotare) */}
+      {conCucine && (
+        <View style={{ paddingHorizontal: 16, paddingTop: 20 }}>
+          {intestazione}
+          <View style={{ height: altoScena, borderRadius: 28, overflow: 'hidden', backgroundColor: COLORS.contenitore }}>
+            <RiparoCucine suRotto={senzaCucine}>
+              <Cucine dati={dati} suPosto={suPosto} suPavimento={suPavimento} suStato={setScena} />
+            </RiparoCucine>
+            {scena === 'ok' && cucina.collegamenti.length === 0 && (
+              <View pointerEvents="none" style={{ position: 'absolute', left: 10, right: 10, bottom: 10, alignItems: 'center' }}>
+                <Text style={{
+                  fontSize: 13, fontWeight: '700', color: COLORS.text, backgroundColor: COLORS.card, borderRadius: 14,
+                  paddingHorizontal: 14, paddingVertical: 8, overflow: 'hidden', textAlign: 'center',
+                }}>Tocca un frigorifero o un banco per collegarlo ai controlli</Text>
+              </View>
+            )}
+          </View>
         </View>
+      )}
 
-        {/* Controlli di oggi */}
+      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: conCucine ? 12 : 20, paddingBottom: 96 }}>
+        {!conCucine && intestazione}
+
+        {/* Controlli di oggi: con le cucine in vista basta una riga, senza resta il riquadro grande */}
+        {conCucine ? (
+          <TouchableOpacity onPress={pulsante ? pulsante.vai : undefined} disabled={!pulsante} activeOpacity={0.8}
+            accessibilityRole="button" accessibilityLabel={`Controlli di oggi: ${titolo}. ${dettaglio}${pulsante ? `. ${pulsante.testo}` : ''}`}
+            style={{
+              backgroundColor: COLORS.eroe, borderRadius: 24, padding: 14, marginBottom: 12, minHeight: 76,
+              flexDirection: 'row', alignItems: 'center',
+            }}>
+            {totali > 0 && (
+              <Anello fatti={fatti} totali={totali} lato={48} spessore={6} colore={COLORS.suEroeTenue} traccia={COLORS.eroeTraccia}>
+                {mancanti === 0
+                  ? <Icona nome="check-bold" size={20} colore={COLORS.suEroe} />
+                  : <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.suEroe }}>{fatti}/{totali}</Text>}
+              </Anello>
+            )}
+            <View style={{ flex: 1, marginLeft: totali > 0 ? 14 : 4 }}>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: COLORS.suEroe }}>{titolo}</Text>
+              <Text style={{ fontSize: 14, color: COLORS.suEroeTenue }}>{pulsante && mancanti > 0 ? `${dettaglio} · inizia il giro` : dettaglio}</Text>
+            </View>
+            {!!pulsante && (
+              <View style={{
+                width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.eroePulsante, alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Icona nome="arrow-right" size={22} colore={COLORS.suEroePulsante} />
+              </View>
+            )}
+          </TouchableOpacity>
+        ) : (
         <View style={{ backgroundColor: COLORS.eroe, borderRadius: 28, padding: 24, marginBottom: 12 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <View style={{ flex: 1, paddingRight: 12 }}>
@@ -228,6 +326,7 @@ export default function HomeScreen({ navigation }) {
             </TouchableOpacity>
           )}
         </View>
+        )}
 
         {/* Stato di temperature, pulizie e scadenze */}
         <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
@@ -317,6 +416,13 @@ export default function HomeScreen({ navigation }) {
         <Icona nome="plus" size={24} colore={COLORS.suTerra} />
         <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.suTerra, marginLeft: 8 }}>Registra</Text>
       </TouchableOpacity>
+
+      {/* Scheda dell'attrezzatura toccata nella scena */}
+      {!!scelto && (
+        <SchedaPosto posto={POSTI.find((p) => p.id === scelto)} stato={stati[scelto]} punti={cucina.punti} aree={cucina.aree}
+          onChiudi={() => setScelto(null)} onCambiato={carica}
+          apri={(rotta, parametri) => { setScelto(null); apri(rotta, parametri); }} />
+      )}
 
       {/* Pannello dal basso con le registrazioni */}
       <Modal visible={registra} transparent animationType="slide" onRequestClose={() => setRegistra(false)}>
