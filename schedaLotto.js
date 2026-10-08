@@ -11,7 +11,7 @@ export function htmlSchedaLotto({ lotto: l, movimenti = [], produzioni = [], imp
     <td>${esc(m.quantita)} ${esc(l.unita_misura)}</td><td>${esc(m.causale)}</td></tr>`).join('');
 
   const prodRighe = produzioni.map((pr) => `
-    <tr><td>${fmtDataOra(pr.data_ora)}</td><td>${esc(pr.nome)}</td>
+    <tr><td>${fmtDataOra(pr.data_ora)}</td><td>${esc(pr.nome)}${pr.evento ? `<br><small>Evento: ${esc(pr.evento)}</small>` : ''}</td>
     <td>${esc(pr.lotto_produzione) || '—'}</td><td>${esc(pr.quantita_usata)}</td></tr>`).join('');
 
   const stessa = impatto && impatto.stessaPartita.length ? `

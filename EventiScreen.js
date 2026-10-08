@@ -1,16 +1,19 @@
 /**
  * Eventi del Menù visti dalla cucina: per ogni evento il fabbisogno (ingredienti che servono, giacenza, lista d'ordine
- * per fornitore), la scheda degli allergeni e, dopo il PIN del titolare, il costo delle materie prime con il margine. I calcoli sono in evento.js.
+ * per fornitore), le produzioni già compilate, la scheda degli allergeni e, dopo il PIN del titolare, il costo delle materie prime con il margine. I calcoli sono in evento.js.
  * Senza parametri mostra l'elenco; con { evento: id } il dettaglio di quell'evento.
  */
 import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Share } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, fmtData, oggiLocale, piuGiorni, ALLERGENI } from './theme';
-import { Bottone, Segmenti, Vuoto, Icona, Caricamento } from './UI';
-import { menuLeggi, datiPerEventi, ricettePerMenu, getImpostazioni } from './database';
+import { Bottone, Segmenti, Vuoto, Icona, Caricamento, useAvviso } from './UI';
+import {
+  menuLeggi, datiPerEventi, ricettePerMenu, getImpostazioni, lottiUtilizzabili, produzioniEvento, registraProduzione, annullaProduzione,
+  leggiAllergeni,
+} from './database';
 import { eventiMenu } from './menuPonte';
-import { fabbisogno, costi, testoOrdine, allergeniEvento } from './evento';
+import { fabbisogno, costi, testoOrdine, allergeniEvento, pianoProduzioni } from './evento';
 import { stampa, htmlSchedaAllergeniEvento } from './report';
 import { condividiPdf } from './condividi';
 import { pinImpostato, costiSbloccati, sbloccaCosti, bloccaCosti } from './pin';
@@ -144,6 +147,99 @@ function Allergeni({ evento, dati }) {
   );
 }
 
+/** Codice del lotto di produzione: P + giorno + ora, come nelle produzioni fatte a mano. */
+const lottoProduzione = () => {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return `P${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+};
+
+/**
+ * Produzioni dell'evento: una per portata con ricetta completa, già compilata con i lotti da usare.
+ * Si registra quando si prepara davvero la portata (anche nei giorni prima): la data è quella della registrazione.
+ */
+function Produzioni({ evento, dati, lotti, fatte, onCambio, mostra, navigation }) {
+  const piano = pianoProduzioni(evento, dati.ricette, dati.prodotti, lotti, fatte);
+  const pronte = piano.filter((p) => p.stato === 'pronta');
+  const descrizione = `${evento.titolo}${evento.cliente ? ` ${evento.cliente}` : ''} del ${fmtData(evento.data)}`;
+  const registra = async (voci) => {
+    const ids = [];
+    try {
+      for (const p of voci) {
+        ids.push(await registraProduzione({
+          ricetta_id: p.ricettaId, nome: p.nome, quantita_prodotta: p.porzioni,
+          lotto_produzione: `${lottoProduzione()}${voci.length > 1 ? `-${ids.length + 1}` : ''}`,
+          evento_id: evento.id, evento: descrizione,
+        }, p.usi.map((u) => ({ lotto_id: u.lotto_id, quantita: u.quantita }))));
+      }
+    } finally {
+      await onCambio();
+    }
+    mostra(ids.length > 1 ? `Registrate ${ids.length} produzioni ✓` : `Produzione registrata ✓ ${voci[0].nome}`, {
+      testo: 'Annulla',
+      onPress: async () => {
+        for (const id of ids) await annullaProduzione(id, 'annullata subito dopo la registrazione');
+        await onCambio();
+        mostra(ids.length > 1 ? 'Produzioni annullate' : 'Produzione annullata');
+      },
+    });
+  };
+  const STATO = {
+    fatta: ['Prodotta', COLORS.ok], pronta: ['Da produrre', COLORS.text], manca: ['Manca merce', COLORS.danger], fuori: ['Non calcolabile', COLORS.warning],
+  };
+  return (
+    <>
+      {piano.length === 0 && <Vuoto icona="pot-steam-outline" titolo="Nessuna portata nel menù" testo="Aggiungi le portate dal Menù: qui compariranno le produzioni da fare." />}
+      {pronte.length > 1 && (
+        <Bottone testo={`Registra le ${pronte.length} produzioni pronte`} icona="check-all" onPress={() => registra(pronte)} />
+      )}
+      {pronte.length > 1 && <View style={{ height: 12 }} />}
+      {piano.map((p, i) => (
+        <View key={`${p.nome}-${i}`} style={[S.card, {
+          borderWidth: 1.5, borderColor: p.stato === 'fatta' ? COLORS.ok : p.stato === 'manca' ? COLORS.danger : p.stato === 'fuori' ? COLORS.warning : COLORS.border,
+        }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <View style={{ flex: 1, paddingRight: 10 }}>
+              <Text style={{ fontSize: 17, fontWeight: '700', color: COLORS.text }}>{p.bambini ? `${p.nome} (bambini)` : p.nome}</Text>
+              <Text style={{ fontSize: 14, color: COLORS.muted }}>{p.porzioni} porzioni</Text>
+            </View>
+            <Text style={{ fontSize: 14, fontWeight: '700', color: STATO[p.stato][1] }}>{STATO[p.stato][0]}</Text>
+          </View>
+          {p.stato === 'fatta' && (
+            <>
+              <Text style={[S.muted, { marginTop: 6 }]}>
+                Registrata il {fmtData(p.produzione.data_ora)}{p.produzione.lotto_produzione ? ` · lotto ${p.produzione.lotto_produzione}` : ''}. Per annullarla: Altro → Produzioni.
+              </Text>
+              <Bottone testo="Stampa etichetta" ghost icona="tag-outline" onPress={() => navigation.navigate('Etichette', {
+                precompila: { tipo: 'Produzione', nome: p.nome, lotto: p.produzione.lotto_produzione || '', allergeni: leggiAllergeni(p.produzione.allergeni) },
+              })} />
+            </>
+          )}
+          {p.stato === 'pronta' && (
+            <>
+              {p.usi.map((u, n) => (
+                <Riga key={`${u.lotto_id}-${n}`} prima={n === 0} titolo={u.prodotto} sotto={u.numero_lotto ? `Lotto ${u.numero_lotto}` : 'Lotto senza numero'}
+                  destra={quantita(u.quantita, u.unita)} />
+              ))}
+              <Bottone testo="Registra produzione" ghost={pronte.length > 1} onPress={() => registra([p])} />
+            </>
+          )}
+          {p.stato === 'manca' && p.mancanti.map((m, n) => (
+            <Riga key={`${m.prodotto}-${n}`} prima={n === 0} titolo={m.prodotto} sotto="Giacenza utilizzabile insufficiente"
+              destra={`manca ${quantita(m.manca, m.unita)}`} coloreDestra={COLORS.danger} />
+          ))}
+          {p.stato === 'fuori' && <Text style={[S.muted, { marginTop: 6 }]}>{p.problemi.join(' · ')}</Text>}
+        </View>
+      ))}
+      <Text style={[S.muted, { marginTop: 4 }]}>
+        Registra ogni produzione quando prepari davvero la portata, anche nei giorni prima dell'evento: l'app scarica i lotti indicati
+        (prima quelli più vicini alla scadenza) e li collega all'evento, così in un richiamo sai dove sono finiti.
+        Per usare lotti o quantità diversi, registra la produzione a mano da Altro → Produzioni.
+      </Text>
+    </>
+  );
+}
+
 function Costo({ evento, dati, onBlocca }) {
   const c = costi(evento, dati.ricette, dati.prodotti);
   const coperti = c.adulti + c.bambini;
@@ -216,20 +312,27 @@ export default function EventiScreen({ navigation, route }) {
   const [pin, setPin] = useState(null);            // il PIN del titolare è impostato su questo telefono?
   const [sbloccato, setSbloccato] = useState(costiSbloccati());
   const [chiedi, setChiedi] = useState(false);
+  const [lotti, setLotti] = useState([]);
+  const [fatte, setFatte] = useState([]);
+  const { avviso, mostra } = useAvviso();
+
+  const carica = useCallback(async (ancora = () => true) => {
+    try {
+      const e = eventiMenu(await menuLeggi('state'));
+      const d = await datiPerEventi();
+      d.ricetteMenu = new Map((await ricettePerMenu()).map((r) => [r.id, r]));
+      const p = await pinImpostato();
+      const l = idEvento ? await lottiUtilizzabili() : [];
+      const f = idEvento ? await produzioniEvento(idEvento) : [];
+      if (ancora()) { setEventi(e); setDati(d); setPin(p); setLotti(l); setFatte(f); setSbloccato(costiSbloccati()); }
+    } catch (err) { if (ancora()) { setEventi([]); setDati({ ricette: new Map(), prodotti: new Map(), ricetteMenu: new Map() }); } }
+  }, [idEvento]);
 
   useFocusEffect(useCallback(() => {
     let vivo = true;
-    (async () => {
-      try {
-        const e = eventiMenu(await menuLeggi('state'));
-        const d = await datiPerEventi();
-        d.ricetteMenu = new Map((await ricettePerMenu()).map((r) => [r.id, r]));
-        const p = await pinImpostato();
-        if (vivo) { setEventi(e); setDati(d); setPin(p); setSbloccato(costiSbloccati()); }
-      } catch (err) { if (vivo) { setEventi([]); setDati({ ricette: new Map(), prodotti: new Map(), ricetteMenu: new Map() }); } }
-    })();
+    carica(() => vivo);
     return () => { vivo = false; };
-  }, []));
+  }, [carica]));
 
   React.useEffect(() => {
     if (idEvento) navigation.setOptions({ title: 'Evento' });
@@ -294,12 +397,13 @@ export default function EventiScreen({ navigation, route }) {
         <Text style={{ fontSize: 13, color: COLORS.muted }}>{fmtData(evento.data)}{evento.ora ? ` · ${evento.ora}` : ''} · {STATI[evento.stato] || evento.stato}</Text>
         <Text style={S.h1}>{evento.titolo}</Text>
         <Text style={[S.muted, { marginBottom: 4 }]}>{[evento.cliente, persone(evento)].filter(Boolean).join(' · ')}</Text>
-        <Segmenti opzioni={['Fabbisogno', 'Costo', 'Allergeni']} valore={vista} onChange={setVista} />
+        <Segmenti opzioni={['Fabbisogno', 'Produci', 'Allergeni', 'Costo']} valore={vista} onChange={setVista} />
         <View style={{ height: 12 }} />
 
         {vista === 'Fabbisogno' && <Fabbisogno evento={evento} dati={dati} />}
 
         {vista === 'Allergeni' && <Allergeni evento={evento} dati={dati} />}
+        {vista === 'Produci' && <Produzioni evento={evento} dati={dati} lotti={lotti} fatte={fatte} onCambio={() => carica()} mostra={mostra} navigation={navigation} />}
 
         {vista === 'Costo' && sbloccato && (
           <Costo evento={evento} dati={dati} onBlocca={() => { bloccaCosti(); setSbloccato(false); }} />
@@ -326,6 +430,7 @@ export default function EventiScreen({ navigation, route }) {
           </View>
         )}
       </ScrollView>
+      {avviso}
       <ModalePin visibile={chiedi} titolo="PIN del titolare" testo="Costi e margini restano visibili per 10 minuti, poi il PIN va rimesso."
         pulsante="Mostra i costi" onConferma={sblocca} onChiudi={() => setChiedi(false)} />
     </View>

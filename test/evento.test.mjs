@@ -144,3 +144,28 @@ test('allergeni dell\'evento: dalla ricetta se collegata, altrimenti a mano; mai
   assert.match(html, /Da completare prima di consegnare la scheda/);
   assert.ok(html.includes('1. Glutine') && html.includes('14. Molluschi'));
 });
+
+test('produzioni da evento: lotti dal più vicino alla scadenza, prenotati una volta sola, stati chiari', async () => {
+  const { pianoProduzioni } = await import('../evento.js');
+  const e = evento({ ospiti: 20, bambini: 0, portate: [
+    { nome: 'Orecchiette', ricettaId: 10, bambini: false }, { nome: 'Agnello', ricettaId: 11, bambini: false },
+    { nome: 'Orecchiette bis', ricettaId: 10, bambini: false }, { nome: 'Libera', ricettaId: null, bambini: false }] });
+  const lotti = [
+    { id: 1, prodotto_id: 1, numero_lotto: 'S1', quantita_residua: 1.5 }, { id: 2, prodotto_id: 1, numero_lotto: 'S2', quantita_residua: 2 },
+    { id: 3, prodotto_id: 2, numero_lotto: 'C1', quantita_residua: 5 }, { id: 4, prodotto_id: 3, numero_lotto: 'O1', quantita_residua: 1 },
+    { id: 5, prodotto_id: 5, numero_lotto: 'A1', quantita_residua: 4 },
+  ];
+  const piano = pianoProduzioni(e, ricette(), prodotti(), lotti);
+  assert.deepEqual(piano.map((p) => [p.nome, p.stato]), [['Orecchiette', 'pronta'], ['Agnello', 'manca'], ['Orecchiette bis', 'manca'], ['Libera', 'fuori']]);
+  // 20 porzioni: semola 2 kg (1,5 dal primo lotto + 0,5 dal secondo), cime 3 kg, olio 0,2 l
+  assert.deepEqual(piano[0].usi.map((u) => [u.lotto_id, u.quantita, u.unita]), [[1, 1.5, 'kg'], [2, 0.5, 'kg'], [3, 3, 'kg'], [4, 0.2, 'l']]);
+  assert.deepEqual(piano[1].mancanti, [{ prodotto: 'Agnello', manca: 2, unita: 'kg' }]); // servono 6 kg, ce ne sono 4
+  // la seconda portata con la stessa ricetta trova i lotti già prenotati dalla prima: le cime non bastano più
+  assert.deepEqual(piano[2].mancanti, [{ prodotto: 'Semola', manca: 0.5, unita: 'kg' }, { prodotto: 'Cime di rapa', manca: 1, unita: 'kg' }]);
+  assert.match(piano[3].problemi[0], /non è collegata/);
+  // già registrate per l'evento: una produzione vale per una sola portata con quella ricetta
+  const dopo = pianoProduzioni(e, ricette(), prodotti(), lotti, [{ id: 7, ricetta_id: 10 }]);
+  assert.deepEqual(dopo.map((p) => p.stato), ['fatta', 'manca', 'pronta', 'fuori']);
+  assert.equal(dopo[0].produzione.id, 7);
+  assert.equal(pianoProduzioni(evento({ ospiti: 0, bambini: 0 }), ricette(), prodotti(), lotti)[0].stato, 'fuori');
+});

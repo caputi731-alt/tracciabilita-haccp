@@ -292,6 +292,9 @@ async function preparaSchema() {
   await aggiungiSeManca('movimenti', 'creato_il', 'TEXT');
   await aggiungiSeManca('registro_temperature', 'creato_il', 'TEXT');
   await aggiungiSeManca('registro_sanificazione', 'creato_il', 'TEXT');
+  // produzione fatta per un evento del Menù: id del menù e descrizione fissata in quel momento (resta anche se il menù viene eliminato)
+  await aggiungiSeManca('produzioni', 'evento_id', 'TEXT');
+  await aggiungiSeManca('produzioni', 'evento', 'TEXT');
   await d.execAsync(`
     CREATE INDEX IF NOT EXISTS idx_movimenti_lotto ON movimenti(lotto_id);
     CREATE INDEX IF NOT EXISTS idx_lotti_prodotto ON lotti(prodotto_id);
@@ -1127,10 +1130,11 @@ export async function registraProduzione(p, usi) {
   await d.withTransactionAsync(async () => {
     const adesso = new Date().toISOString();
     const res = await d.runAsync(
-      `INSERT INTO produzioni (ricetta_id, nome, data_ora, quantita_prodotta, lotto_produzione, data_scadenza, operatore, note)
-       VALUES (?,?,?,?,?,?,?,?)`,
+      `INSERT INTO produzioni (ricetta_id, nome, data_ora, quantita_prodotta, lotto_produzione, data_scadenza, operatore, note, evento_id, evento)
+       VALUES (?,?,?,?,?,?,?,?,?,?)`,
       [p.ricetta_id ?? null, p.nome, adesso, p.quantita_prodotta ?? null,
-       p.lotto_produzione ?? null, p.data_scadenza ?? null, p.operatore ?? null, p.note ?? null]);
+       p.lotto_produzione ?? null, p.data_scadenza ?? null, p.operatore ?? null, p.note ?? null,
+       p.evento_id ?? null, p.evento ?? null]);
     prodId = res.lastInsertRowId;
     const allergeni = new Set(p.allergeni || []);
     for (const u of (usi || [])) {
@@ -1236,6 +1240,21 @@ export async function getProduzione(id) {
      WHERE pl.produzione_id = ?`, [id]);
   return pr;
 }
+
+/** Produzioni già registrate per un evento del Menù (non annullate). */
+export const produzioniEvento = (eventoId) =>
+  query(
+    `SELECT id, ricetta_id, nome, data_ora, quantita_prodotta, lotto_produzione, allergeni FROM produzioni
+     WHERE evento_id = ? AND COALESCE(annullata, 0) = 0 ORDER BY data_ora`, [String(eventoId)]);
+
+/** Lotti che si possono impiegare oggi (disponibili, non scaduti), dal più vicino alla scadenza: per preparare le produzioni di un evento. */
+export const lottiUtilizzabili = () =>
+  query(
+    `SELECT l.id, l.prodotto_id, l.numero_lotto, l.quantita_residua, l.data_scadenza, l.unita_misura
+     FROM lotti l
+     WHERE l.stato = 'disponibile' AND l.quantita_residua > 0
+       AND (l.data_scadenza IS NULL OR substr(l.data_scadenza, 1, 10) >= ?)
+     ORDER BY l.data_scadenza IS NULL, l.data_scadenza ASC, l.data_ricevimento ASC, l.id ASC`, [oggiLocale()]);
 
 export const produzioniDaLotto = (lottoId) =>
   query(
@@ -1580,7 +1599,7 @@ export async function impattoLotto(lottoId) {
   const l = await queryOne('SELECT * FROM lotti WHERE id = ?', [lottoId]);
   if (!l) return null;
   const piatti = await query(
-    `SELECT pr.id, pr.nome, pr.data_ora, pr.lotto_produzione, pr.data_scadenza, pl.quantita_usata
+    `SELECT pr.id, pr.nome, pr.data_ora, pr.lotto_produzione, pr.data_scadenza, pr.evento, pl.quantita_usata
      FROM produzione_lotti pl JOIN produzioni pr ON pr.id = pl.produzione_id
      WHERE pl.lotto_id = ? AND COALESCE(pr.annullata, 0) = 0 ORDER BY pr.data_ora DESC`, [lottoId]);
   const stessaPartita = l.numero_lotto

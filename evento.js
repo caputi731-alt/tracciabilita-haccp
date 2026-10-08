@@ -191,3 +191,46 @@ export function allergeniEvento(evento, ricetteMenu) {
     return { ...base, numeri: m.numeri || [], stato: m.stato, fonte: 'a mano', nota };
   });
 }
+
+/**
+ * Produzioni da registrare per un evento: una per ogni portata con una ricetta completa, con i lotti da cui prendere
+ * gli ingredienti (dal più vicino alla scadenza). I lotti vengono "prenotati" via via, così due portate non contano
+ * due volte la stessa merce.
+ * `lotti` = lottiUtilizzabili() già in ordine; `fatte` = produzioniEvento() (già registrate per questo evento).
+ * → [{ nome, bambini, ricettaId, porzioni, stato, usi, mancanti, problemi, produzione }], con stato:
+ *   'fatta' (già registrata) · 'pronta' (si può registrare) · 'manca' (giacenza insufficiente) · 'fuori' (non calcolabile).
+ */
+export function pianoProduzioni(evento, ricette, prodotti, lotti, fatte = []) {
+  const residuo = new Map(lotti.map((l) => [l.id, Number(l.quantita_residua) || 0]));
+  const perProdotto = new Map();
+  for (const l of lotti) { if (!perProdotto.has(l.prodotto_id)) perProdotto.set(l.prodotto_id, []); perProdotto.get(l.prodotto_id).push(l); }
+  const giaFatte = [...fatte];
+  return porzioniEvento(evento).map((p) => {
+    const base = { nome: p.nome, bambini: !!p.bambini, ricettaId: p.ricettaId || null, porzioni: p.porzioni, usi: [], mancanti: [], problemi: [], produzione: null };
+    const i = p.ricettaId ? giaFatte.findIndex((f) => f.ricetta_id === p.ricettaId) : -1;
+    if (i >= 0) return { ...base, stato: 'fatta', produzione: giaFatte.splice(i, 1)[0] };
+    const { righe, problemi } = ingredientiPerPorzione(p, ricette, prodotti);
+    if (problemi.length) return { ...base, stato: 'fuori', problemi };
+    if (!(p.porzioni > 0)) return { ...base, stato: 'fuori', problemi: ['nel menù non è indicato il numero di ospiti'] };
+    // prima si controlla che ci sia tutto, poi si prenotano i lotti: una portata che non si può fare non toglie merce alle altre
+    const prove = new Map();
+    const usi = [];
+    const mancanti = [];
+    for (const r of righe) {
+      let serve = tondo(r.quantita * p.porzioni, 3);
+      for (const l of perProdotto.get(r.prodotto.id) || []) {
+        if (serve <= 0) break;
+        const libero = (prove.has(l.id) ? prove.get(l.id) : residuo.get(l.id)) || 0;
+        const prendo = tondo(Math.min(libero, serve), 3);
+        if (prendo <= 0) continue;
+        prove.set(l.id, tondo(libero - prendo, 3));
+        serve = tondo(serve - prendo, 3);
+        usi.push({ lotto_id: l.id, prodotto: r.prodotto.denominazione, numero_lotto: l.numero_lotto || '', quantita: prendo, unita: r.prodotto.unita_misura || '' });
+      }
+      if (serve > 0) mancanti.push({ prodotto: r.prodotto.denominazione, manca: serve, unita: r.prodotto.unita_misura || '' });
+    }
+    if (mancanti.length) return { ...base, stato: 'manca', mancanti };
+    for (const [id, q] of prove) residuo.set(id, q);
+    return { ...base, stato: 'pronta', usi };
+  });
+}

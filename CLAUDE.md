@@ -152,6 +152,9 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
   Quello che non si può calcolare (portata senza ricetta, porzioni o quantità mancanti, unità non convertibili, prezzo assente)
   viene elencato, mai stimato. Ricavo al netto dell'IVA al 10% (`IVA_RISTORAZIONE`). Costi e margini si vedono solo dopo il PIN
   del titolare (`sbloccaCosti` / `costiSbloccati` in pin.js, 10 minuti): ogni nuova schermata con costi o incassi deve usare lo stesso blocco.
+  Produzioni da evento (linguetta "Produci"): `pianoProduzioni` (evento.js) prepara una produzione per portata con ricetta completa,
+  con i lotti in FIFO da `lottiUtilizzabili()`; si registra con `registraProduzione` passando `evento_id` ed `evento` (descrizione fissata),
+  che compaiono nella scheda del lotto per i richiami. `produzioniEvento(id)` dice quali portate sono già prodotte.
   Scheda allergeni dell'evento: `allergeniEvento` (evento.js) + `htmlSchedaAllergeniEvento` (report.js); stesse regole del Menù
   (`allergeniAMano` in `eventiMenu` ricalca `algNums`/`algState`): se cambiano là, vanno cambiate anche qui.
 - Ponte pagina ↔ suite: `menu/js/00-suite.js` (lato pagina, caricato per primo) e `menuPonte.js` (lato suite, senza dipendenze

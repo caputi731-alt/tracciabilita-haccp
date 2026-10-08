@@ -237,6 +237,19 @@ test('ricette per il Menù: allergeni come numeri, ingredienti da verificare, cr
   assert.deepEqual([dati.prodotti.get(farina).giacenza, dati.prodotti.get(farina).prezzo, dati.prodotti.get(farina).unita_misura], [8, 1.1, 'kg']);
   assert.deepEqual([dati.prodotti.get(acciughe).giacenza, dati.prodotti.get(acciughe).prezzo], [0, null]);
   assert.deepEqual([dati.ricette.get(piena).porzioni, dati.ricette.get(piena).ingredienti.length], [4, 2]);
+  // produzione fatta per un evento: resta collegata all'evento e compare nella scheda del lotto
+  const usabili = await db.lottiUtilizzabili();
+  const lottoFarina = usabili.find((l) => l.prodotto_id === farina);
+  assert.ok(lottoFarina && usabili.every((l) => l.quantita_residua > 0));
+  assert.equal(usabili.filter((l) => l.prodotto_id === farina).length, 2, 'il lotto scaduto non è utilizzabile');
+  const prodId = await db.registraProduzione({ ricetta_id: piena, nome: 'Orecchiette alle acciughe', quantita_prodotta: 20, evento_id: 'm1', evento: 'Battesimo Rossi del 17/10/2026' },
+    [{ lotto_id: lottoFarina.id, quantita: 2 }]);
+  assert.deepEqual((await db.produzioniEvento('m1')).map((x) => [x.id, x.ricetta_id]), [[prodId, piena]]);
+  assert.deepEqual(db.leggiAllergeni((await db.produzioniEvento('m1'))[0].allergeni).sort(), ['Glutine', 'Pesce']);
+  assert.equal((await db.produzioniDaLotto(lottoFarina.id))[0].evento, 'Battesimo Rossi del 17/10/2026');
+  assert.equal((await db.impattoLotto(lottoFarina.id)).piatti[0].evento, 'Battesimo Rossi del 17/10/2026');
+  await db.annullaProduzione(prodId, 'prova');
+  assert.deepEqual(await db.produzioniEvento('m1'), [], 'una produzione annullata non conta più per l\'evento');
   await db.eliminaRicetta(piena);
   assert.equal((await db.ricettePerMenu()).some((r) => r.id === piena), false, 'le ricette eliminate non arrivano al Menù');
 });

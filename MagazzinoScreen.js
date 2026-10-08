@@ -570,7 +570,7 @@ export default function MagazzinoScreen({ route, navigation }) {
                     </Text>
                     {produzioni.length ? produzioni.map((pr) => (
                       <Text key={pr.id} style={S.muted}>
-                        • {fmtData(pr.data_ora)} · {pr.nome} · lotto {pr.lotto_produzione || '—'} · {pr.quantita_usata} {sel.unita_misura}
+                        • {fmtData(pr.data_ora)} · {pr.nome}{pr.evento ? ` · per ${pr.evento}` : ''} · lotto {pr.lotto_produzione || '—'} · {pr.quantita_usata} {sel.unita_misura}
                       </Text>
                     )) : <Text style={S.muted}>Non risulta impiegato in produzioni.</Text>}
                     {impatto.stessaPartita.length > 0 && (
