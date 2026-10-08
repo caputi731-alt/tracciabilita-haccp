@@ -23,7 +23,17 @@ export function getDb() {
   return apertura;
 }
 
-export async function initDatabase() {
+/**
+ * Crea le tabelle e porta lo schema alla versione attuale. Se viene chiamata più volte insieme (l'app che si riavvia
+ * mentre il primo avvio è ancora in corso) il lavoro si fa una volta sola: le altre chiamate aspettano la stessa.
+ */
+let avvio = null;
+export function initDatabase() {
+  if (!avvio) avvio = preparaSchema().finally(() => { avvio = null; });
+  return avvio;
+}
+
+async function preparaSchema() {
   const d = await getDb();
   await d.execAsync(`
     CREATE TABLE IF NOT EXISTS fornitori (
@@ -245,7 +255,13 @@ export async function initDatabase() {
   const aggiungiSeManca = async (tabella, colonna, tipo) => {
     const cols = await d.getAllAsync(`PRAGMA table_info(${tabella})`);
     if (!cols.some((c) => c.name === colonna)) {
-      await d.execAsync(`ALTER TABLE ${tabella} ADD COLUMN ${colonna} ${tipo}`);
+      try {
+        await d.execAsync(`ALTER TABLE ${tabella} ADD COLUMN ${colonna} ${tipo}`);
+      } catch (e) {
+        // la colonna c'è già (aggiunta un attimo prima da un altro avvio): non è un errore, l'app deve partire
+        if (/duplicate column/i.test(String(e?.message || e))) return false;
+        throw e;
+      }
       return true;
     }
     return false;
