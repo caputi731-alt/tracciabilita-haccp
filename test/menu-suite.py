@@ -129,6 +129,29 @@ with sync_playwright() as p:
     img = pg.evaluate("makeImage(getMenu('m1'),'tavolo').then(b=>b.size)")
     ok(img > 30000, f'immagine del menù creata ({img // 1024} KB)')
 
+    # ---------- menù verticale: nel PDF occupa il foglio A4, l'immagine resta 9:16 ----------
+    SEZ = """n=>Array.from({length:n},(_,i)=>({name:'Sezione '+(i+1),items:Array.from({length:n>3?4:2},(_,j)=>({name:'Portata di prova numero '+(j+1)}))}))"""
+    A4V = """async n=>{const m={...getMenu('m1'),templateId:'tpl-pecore',sections:(%s)(n)},t=tplOf(m),h=document.getElementById('rh');
+      h.innerHTML=pageHTML(m,t,'tavolo','it');let p=h.firstElementChild;fitPage(p);const prima=parseFloat(p.querySelector('.v-in').style.fontSize);
+      h.innerHTML=pageHTML(m,t,'tavolo','it');p=h.firstElementChild;const sc=verticaleA4(p,t),r=fitPage(p),dopo=parseFloat(p.querySelector('.v-in').style.fontSize)*sc;h.innerHTML='';
+      const x=new TextDecoder('latin1').decode(await (await makePDF(m,'tavolo',false,true)).arrayBuffer());
+      const b=x.match(/\\/MediaBox\\s*\\[([^\\]]+)\\]/)[1].trim().split(/\\s+/).map(Number),c=x.match(/([\\d.]+) 0 0 ([\\d.]+) ([\\d.]+) ([\\d.]+) cm/).slice(1).map(Number);
+      const cv=await makePDF(m,'tavolo',true);return{prima,dopo,sc,over:r.over,foglio:[b[2],b[3]],img:[c[0],c[1],c[2]],jpg:[cv.width,cv.height]}}""" % SEZ
+    corto, lungo = pg.evaluate(A4V, 3), pg.evaluate(A4V, 5)
+    for nome, r in (('corto', corto), ('lungo', lungo)):
+        a4 = abs(r['foglio'][0] - 595.28) < 0.5 and abs(r['foglio'][1] - 841.89) < 0.5
+        ok(a4 and abs(r['img'][0] - 595.28) < 0.5 and abs(r['img'][1] - 841.89) < 0.5 and r['img'][2] < 0.5 and not r['over'],
+           f"menù verticale {nome}: il PDF è un A4 e il menù lo occupa tutto, senza fasce ai lati")
+        ok(r['jpg'] == [1620, 2880], f"menù verticale {nome}: l'immagine JPG resta nel formato 9:16 di sempre")
+    ok(abs(corto['sc'] - 1.257) < 0.005 and corto['dopo'] > corto['prima'] * 1.25,
+       f"menù corto: scritte e illustrazione ingrandite del {round((corto['sc'] - 1) * 100)}% sul foglio")
+    ok(lungo['sc'] > 1.03 and lungo['dopo'] > lungo['prima'] * 1.03,
+       f"menù lungo: scritte più grandi di prima anche a pagina piena (+{round((lungo['dopo'] / lungo['prima'] - 1) * 100)}%)")
+    mio = pg.evaluate("""async()=>{const t={...getTpl('tpl-pecore'),id:'tpl-foto',builtIn:false,bgImage:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII='};
+      state.templates.push(t);const m={...getMenu('m1'),templateId:'tpl-foto'},h=document.getElementById('rh');h.innerHTML=pageHTML(m,t,'tavolo','it');
+      const sc=verticaleA4(h.firstElementChild,t);h.innerHTML='';state.templates.pop();return sc}""")
+    ok(mio == 1, 'template con uno sfondo caricato da te: la pagina resta quella di sempre')
+
     ricevuti.clear()
     pg.evaluate("""async()=>{const m=getMenu('m1');const f=[await waFile(m,'proposta','pdf'),await waFile(m,'proposta','jpg')];
       await sendFiles(f,menuMsg(m,'proposta'),m.phone,true)}""")
