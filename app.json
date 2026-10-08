@@ -41,7 +41,8 @@
         {
           "cameraPermission": "L'app usa la fotocamera per archiviare le foto dei documenti di trasporto."
         }
-      ]
+      ],
+      "./plugins/conMenu"
     ],
     "icon": "./icon.png"
   }

@@ -201,6 +201,11 @@ export async function initDatabase() {
       valore TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS menu_dati (
+      chiave TEXT PRIMARY KEY,
+      valore TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS registro_modifiche (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       tabella TEXT NOT NULL,
@@ -651,6 +656,9 @@ async function elencoTabelle() {
 /** Tabelle locali al dispositivo, escluse dal backup (es. la cartella scelta per i backup). */
 const TABELLE_LOCALI = ['preferenze'];
 
+/** Tabelle aggiunte dopo i primi backup: se il backup da ripristinare non le contiene, non vengono svuotate. */
+const TABELLE_NUOVE = ['menu_dati'];
+
 export async function esportaTutto() {
   const tabelle = (await elencoTabelle()).filter((t) => !TABELLE_LOCALI.includes(t));
   const dati = {};
@@ -678,7 +686,11 @@ export async function importaTutto(dump) {
   await d.execAsync('PRAGMA foreign_keys = OFF;');
   try {
     await d.withTransactionAsync(async () => {
-      for (const t of esistenti) await d.execAsync(`DELETE FROM ${t}`);
+      for (const t of esistenti) {
+        // un backup fatto prima che esistesse il modulo Menù non ha i suoi dati: in quel caso restano quelli attuali
+        if (TABELLE_NUOVE.includes(t) && !Array.isArray(dump.tabelle[t])) continue;
+        await d.execAsync(`DELETE FROM ${t}`);
+      }
       for (const t of Object.keys(dump.tabelle)) {
         if (!colonne[t]) continue;
         const righe = dump.tabelle[t];
@@ -712,6 +724,40 @@ export async function leggiPreferenza(chiave) {
 export const salvaPreferenza = (chiave, valore) =>
   exec(`INSERT INTO preferenze (chiave, valore) VALUES (?, ?)
         ON CONFLICT(chiave) DO UPDATE SET valore = excluded.valore`, [chiave, valore]);
+
+/* ---------- dati del modulo Menù ----------
+   L'app web del Menù salva qui il suo archivio (prima stava in IndexedDB): coppie chiave → testo JSON.
+   Stando nel database, questi dati entrano nel backup come tutti gli altri. */
+
+export async function menuLeggi(chiave) {
+  const r = await queryOne('SELECT valore FROM menu_dati WHERE chiave = ?', [String(chiave)]);
+  return r ? r.valore : null;
+}
+
+export async function menuChiavi() {
+  return (await query('SELECT chiave FROM menu_dati ORDER BY chiave')).map((r) => r.chiave);
+}
+
+/** Scrive più chiavi insieme, o tutte o nessuna. Un valore null (o undefined) cancella la chiave. */
+export async function menuScrivi(coppie) {
+  if (!Array.isArray(coppie)) throw new Error('Dati del menù non validi.');
+  for (const c of coppie) {
+    if (!Array.isArray(c) || typeof c[0] !== 'string' || !c[0]) throw new Error('Dati del menù non validi.');
+    if (c[1] !== null && c[1] !== undefined && typeof c[1] !== 'string') throw new Error('Dati del menù non validi.');
+  }
+  const d = await getDb();
+  await d.withTransactionAsync(async () => {
+    for (const [chiave, valore] of coppie) {
+      if (valore === null || valore === undefined) {
+        await d.runAsync('DELETE FROM menu_dati WHERE chiave = ?', [chiave]);
+      } else {
+        await d.runAsync(
+          `INSERT INTO menu_dati (chiave, valore) VALUES (?, ?)
+           ON CONFLICT(chiave) DO UPDATE SET valore = excluded.valore`, [chiave, valore]);
+      }
+    }
+  });
+}
 
 export function toCsv(righe) {
   if (!righe || righe.length === 0) return '';

@@ -11,7 +11,7 @@
   "env": { "es2022": true },
   "globals": {
     "setTimeout": "readonly", "clearTimeout": "readonly", "console": "readonly", "Promise": "readonly",
-    "decodeURIComponent": "readonly", "TextDecoder": "readonly", "Uint8Array": "readonly", "atob": "readonly"
+    "decodeURIComponent": "readonly", "require": "readonly", "JSON": "readonly", "Date": "readonly", "TextDecoder": "readonly", "Uint8Array": "readonly", "atob": "readonly"
   },
   "plugins": ["react", "import"],
   "settings": { "import/resolver": { "node": { "extensions": [".js"] } }, "import/ignore": ["node_modules"] },

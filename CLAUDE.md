@@ -11,7 +11,8 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
 - Dopo il push, riepilogare a Luca cosa è cambiato e cosa testare.
 
 ## Regole vincolanti
-- Struttura piatta: nessuna sottocartella per il codice (eccezioni: `.github/workflows/` e `test/`).
+- Struttura piatta: nessuna sottocartella per il codice dell'app (eccezioni: `.github/workflows/`, `test/`,
+  `menu/` con l'app web del Menù e `plugins/` con i plugin di configurazione Expo).
 - Nomi file in PascalCase esatto (es. `RicevimentoScreen.js`): Linux distingue maiuscole/minuscole.
 - Kotlin resta fissato a 1.9.25 tramite `expo-build-properties` in `app.json`. Non rimuoverlo.
 - `database.js`: prima di ogni commit verificare che non esistano funzioni dichiarate due volte
@@ -84,6 +85,25 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
 - Contenuto di una modale: sempre dentro `VistaModale` (UI.js), non uno `ScrollView` figlio diretto di `<Modal>` (su Android non scorrerebbe fino al primo nuovo layout).
 - Struttura schermate: Magazzino contiene anche la rintracciabilità (modalità "In giacenza" / "Tutti i lotti"); la rotta `Rintracciabilita` punta a MagazzinoScreen per compatibilità. `CaricoMerce` è l'ingresso unico verso ImportaFattura e Ricevimento. PDF del lotto in `schedaLotto.js`.
 - Anagrafiche (Prodotti/Fornitori/Ricette/Frigoriferi) e Documenti e dati (Registri PDF/Backup) sono contenitori a linguette: le schermate interne restano file separati e si aprono anche da rotta diretta con `{ scheda: '...' }`.
+
+## Modulo Menù (suite Tenuta Coppa, tappa 1: prototipo)
+- La suite nasce da questa app: il Menù (prima app a parte, repository `menu-tenuta-coppa`) entra come modulo.
+  Piano completo nel progetto Claude "Suite Tenuta Coppa".
+- `menu/` è l'app web del Menù copiata com'è (HTML/JS puro, niente import: script caricati in ordine da `menu/index.html`).
+  Da qui in poi le modifiche al Menù si fanno in questa cartella. `npm run lint` non la controlla.
+- `plugins/conMenu.js` (in `app.json`) copia `menu/` negli asset dell'APK a ogni prebuild e dichiara WhatsApp nel manifest.
+- `MenuScreen.js` mostra `file:///android_asset/menu/index.html` in una WebView (`react-native-webview`). La rotta `Menu`
+  si carica con `getComponent`, e `menuInvio.js` con `require` al momento dell'uso: un problema del modulo non ferma il resto dell'app.
+- Ponte pagina ↔ suite: `menu/js/00-suite.js` (lato pagina, caricato per primo) e `menuPonte.js` (lato suite, senza dipendenze
+  dal telefono, provato in `test/menuPonte.test.mjs`). La pagina manda messaggi JSON `{ tipo, ... }`; la suite risponde
+  eseguendo `window.__suiteRisposta(id, ok, valore)`.
+- Archivio: dentro la suite la pagina non usa IndexedDB ma `window.SuiteKV` → tabella `menu_dati` (`menuLeggi`, `menuChiavi`,
+  `menuScrivi` in database.js). I dati del Menù entrano così nel backup; `importaTutto` non svuota `menu_dati` se il backup
+  è precedente al modulo (`TABELLE_NUOVE`).
+- Telefono: `menuInvio.js` rifà le funzioni di `window.Android` dell'app originale — apri/condividi (`expo-sharing`,
+  `expo-intent-launcher`), "Salva con nome" (cartella scelta con SAF), invio su WhatsApp (`react-native-share`, testo anche negli appunti).
+- Prova della parte web: `python3 test/menu-suite.py` (Playwright, pagina aperta da file con una finta suite). Non gira ancora su GitHub.
+- Se la compilazione Android fallisce, il passo "Compila l'APK" scrive le righe d'errore nel riepilogo della build.
 
 ## Linee guida UX (pacchetto build 60)
 - Colori: `COLORS.azione` (blu) per pulsanti, collegamenti e scelte attive; il verde (`primary`/`ok`) solo per intestazione e stati positivi.

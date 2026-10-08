@@ -119,7 +119,14 @@ jobs:
         run: |
           chmod +x ./gradlew
           # una sola architettura (arm64, quella dei telefoni recenti): APK molto più leggero e veloce da pubblicare
-          ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a
+          ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a 2>&1 | tee "$RUNNER_TEMP/gradle.log"
+          esito=${PIPESTATUS[0]}
+          if [ "$esito" != "0" ]; then
+            # le righe che spiegano l'errore finiscono nel riepilogo della build, leggibile senza aprire tutto il log
+            righe=$(grep -E "error:|^e: |FAILED|What went wrong|Execution failed|Could not |Unresolved reference|cannot find symbol|Duplicate class|Manifest merger" "$RUNNER_TEMP/gradle.log" | head -12 | cut -c1-280 | sed 's/%/%25/g' | tr '\n' '|')
+            echo "::error::Compilazione Android non riuscita: ${righe:-nessuna riga di errore riconosciuta, vedi il log}"
+            exit "$esito"
+          fi
 
       - name: Rinomina l'APK con il numero di build
         run: |

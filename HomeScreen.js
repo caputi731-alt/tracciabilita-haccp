@@ -191,6 +191,18 @@ export default function HomeScreen({ navigation }) {
         ))}
       </View>
 
+      {/* Modulo Menù (prototipo della suite) */}
+      <TouchableOpacity activeOpacity={0.8} onPress={() => navigation.navigate('Menu')}
+        accessibilityRole="button" accessibilityLabel="Menù ed eventi. In prova dentro la suite"
+        style={[S.card, S.row, { marginTop: 4, minHeight: 64 }]}>
+        <Icona nome="silverware-fork-knife" size={28} colore={COLORS.azione} />
+        <View style={{ flex: 1, marginLeft: 12 }}>
+          <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.text }}>Menù ed eventi</Text>
+          <Text style={S.muted}>In prova dentro la suite</Text>
+        </View>
+        <Text style={S.chevron}>›</Text>
+      </TouchableOpacity>
+
       {scadenze.length > 0 && (
         <TouchableOpacity style={[S.card, { marginTop: 4 }]} activeOpacity={0.8}
           onPress={() => navigation.navigate('Magazzino')}>

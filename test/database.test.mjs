@@ -280,3 +280,31 @@ test('pulizie: "da fare" rispetta la frequenza dell\'area', async () => {
   assert.equal(stato.find((a) => a.id === sett).daFare, false, 'settimanale fatta 3 giorni fa: a posto');
   assert.equal(stato.find((a) => a.id === gior).daFare, true, 'giornaliera fatta 3 giorni fa: da fare');
 });
+
+test('archivio del modulo Menù: lettura, scrittura a gruppi, cancellazione', async () => {
+  assert.equal(await db.menuLeggi('state'), null);
+  await db.menuScrivi([['state', '{"v":3}'], ['blob:a', '"data:image/png;base64,AAAA"']]);
+  assert.equal(await db.menuLeggi('state'), '{"v":3}');
+  assert.deepEqual(await db.menuChiavi(), ['blob:a', 'state']);
+  await db.menuScrivi([['state', '{"v":3,"menus":[1]}'], ['blob:a', null]]);
+  assert.equal(await db.menuLeggi('state'), '{"v":3,"menus":[1]}');
+  assert.deepEqual(await db.menuChiavi(), ['state']);
+  // un gruppo con un dato non valido non scrive niente
+  await assert.rejects(db.menuScrivi([['state', '{"v":0}'], ['x', { oggetto: true }]]), /non validi/);
+  assert.equal(await db.menuLeggi('state'), '{"v":3,"menus":[1]}');
+});
+
+test('i dati del Menù entrano nel backup e un backup vecchio non li cancella', async () => {
+  await db.menuScrivi([['state', '{"v":3,"menus":["a"]}']]);
+  const dump = await db.esportaTutto();
+  assert.deepEqual(dump.tabelle.menu_dati.map((r) => ({ ...r })), [{ chiave: 'state', valore: '{"v":3,"menus":["a"]}' }]);
+  await db.menuScrivi([['state', '{"v":3,"menus":["a","b"]}']]);
+  await db.importaTutto(dump);
+  assert.equal(await db.menuLeggi('state'), '{"v":3,"menus":["a"]}', 'il ripristino riporta i menù del backup');
+  // backup fatto prima del modulo Menù: non ha la tabella, i menù attuali restano
+  const vecchio = { ...dump, tabelle: { ...dump.tabelle } };
+  delete vecchio.tabelle.menu_dati;
+  await db.menuScrivi([['state', '{"v":3,"menus":["nuovo"]}']]);
+  await db.importaTutto(vecchio);
+  assert.equal(await db.menuLeggi('state'), '{"v":3,"menus":["nuovo"]}');
+});
