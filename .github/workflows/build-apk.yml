@@ -131,12 +131,11 @@ jobs:
           APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
           "$APKSIGNER" verify --print-certs dist/*.apk | grep -E "Signer #1 certificate (DN|SHA-256)" | tee firma.txt
           # l'impronta deve essere quella dell'app: altrimenti l'APK non si installerebbe sopra i dati esistenti
-          trovata=$(grep "SHA-256" firma.txt | sed 's/.*: *//' | tr -d ': \r' | tr 'A-F' 'a-f')
+          # si prende la sola impronta (64 cifre esadecimali) dalla riga del certificato, qualunque sia il resto della riga
+          trovata=$(grep "certificate SHA-256" firma.txt | grep -oiE '[0-9a-f]{64}' | head -1 | tr 'A-F' 'a-f' || true)
           attesa=$(printf '%s' "$IMPRONTA_ATTESA" | tr -d ': ' | tr 'A-F' 'a-f')
           if [ -z "$trovata" ] || [ "$trovata" != "$attesa" ]; then
-            echo "::error::Impronta della firma diversa da quella attesa: l'APK non viene pubblicato."
-            echo "Trovata: ${trovata:-nessuna}"
-            echo "Attesa:  $attesa"
+            echo "::error::Impronta della firma diversa da quella attesa: l'APK non viene pubblicato. Trovata: ${trovata:-nessuna} - Attesa: $attesa - Righe lette: $(wc -l < firma.txt)"
             exit 1
           fi
           echo "Impronta corretta."
