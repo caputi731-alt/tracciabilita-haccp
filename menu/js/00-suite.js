@@ -74,6 +74,7 @@
 
   // Aspetto: dentro la suite la pagina prende colori, carattere e forme delle altre sezioni (css/suite.css)
   document.documentElement.classList.add('suite');
+  if (dati.scuro) document.documentElement.classList.add('scuro'); // tema scuro del telefono, deciso dalla suite all'avvio
   window.NELLA_SUITE = true;
   // Chiamata dopo ogni disegno della pagina (render in 09-fogli.js). Nelle schermate principali il titolo è "Menù" e
   // le sezioni stanno nelle linguette; in quelle interne (modifica, anteprima...) la suite nasconde la sua barra in basso.

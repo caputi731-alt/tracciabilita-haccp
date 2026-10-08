@@ -203,29 +203,29 @@ export default function HomeScreen({ navigation }) {
         </View>
 
         {/* Controlli di oggi */}
-        <View style={{ backgroundColor: COLORS.primary, borderRadius: 28, padding: 24, marginBottom: 12 }}>
+        <View style={{ backgroundColor: COLORS.eroe, borderRadius: 28, padding: 24, marginBottom: 12 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <View style={{ flex: 1, paddingRight: 12 }}>
-              <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.primarySoft }}>Controlli di oggi</Text>
-              <Text style={{ fontSize: 28, fontWeight: '700', color: '#fff', letterSpacing: -0.6, marginTop: 2 }}>{titolo}</Text>
-              <Text style={{ fontSize: 16, color: COLORS.primarySoft, marginTop: 2 }}>{dettaglio}</Text>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.suEroeTenue }}>Controlli di oggi</Text>
+              <Text style={{ fontSize: 28, fontWeight: '700', color: COLORS.suEroe, letterSpacing: -0.6, marginTop: 2 }}>{titolo}</Text>
+              <Text style={{ fontSize: 16, color: COLORS.suEroeTenue, marginTop: 2 }}>{dettaglio}</Text>
             </View>
             {totali > 0 && (
-              <Anello fatti={fatti} totali={totali} colore={COLORS.primarySoft} traccia="#4A6E3B">
+              <Anello fatti={fatti} totali={totali} colore={COLORS.suEroeTenue} traccia={COLORS.eroeTraccia}>
                 {mancanti === 0
-                  ? <Icona nome="check-bold" size={30} colore="#fff" />
-                  : <Text style={{ fontSize: 20, fontWeight: '700', color: '#fff' }}>{fatti}/{totali}</Text>}
+                  ? <Icona nome="check-bold" size={30} colore={COLORS.suEroe} />
+                  : <Text style={{ fontSize: 20, fontWeight: '700', color: COLORS.suEroe }}>{fatti}/{totali}</Text>}
               </Anello>
             )}
           </View>
           {!!pulsante && (
             <TouchableOpacity onPress={pulsante.vai} activeOpacity={0.8} accessibilityRole="button"
               style={{
-                marginTop: 20, minHeight: 52, borderRadius: 26, backgroundColor: COLORS.primarySoft,
+                marginTop: 20, minHeight: 52, borderRadius: 26, backgroundColor: COLORS.eroePulsante,
                 flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16,
               }}>
-              <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.primaryDark, marginRight: 8 }}>{pulsante.testo}</Text>
-              <Icona nome="arrow-right" size={20} colore={COLORS.primaryDark} />
+              <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.suEroePulsante, marginRight: 8 }}>{pulsante.testo}</Text>
+              <Icona nome="arrow-right" size={20} colore={COLORS.suEroePulsante} />
             </TouchableOpacity>
           )}
         </View>
@@ -315,8 +315,8 @@ export default function HomeScreen({ navigation }) {
           position: 'absolute', right: 16, bottom: 16, height: 56, borderRadius: 18, paddingLeft: 18, paddingRight: 22,
           backgroundColor: COLORS.terra, flexDirection: 'row', alignItems: 'center', elevation: 4,
         }}>
-        <Icona nome="plus" size={24} colore="#fff" />
-        <Text style={{ fontSize: 16, fontWeight: '700', color: '#fff', marginLeft: 8 }}>Registra</Text>
+        <Icona nome="plus" size={24} colore={COLORS.suTerra} />
+        <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.suTerra, marginLeft: 8 }}>Registra</Text>
       </TouchableOpacity>
 
       {/* Pannello dal basso con le registrazioni */}

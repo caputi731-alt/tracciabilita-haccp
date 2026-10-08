@@ -174,7 +174,11 @@ with sync_playwright() as p:
     con = pg.evaluate(STILI)
     pg.evaluate("document.documentElement.classList.remove('suite')")
     senza = pg.evaluate(STILI)
-    pg.evaluate("document.documentElement.classList.add('suite')")
+    pg.evaluate("document.documentElement.classList.add('suite','scuro')")
+    scuro = pg.evaluate(STILI)
+    fondo = pg.evaluate("getComputedStyle(document.body).backgroundColor")
+    pg.evaluate("document.documentElement.classList.remove('scuro')")
+    ok(fondo == 'rgb(18, 20, 15)' and scuro == senza, 'tema scuro: cambia il contorno, le pagine dei menù restano su carta chiara e identiche')
     ok(len(con) > 300 and con == senza, f'pagine dei menù identiche a prima in tutti i template ({len(con)} elementi confrontati)')
 
     ricevuti.clear()

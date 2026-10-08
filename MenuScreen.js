@@ -9,7 +9,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Linking, PixelRatio, ActivityIndicator } from 'react-native';
 import { WebView } from 'react-native-webview';
-import { COLORS, S } from './theme';
+import { COLORS, S, TEMA_SCURO } from './theme';
 import { Vuoto } from './UI';
 import { BUILD } from './build';
 import { menuLeggi, menuChiavi, menuScrivi } from './database';
@@ -122,7 +122,7 @@ export default function MenuScreen({ attiva = true, comandi, suEsci, suVista }) 
         setBuiltInZoomControls={false}
         setSupportMultipleWindows={false}
         overScrollMode="never"
-        injectedJavaScriptObject={{ build: BUILD, fontScale: PixelRatio.getFontScale() }}
+        injectedJavaScriptObject={{ build: BUILD, fontScale: PixelRatio.getFontScale(), scuro: TEMA_SCURO }}
         onMessage={messaggio}
         onShouldStartLoadWithRequest={richiesta}
         onLoadEnd={() => { caricata.current = true; }}

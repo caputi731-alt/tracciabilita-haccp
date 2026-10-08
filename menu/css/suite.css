@@ -59,3 +59,27 @@ html.suite .stat button,html.suite .chips button,html.suite .algs button{border-
 html.suite .algs button.on{border-color:var(--olive)}
 html.suite .sheet{border-radius:28px 28px 0 0}
 html.suite .dlg{border-radius:28px}
+
+/* ---------- Tema scuro (classe "scuro" su <html>, messa da js/00-suite.js quando la suite è in tema scuro) ----------
+   Stessi colori di theme.js. Le pagine dei menù e le anteprime di stampa restano su carta chiara: sono ciò che si stampa. */
+html.suite.scuro{color-scheme:dark;--paper:#12140F;--ink:#E6E5D9;--muted:#B0B3A4;--line:#2E3226;--olive:#C9E0B5;--olive-2:#D7E8C6;--olive-soft:#2C4721;--wine:#FFB4AB;
+  --cont:#23261C;--campo:#8F9285;--terra:#F2B79C;--scheda:#1D2017;--su-olive:#14290C}
+html.suite.scuro .card,html.suite.scuro .mcard,html.suite.scuro .sec,html.suite.scuro .list,html.suite.scuro .fcard,html.suite.scuro .day,
+html.suite.scuro .drow,html.suite.scuro .trow,html.suite.scuro .crow,html.suite.scuro .sheet,html.suite.scuro .dlg{background:var(--scheda)}
+html.suite.scuro .btn,html.suite.scuro .stat button,html.suite.scuro .chips button,html.suite.scuro .algs button{background:transparent}
+html.suite.scuro .inp,html.suite.scuro .clr input{background-color:var(--cont)}
+html.suite.scuro .day.sel{background:var(--olive-soft)}
+html.suite.scuro .btn.pri,html.suite.scuro .algs button.on,html.suite.scuro .pk.on i,html.suite.scuro .wa-step.done>b{color:var(--su-olive)}
+html.suite.scuro .btn.pri{background:var(--olive)}
+html.suite.scuro .algs button.on{background:var(--olive)}
+html.suite.scuro .btn.danger-f{color:#4A1512}
+html.suite.scuro .fab{color:#4A1A06;box-shadow:0 4px 12px rgba(0,0,0,.5)}
+html.suite.scuro .toast{background:#E6E5D9;color:#1B1D17}
+html.suite.scuro .toast button{color:#2F4F23}
+html.suite.scuro .busy{background:rgba(18,20,15,.94)}
+html.suite.scuro .shbg{background:rgba(0,0,0,.6)}
+html.suite.scuro .pill{color:color-mix(in srgb,var(--c) 45%,#fff);background:color-mix(in srgb,var(--c) 28%,#1D2017)}
+html.suite.scuro .stat button.on{background:color-mix(in srgb,var(--c) 26%,#1D2017)}
+html.suite.scuro .hint[style*="color:#8A5A12"]{color:#F2C078 !important}
+html.suite.scuro .pv .pg{box-shadow:0 10px 30px rgba(0,0,0,.6)}
+html.suite.scuro select.inp{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23B0B3A4' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")}

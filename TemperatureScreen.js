@@ -175,13 +175,13 @@ export default function TemperatureScreen({ navigation, route }) {
                   accessibilityLabel={`${g.giorno === oggi ? 'Oggi' : fmtData(g.giorno)}, ${stato}`}
                   style={{
                     minWidth: 62, minHeight: 64, borderRadius: 14, alignItems: 'center', justifyContent: 'center',
-                    paddingHorizontal: 8, backgroundColor: scelto ? COLORS.azione : '#fff',
+                    paddingHorizontal: 8, backgroundColor: scelto ? COLORS.azione : COLORS.card,
                     borderWidth: 1, borderColor: scelto ? COLORS.azione : COLORS.bordoCampo,
                   }}>
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: scelto ? '#fff' : COLORS.muted }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: scelto ? COLORS.suAzione : COLORS.muted }}>
                     {g.giorno === oggi ? 'oggi' : nomeGiorno(g.giorno)}
                   </Text>
-                  <Icona size={22} colore={scelto ? '#fff' : colore}
+                  <Icona size={22} colore={scelto ? COLORS.suAzione : colore}
                     nome={g.fuori ? 'alert-circle' : g.completo ? 'check-circle' : g.fatti ? 'circle-half-full' : 'circle-outline'} />
                 </TouchableOpacity>
               );

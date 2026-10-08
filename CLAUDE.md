@@ -111,7 +111,12 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
 - Schermate interne: intestazione chiara (`COLORS.bg`), senza ombra.
 - Anteprima nel browser per controllare l'aspetto senza telefono: `test/anteprima/vedi.py` (istruzioni nel file).
   `metro.config.js` serve solo a quello (piattaforma "web") e non cambia l'APK. Usarla prima di ogni modifica visibile.
-- Tema scuro: non ancora fatto (previsto nella tappa 2b). `COLORS` è fisso all'avvio.
+- Tema scuro: segue il telefono e si decide all'avvio (`TEMA_SCURO` e le due tavolozze `CHIARO`/`SCURO` in `theme.js`, stesse chiavi;
+  `COLORS` resta fisso finché l'app è aperta). Mai colori scritti a mano nelle schermate: sopra un fondo `azione` il testo è
+  `COLORS.suAzione`, sopra `terra` è `suTerra`, i campi hanno fondo `campo`; il riquadro della Home usa le chiavi `eroe…`.
+  `caratteri.js` dà `COLORS.text` ai testi senza colore (non a quelli dentro un altro testo). PDF, etichette e pagine dei menù restano chiari.
+  Il Menù riceve `scuro` dalla suite e usa la parte "Tema scuro" di `menu/css/suite.css`. Controllare sempre entrambi i temi:
+  `SCHEMI=dark,light python3 test/anteprima/vedi.py …`. Finestre di sistema (Alert, barra di navigazione di Android) non ancora adattate.
 
 ## Modulo Menù (suite Tenuta Coppa)
 - La suite nasce da questa app: il Menù (prima app a parte, repository `menu-tenuta-coppa`) entra come modulo.

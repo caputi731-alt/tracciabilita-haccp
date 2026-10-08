@@ -5,7 +5,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { initDatabase } from './database';
 import { backupAutomaticoSeServe, mettiAlSicuroFoto, pulisciFotoInutili } from './backupAutomatico';
-import { COLORS, S } from './theme';
+import { COLORS, S, TEMA_SCURO } from './theme';
 import { aggiornaPromemoria, ascoltaToccoNotifica } from './notifiche';
 import { useFonts } from 'expo-font';
 import { CARATTERI, usaCaratteri } from './caratteri';
@@ -85,7 +85,7 @@ export default function App() {
   return (
     <NavigationContainer ref={navigazione}
       onReady={() => { if (rottaInAttesa) { const r = rottaInAttesa; rottaInAttesa = null; apriDaNotifica(r); } }}>
-      <StatusBar barStyle="dark-content" backgroundColor={COLORS.bg} />
+      <StatusBar barStyle={TEMA_SCURO ? 'light-content' : 'dark-content'} backgroundColor={COLORS.bg} />
       <Stack.Navigator
         screenOptions={{
           headerStyle: { backgroundColor: COLORS.bg },

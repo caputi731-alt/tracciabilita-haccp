@@ -251,7 +251,7 @@ export function Bottone({ testo, onPress, ghost, colore, icona, disabilitato = f
   const inCorso = useRef(false);
   const montato = useRef(true);
   React.useEffect(() => () => { montato.current = false; }, []);
-  const coloreTesto = ghost ? (colore || COLORS.azione) : '#fff';
+  const coloreTesto = ghost ? (colore || COLORS.azione) : COLORS.suAzione;
   const premi = () => {
     if (inCorso.current || disabilitato || !onPress) return;
     let esito;
@@ -408,7 +408,7 @@ export function CampoData({ label, value, onChange, errore, scorciatoie, facolta
                       backgroundColor: sel ? (COLORS.azione || COLORS.primary) : 'transparent',
                       borderWidth: iso === oggi && !sel ? 1.5 : 0, borderColor: COLORS.azione || COLORS.primary,
                     }}>
-                      <Text style={{ fontSize: 16, color: sel ? '#fff' : COLORS.text, fontWeight: sel ? '800' : '500' }}>{g}</Text>
+                      <Text style={{ fontSize: 16, color: sel ? COLORS.suAzione : COLORS.text, fontWeight: sel ? '800' : '500' }}>{g}</Text>
                     </View>
                   </TouchableOpacity>
                 );
@@ -484,7 +484,7 @@ export function CameraCapture({ visibile, onScattata, onChiudi }) {
           </TouchableOpacity>
           {permesso?.granted && (
             <TouchableOpacity style={{ flex: 1, padding: 20, backgroundColor: COLORS.azione }} onPress={scatta}>
-              <Text style={{ color: '#fff', textAlign: 'center', fontSize: 16, fontWeight: '700' }}>
+              <Text style={{ color: COLORS.suAzione, textAlign: 'center', fontSize: 16, fontWeight: '700' }}>
                 {inCorso ? 'Scatto…' : 'Scatta'}
               </Text>
             </TouchableOpacity>

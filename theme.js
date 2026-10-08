@@ -1,4 +1,4 @@
-import { StyleSheet } from 'react-native';
+import { StyleSheet, Appearance } from 'react-native';
 import { oggiLocale, daIsoLocale } from './utile';
 
 export {
@@ -6,12 +6,13 @@ export {
 } from './utile';
 
 // Tavolozza della suite (Material Design 3, dal mockup approvato l'8/10/2026): verdi oliva e un accento terracotta.
-export const COLORS = {
+const CHIARO = {
   bg: '#F6F5EC',            // fondo delle schermate
   card: '#FFFFFF',
+  campo: '#FFFFFF',         // fondo dei campi di testo
   contenitore: '#ECEBDD',   // superfici in secondo piano: barra in basso, tasti neutri, selettori
   primary: '#2F4F23',
-  primaryDark: '#1A3310',
+  primaryDark: '#1A3310',   // testo sopra primarySoft
   primarySoft: '#D7E8C6',
   text: '#1B1D17',
   muted: '#5B5F52',
@@ -25,15 +26,67 @@ export const COLORS = {
   // bordo dei campi (visibile: contrasto 3:1 sul bianco) e testo dei segnaposto
   bordoCampo: '#8A8E7E',
   segnaposto: '#6A6E60',
+  campoErrore: '#FFF8F7',
   // colore delle azioni (pulsanti, collegamenti, scelte attive): il verde oliva principale
   azione: '#2F4F23',
   azioneDark: '#1A3310',
   azioneSoft: '#D7E8C6',
+  suAzione: '#FFFFFF',      // testo e icone sopra un fondo "azione" (pulsanti pieni)
   // accento terracotta: il pulsante "Registra" e le cose che chiedono attenzione senza essere un errore
   terra: '#9C4524',
   terraSoft: '#FBDDCF',
-  terraScuro: '#5C2410',
+  terraScuro: '#5C2410',    // testo sopra terraSoft
+  suTerra: '#FFFFFF',
+  // riquadro "Controlli di oggi" della Home
+  eroe: '#2F4F23',
+  suEroe: '#FFFFFF',
+  suEroeTenue: '#D7E8C6',
+  eroeTraccia: '#4A6E3B',
+  eroePulsante: '#D7E8C6',
+  suEroePulsante: '#1A3310',
 };
+
+// Tema scuro (stesso mockup, schermata "Home scura"): nel Material 3 scuro i colori d'azione diventano chiari
+// e il testo che ci sta sopra scuro. Le chiavi sono le stesse del tema chiaro.
+const SCURO = {
+  bg: '#12140F',
+  card: '#1D2017',
+  campo: '#23261C',
+  contenitore: '#23261C',
+  primary: '#C9E0B5',
+  primaryDark: '#D7E8C6',
+  primarySoft: '#2C4721',
+  text: '#E6E5D9',
+  muted: '#B0B3A4',
+  border: '#2E3226',
+  danger: '#FFB4AB',
+  dangerSoft: '#4A1512',
+  warning: '#F2C078',
+  warningSoft: '#3F2A08',
+  ok: '#A6D69A',
+  accent: '#8FB377',
+  bordoCampo: '#8F9285',
+  segnaposto: '#9A9D8E',
+  campoErrore: '#3A1512',
+  azione: '#C9E0B5',
+  azioneDark: '#D7E8C6',
+  azioneSoft: '#2C4721',
+  suAzione: '#14290C',
+  terra: '#F2B79C',
+  terraSoft: '#5C2A14',
+  terraScuro: '#FBDDCF',
+  suTerra: '#4A1A06',
+  eroe: '#2C4721',
+  suEroe: '#E6E5D9',
+  suEroeTenue: '#C9E0B5',
+  eroeTraccia: '#456A36',
+  eroePulsante: '#C9E0B5',
+  suEroePulsante: '#14290C',
+};
+
+/** Il tema segue quello del telefono e si decide all'avvio: cambiando tema nelle impostazioni, l'app lo prende alla riapertura. */
+export const TEMA_SCURO = Appearance.getColorScheme() === 'dark';
+export const COLORS = TEMA_SCURO ? SCURO : CHIARO;
 
 export const ALLERGENI = [
   'Glutine', 'Crostacei', 'Uova', 'Pesce', 'Arachidi', 'Soia', 'Latte',
@@ -104,7 +157,7 @@ export const S = StyleSheet.create({
   },
   input: {
     borderWidth: 1, borderColor: COLORS.bordoCampo, borderRadius: 14, paddingHorizontal: 14,
-    paddingVertical: 13, fontSize: 16, backgroundColor: '#fff', color: COLORS.text,
+    paddingVertical: 13, fontSize: 16, backgroundColor: COLORS.campo, color: COLORS.text,
   },
 
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
@@ -113,7 +166,7 @@ export const S = StyleSheet.create({
     backgroundColor: COLORS.azione, borderRadius: 26, paddingVertical: 14, paddingHorizontal: 20, minHeight: 52,
     alignItems: 'center', justifyContent: 'center', marginTop: 14,
   },
-  btnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  btnText: { color: COLORS.suAzione, fontSize: 16, fontWeight: '700' },
   btnGhost: {
     borderWidth: 1, borderColor: COLORS.bordoCampo, borderRadius: 26, minHeight: 50,
     paddingVertical: 13, paddingHorizontal: 20, alignItems: 'center', justifyContent: 'center', marginTop: 10,
@@ -132,7 +185,7 @@ export const S = StyleSheet.create({
 
   muted: { color: COLORS.muted, fontSize: 15, lineHeight: 21 },
   link: { color: COLORS.azione, fontWeight: '700', fontSize: 15 },
-  inputErrore: { borderColor: COLORS.danger, borderWidth: 2, backgroundColor: '#FFF8F7' },
+  inputErrore: { borderColor: COLORS.danger, borderWidth: 2, backgroundColor: COLORS.campoErrore },
   testoErrore: { color: COLORS.danger, fontSize: 14, fontWeight: '700', marginTop: 5 },
   empty: { textAlign: 'center', color: COLORS.muted, marginTop: 44, fontSize: 15 },
 

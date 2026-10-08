@@ -8,7 +8,7 @@ const radice = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const mock = pathToFileURL(path.join(radice, 'test', 'expo-sqlite-finto.mjs')).href;
 const aes = pathToFileURL(path.join(radice, 'test', 'aes-finto.mjs')).href;
 const finti = {
-  'react-native': 'data:text/javascript,export const StyleSheet = { create: (s) => s };',
+  'react-native': "data:text/javascript,export const StyleSheet = { create: (s) => s }; export const Appearance = { getColorScheme: () => 'light' };",
   'expo-print': 'data:text/javascript,export const printAsync = async () => {};',
   'expo-notifications': 'data:text/javascript,export const setNotificationHandler = () => {}; export const getPermissionsAsync = async () => ({ granted: false });',
 };
