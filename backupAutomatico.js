@@ -1,7 +1,7 @@
 /**
  * Backup automatico giornaliero in una cartella scelta dall'utente (Storage Access Framework).
  * La cartella è fuori dall'app: il backup sopravvive anche alla disinstallazione.
- * Si conservano le ultime MAX_COPIE copie. Se il PIN è impostato (pin.js) il file dei dati è cifrato; le foto no.
+ * Copie a rotazione: resta un file per ognuno degli ultimi GIORNI_COPIE giorni (vedi backupDaEliminare in utile.js). Se il PIN è impostato (pin.js) il file dei dati è cifrato; le foto no.
  */
 import * as FileSystem from 'expo-file-system';
 import {
@@ -11,9 +11,10 @@ import {
   CARTELLA_FOTO, nomeFoto, esisteFoto, rendiPermanente, elencoFotoPermanenti, eliminaFotoOrfane,
 } from './foto';
 import { testoBackup } from './pin';
+import { backupDaEliminare } from './utile';
 
 const SAF = FileSystem.StorageAccessFramework;
-export const MAX_COPIE = 14;
+export const GIORNI_COPIE = 3;
 const ORE_TRA_BACKUP = 20;
 const PREFISSO = 'backup-haccp-';
 
@@ -55,16 +56,18 @@ export async function eseguiBackup() {
     const uri = await SAF.createFileAsync(cartella, `${PREFISSO}${timbro()}`, 'application/json');
     await FileSystem.writeAsStringAsync(uri, contenuto, { encoding: FileSystem.EncodingType.UTF8 });
 
-    const file = (await SAF.readDirectoryAsync(cartella))
-      .filter((u) => nomeDaUri(u).startsWith(PREFISSO))
-      .sort((a, b) => (nomeDaUri(a) < nomeDaUri(b) ? 1 : -1));
-    for (const vecchio of file.slice(MAX_COPIE)) {
-      try { await FileSystem.deleteAsync(vecchio, { idempotent: true }); } catch (e) { /* non bloccante */ }
+    // rotazione: il file appena scritto prende il posto di quello più vecchio
+    const file = (await SAF.readDirectoryAsync(cartella)).filter((u) => nomeDaUri(u).startsWith(PREFISSO));
+    const perNome = {};
+    file.forEach((u) => { perNome[nomeDaUri(u)] = u; });
+    const via = backupDaEliminare(Object.keys(perNome), GIORNI_COPIE, PREFISSO);
+    for (const nome of via) {
+      try { await FileSystem.deleteAsync(perNome[nome], { idempotent: true }); } catch (e) { /* non bloccante */ }
     }
     const fotoCopiate = await copiaFotoNellaCartella(cartella);
     await salvaPreferenza('backup_ultimo', new Date().toISOString());
     await salvaPreferenza('backup_errore', null);
-    return { nome: nomeDaUri(uri), copie: Math.min(file.length, MAX_COPIE), byte: contenuto.length, fotoCopiate };
+    return { nome: nomeDaUri(uri), copie: file.length - via.length, byte: contenuto.length, fotoCopiate };
   } catch (e) {
     await salvaPreferenza('backup_errore', String(e?.message || e));
     throw e;

@@ -272,6 +272,10 @@ export async function initDatabase() {
 
   await aggiungiSeManca('non_conformita', 'temperatura_id', 'INTEGER');
   await aggiungiSeManca('produzioni', 'annullata', 'INTEGER DEFAULT 0');
+  // istante vero della registrazione (data_ora può essere un giorno passato): serve al limite di tempo di "Annulla"
+  await aggiungiSeManca('movimenti', 'creato_il', 'TEXT');
+  await aggiungiSeManca('registro_temperature', 'creato_il', 'TEXT');
+  await aggiungiSeManca('registro_sanificazione', 'creato_il', 'TEXT');
   await d.execAsync(`
     CREATE INDEX IF NOT EXISTS idx_movimenti_lotto ON movimenti(lotto_id);
     CREATE INDEX IF NOT EXISTS idx_lotti_prodotto ON lotti(prodotto_id);
@@ -493,8 +497,8 @@ export async function registraScarico(lottoId, quantita, causale) {
       [residua, statoDopo(lotto.stato, residua), lottoId]
     );
     const r = await exec(
-      'INSERT INTO movimenti (lotto_id, tipo, quantita, data_ora, causale) VALUES (?,?,?,?,?)',
-      [lottoId, causale === 'scarto' ? 'scarto' : 'scarico', q, new Date().toISOString(), causale]
+      'INSERT INTO movimenti (lotto_id, tipo, quantita, data_ora, causale, creato_il) VALUES (?,?,?,?,?,?)',
+      [lottoId, causale === 'scarto' ? 'scarto' : 'scarico', q, new Date().toISOString(), causale, new Date().toISOString()]
     );
     movimentoId = r.lastInsertRowId;
   });
@@ -538,8 +542,8 @@ export async function registraTemperatura(puntoId, temperatura, note, giorno = n
     if (!punto) throw new Error('Frigorifero non trovato');
     const conforme = t >= punto.temp_min && t <= punto.temp_max;
     const r = await exec(
-      'INSERT INTO registro_temperature (punto_controllo_id, data_ora, temperatura, esito, note) VALUES (?,?,?,?,?)',
-      [puntoId, dataOra, t, conforme ? 'conforme' : 'non conforme', nota]
+      'INSERT INTO registro_temperature (punto_controllo_id, data_ora, temperatura, esito, note, creato_il) VALUES (?,?,?,?,?,?)',
+      [puntoId, dataOra, t, conforme ? 'conforme' : 'non conforme', nota, new Date().toISOString()]
     );
     let ncId = null;
     if (!conforme) {
@@ -897,9 +901,9 @@ export const eliminaArea = (id) =>
 
 export async function registraSanificazione(s) {
   const r = await exec(
-    `INSERT INTO registro_sanificazione (area_id, data_ora, prodotto_utilizzato, esito, operatore, note)
-     VALUES (?,?,?,?,?,?)`,
-    [s.area_id, new Date().toISOString(), s.prodotto_utilizzato, s.esito || 'conforme', s.operatore, s.note]
+    `INSERT INTO registro_sanificazione (area_id, data_ora, prodotto_utilizzato, esito, operatore, note, creato_il)
+     VALUES (?,?,?,?,?,?,?)`,
+    [s.area_id, new Date().toISOString(), s.prodotto_utilizzato, s.esito || 'conforme', s.operatore, s.note, new Date().toISOString()]
   );
   return r.lastInsertRowId;
 }
@@ -1519,12 +1523,25 @@ const traccia = (tabella, id, campo, prima, dopo) => exec(
   `INSERT INTO registro_modifiche (tabella, record_id, data_ora, campo, valore_precedente, valore_nuovo)
    VALUES (?,?,?,?,?,?)`, [tabella, id, new Date().toISOString(), campo, prima, dopo]);
 
+/**
+ * "Annulla" vale solo per le registrazioni appena fatte: passati MINUTI_ANNULLA minuti la riga non si può più togliere
+ * e resta solo la correzione, che lascia nel registro il valore di prima. Il limite è controllato qui, non nelle schermate.
+ */
+export const MINUTI_ANNULLA = 10;
+function ancoraAnnullabile(riga) {
+  const eta = riga && riga.creato_il ? Date.now() - new Date(riga.creato_il).getTime() : Infinity;
+  if (!(eta >= -60000 && eta <= MINUTI_ANNULLA * 60000)) {
+    throw new Error(`Sono passati più di ${MINUTI_ANNULLA} minuti dalla registrazione: non si può più annullare, usa la correzione.`);
+  }
+}
+
 /** Annulla un'uscita appena registrata: la quantità torna nel lotto. */
 export async function annullaUscita(movimentoId) {
   const d = await getDb();
   await d.withTransactionAsync(async () => {
     const m = await queryOne('SELECT * FROM movimenti WHERE id = ?', [movimentoId]);
     if (!m || m.tipo === 'carico') throw new Error('Movimento non annullabile');
+    ancoraAnnullabile(m);
     const l = await queryOne('SELECT * FROM lotti WHERE id = ?', [m.lotto_id]);
     const residua = Math.round((l.quantita_residua + m.quantita) * 1000) / 1000;
     await exec('UPDATE lotti SET quantita_residua = ?, stato = ? WHERE id = ?',
@@ -1540,6 +1557,7 @@ export async function annullaTemperatura(id, ncId) {
   await d.withTransactionAsync(async () => {
     const t = await queryOne('SELECT * FROM registro_temperature WHERE id = ?', [id]);
     if (!t) return;
+    ancoraAnnullabile(t);
     await exec('DELETE FROM registro_temperature WHERE id = ?', [id]);
     if (ncId) await exec("DELETE FROM non_conformita WHERE id = ? AND stato = 'aperta'", [ncId]);
     await traccia('registro_temperature', id, 'annullato', String(t.temperatura), 'annullato subito dopo la registrazione');
@@ -1550,6 +1568,7 @@ export async function annullaTemperatura(id, ncId) {
 export async function annullaSanificazione(id) {
   const r = await queryOne('SELECT * FROM registro_sanificazione WHERE id = ?', [id]);
   if (!r) return;
+  ancoraAnnullabile(r);
   await exec('DELETE FROM registro_sanificazione WHERE id = ?', [id]);
   await traccia('registro_sanificazione', id, 'annullato', r.data_ora, 'annullato subito dopo la registrazione');
 }

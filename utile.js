@@ -61,3 +61,25 @@ export const arrotonda = (n) => Math.round(Number(n) * 1000) / 1000;
 /** Testo sicuro dentro l'HTML di stampe ed etichette. */
 export const escHtml = (v) => (v === null || v === undefined ? '' : String(v)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'));
+
+/**
+ * Backup a rotazione: dato l'elenco dei nomi dei file (backup-haccp-AAAAMMGG-HHMM...), restituisce quelli da eliminare
+ * tenendo un solo file, il più recente, per ognuno degli ultimi `giorni` giorni in cui è stato fatto un backup.
+ * Contano i giorni con un backup, non quelli del calendario: se l'app resta chiusa una settimana le copie non spariscono.
+ * I file con un nome diverso non vengono mai toccati.
+ */
+export function backupDaEliminare(nomi, giorni = 3, prefisso = 'backup-haccp-') {
+  const copie = [];
+  for (const nome of nomi) {
+    const m = String(nome).startsWith(prefisso) && /^(\d{8})-(\d{4})/.exec(String(nome).slice(prefisso.length));
+    if (m) copie.push({ nome, giorno: m[1], ora: m[2] });
+  }
+  copie.sort((a, b) => (a.giorno + a.ora < b.giorno + b.ora ? 1 : a.giorno + a.ora > b.giorno + b.ora ? -1 : a.nome < b.nome ? 1 : -1));
+  const tenuti = new Set();
+  const via = [];
+  for (const c of copie) {
+    if (!tenuti.has(c.giorno) && tenuti.size < giorni) tenuti.add(c.giorno);
+    else via.push(c.nome);
+  }
+  return via;
+}

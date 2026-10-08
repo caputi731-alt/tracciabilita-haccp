@@ -32,6 +32,12 @@ jobs:
       - name: Controlla il codice (variabili e import inesistenti, chiavi doppie)
         run: npm run lint
 
+      - name: Prova il modulo Menù in un browser (dati, PDF, aspetto, collegamento con la suite)
+        run: |
+          pip install --quiet playwright==1.56.0
+          python3 -m playwright install --with-deps chromium
+          python3 test/menu-suite.py
+
       - name: Prova a impacchettare tutte le schermate (trova gli errori in un minuto, prima della build Android)
         run: npx expo export --platform android --output-dir "$RUNNER_TEMP/esportazione"
         env:

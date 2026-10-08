@@ -6,7 +6,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { S, COLORS } from './theme';
 import { Bottone, conferma, useAvviso } from './UI';
 import {
-  statoBackup, scegliCartellaBackup, eseguiBackup, recuperaFotoMancanti, MAX_COPIE,
+  statoBackup, scegliCartellaBackup, eseguiBackup, recuperaFotoMancanti, GIORNI_COPIE,
   salvaCopiaDiSicurezza, copiaDiSicurezza, leggiCopiaDiSicurezza,
 } from './backupAutomatico';
 import {
@@ -235,7 +235,7 @@ export default function BackupScreen() {
           <>
             <Text style={{ fontSize: 15, color: COLORS.text }}>Attivo · ultimo backup {quando(stato)}</Text>
             <Text style={S.muted}>Cartella: {stato.nomeCartella}</Text>
-            <Text style={S.muted}>Un backup al giorno all'apertura dell'app, conservando le ultime {MAX_COPIE} copie.</Text>
+            <Text style={S.muted}>Un backup al giorno, alla prima apertura dell'app. Sul telefono restano le copie degli ultimi {GIORNI_COPIE} giorni: la più nuova prende il posto della più vecchia.</Text>
             {!!stato.errore && (
               <Text style={{ color: COLORS.danger, marginTop: 6 }}>Ultimo tentativo fallito: {stato.errore}</Text>
             )}

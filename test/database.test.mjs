@@ -186,6 +186,30 @@ test('annulla subito: scarico, temperatura (con la sua non conformità) e pulizi
   assert.ok((await db.query("SELECT * FROM registro_modifiche WHERE campo = 'annullato'")).length >= 3);
 });
 
+test('annulla: solo entro pochi minuti dalla registrazione, poi resta la correzione', async () => {
+  const prima = new Date(Date.now() - (db.MINUTI_ANNULLA + 1) * 60000).toISOString();
+  const id = await carico({ quantita: 5 });
+  const mov = await db.registraScarico(id, 2, 'consumo');
+  await db.exec('UPDATE movimenti SET creato_il = ? WHERE id = ?', [prima, mov]);
+  await assert.rejects(db.annullaUscita(mov), /non si può più annullare/);
+  assert.equal((await db.queryOne('SELECT quantita_residua q FROM lotti WHERE id = ?', [id])).q, 3, 'la giacenza non cambia');
+  assert.equal((await db.queryOne('SELECT COUNT(*) n FROM movimenti WHERE id = ?', [mov])).n, 1);
+
+  const pc = (await db.exec("INSERT INTO punti_controllo (nome, tipo, temp_min, temp_max) VALUES ('Frigo limite', 'frigorifero', 0, 4)")).lastInsertRowId;
+  // una temperatura di ieri registrata adesso si può annullare: conta quando è stata scritta, non il giorno a cui si riferisce
+  const ieri = await db.registraTemperatura(pc, 3, null, piuGiorni(oggiLocale(), -1));
+  await db.annullaTemperatura(ieri.id, ieri.ncId);
+  const t = await db.registraTemperatura(pc, 9, null);
+  await db.exec('UPDATE registro_temperature SET creato_il = ? WHERE id = ?', [prima, t.id]);
+  await assert.rejects(db.annullaTemperatura(t.id, t.ncId), /non si può più annullare/);
+  assert.equal((await db.queryOne('SELECT COUNT(*) n FROM non_conformita WHERE id = ?', [t.ncId])).n, 1, 'la non conformità resta');
+
+  const san = await db.registraSanificazione({ area_id: null, prodotto_utilizzato: 'x', operatore: 'L', note: null });
+  // righe salvate prima di questa versione (senza istante di registrazione): non annullabili
+  await db.exec('UPDATE registro_sanificazione SET creato_il = NULL WHERE id = ?', [san]);
+  await assert.rejects(db.annullaSanificazione(san), /non si può più annullare/);
+});
+
 /* ---------- giacenze, produzioni, temperature flessibili, giorni locali ---------- */
 
 test('scarico: mai più della giacenza, neanche con un doppio tocco; annulla riporta la quantità giusta', async () => {

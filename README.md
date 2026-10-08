@@ -1,90 +1,33 @@
-# Tracciabilità HACCP — Fase 1
+# Suite Tenuta Coppa
 
-App Android offline per la tracciabilità alimentare di un ristorante.
-Tutti i dati restano sul dispositivo in un database SQLite locale.
+App Android del ristorante Tenuta Coppa: registri HACCP e rintracciabilità, più le proposte di menù.
+Funziona senza rete: tutti i dati restano sul telefono, in un database locale.
+Sul telefono si chiama **Tenuta Coppa**.
 
-## Cosa fa già
+## Cosa fa
 
-- Anagrafica **fornitori** (con partita IVA e numero di riconoscimento CE)
-- Catalogo **prodotti** con allergeni, temperature di conservazione, codice a barre
-- **Ricevimento merce**: fornitore, DDT, lotto, scadenza, quantità, foto del documento e dell'etichetta
-- **Controllo al ricevimento**: temperatura, integrità imballo, etichettatura → in caso di esito negativo apre automaticamente una non conformità
-- **Magazzino**: lotti disponibili ordinati per scadenza, scarichi, scarti, storico movimenti
-- **Frigoriferi/congelatori**: configurazione dei punti di controllo con i propri limiti
-- **Registro temperature** giornaliero con allarme e non conformità automatica
-- **Dashboard** con scadenze imminenti, controlli da fare e non conformità aperte
-
-Fasi successive: rintracciabilità lotto→piatto, ricette, report PDF per l'ASL, export CSV, OCR fatture, etichette termiche, backup automatico.
-
----
-
-## Come installarla — passo per passo
-
-Serve solo un computer con Node.js installato (gratuito, da nodejs.org).
-
-### 1. Crea il progetto base
-
-```bash
-npx create-expo-app@latest tracciabilita-haccp --template blank
-cd tracciabilita-haccp
-```
-
-### 2. Copia i file
-
-Copia dentro la cartella appena creata: `App.js`, `app.json`, `eas.json` e l'intera cartella `src/`, sovrascrivendo quelli esistenti.
-
-### 3. Installa le dipendenze
-
-`npx expo install` sceglie da solo le versioni compatibili — non modificare i numeri a mano.
-
-```bash
-npx expo install expo-sqlite expo-camera expo-image-picker \
-  @react-navigation/native @react-navigation/native-stack \
-  react-native-screens react-native-safe-area-context
-```
-
-### 4. Prova l'app subito (facoltativo)
-
-```bash
-npx expo start
-```
-
-Installa **Expo Go** dal Play Store sul tablet e inquadra il QR code. Utile per provare l'interfaccia, ma la fotocamera per i codici a barre funziona bene solo nell'APK vero.
-
-### 5. Genera l'APK
-
-```bash
-npm install -g eas-cli
-eas login          # crea un account gratuito su expo.dev
-eas build:configure
-eas build -p android --profile preview
-```
-
-Dopo 10–20 minuti ricevi un link. Aprilo dal tablet, scarica l'APK e installalo (Android chiederà di autorizzare l'installazione da origini sconosciute).
-
-### 6. Primo avvio
-
-1. **Frigoriferi** → aggiungi i tuoi frigoriferi e congelatori con i relativi limiti
-2. **Fornitori** → inserisci i primi fornitori
-3. **Ricevi merce** → i prodotti si creano man mano, non serve precaricare nulla
-
----
-
-## Costi
-
-| Voce | Costo |
+| Sezione | Contenuto |
 |---|---|
-| Expo SDK e CLI | gratuito |
-| EAS Build (piano Free) | gratuito, 15 build Android al mese |
-| Hosting / server | nessuno, i dati sono sul tablet |
-| Google Play | non necessario, si installa l'APK direttamente |
+| **Oggi** | Controlli della giornata (temperature, pulizie, scadenze), cose da sistemare, prossimo menù, pulsante "Registra" |
+| **Magazzino** | Lotti in giacenza per scadenza, scarichi e scarti, rintracciabilità del lotto, richiami |
+| **Menù** | Calendario degli eventi, proposte e menù da tavolo in PDF e immagine, invio su WhatsApp, stampe |
+| **Altro** | Temperature, sanificazione, non conformità, carico merce (anche da fattura PDF), produzioni, etichette, anagrafiche, registri PDF per l'ASL, backup |
 
----
+## Dati e backup
 
-## Nota importante sui backup
+- I dati vivono solo sul telefono. Il **backup automatico** scrive una copia al giorno in una cartella scelta da te
+  e tiene quelle degli ultimi 3 giorni.
+- Con il **PIN del titolare** impostato, i backup sono cifrati: senza PIN non si aprono, e se il PIN viene dimenticato non si recuperano.
+- Una volta a settimana conviene inviare una copia fuori dal telefono (Drive, email): l'app lo ricorda.
 
-I dati esistono in una sola copia, sul tablet. Finché la funzione di backup automatico non è implementata (Fase 5), esporta periodicamente il database:
+## Come si aggiorna
 
-il file si trova in `/data/data/com.ristorante.tracciabilita/databases/haccp.db` e va copiato con un file manager o via USB.
+Ogni modifica caricata sul ramo `main` fa partire la compilazione su GitHub Actions (test, controllo del codice, APK firmato).
+L'APK finisce nelle [Releases](../../releases): le istruzioni per installarlo sono in [COME-OTTENERE-APK.md](COME-OTTENERE-APK.md).
 
-In caso di controllo ASL, un dispositivo perso o rotto significa tracciabilità perduta: è il rischio principale della scelta "solo offline".
+## Per chi lavora sul codice
+
+- Expo SDK 52 / React Native, database SQLite (`expo-sqlite`); il Menù è una pagina web (`menu/`) mostrata dentro l'app.
+- Regole e convenzioni del progetto: [CLAUDE.md](CLAUDE.md).
+- Controlli: `npm test`, `npm run lint`, `python3 test/menu-suite.py`.
+- Il repository è pubblico: non deve contenere dati reali del ristorante, né chiavi o password.

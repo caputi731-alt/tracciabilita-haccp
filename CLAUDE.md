@@ -71,7 +71,8 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
 - `npm test` (Node 22): test in `test/*.test.mjs`, eseguiti da GitHub Actions prima della build; se falliscono l'APK non viene creato.
   I moduli dell'app girano in Node grazie a `test/hooks.mjs` (expo-sqlite sostituito da node:sqlite). Ogni nuova logica di database va coperta da un test.
 - Nel repository (pubblico) mai dati reali: la fattura di test `test/fattura-esempio.pdf` ha dati inventati.
-- Backup automatico: `backupAutomatico.js` (cartella scelta via Storage Access Framework, 1 al giorno, ultime 14 copie). La tabella `preferenze` è locale e non va nel backup.
+- Backup automatico: `backupAutomatico.js` (cartella scelta via Storage Access Framework, 1 al giorno alla prima apertura dell'app; a rotazione
+  resta un file per ognuno degli ultimi 3 giorni con un backup, scelta di Luca: `backupDaEliminare` in utile.js). La tabella `preferenze` è locale e non va nel backup.
 - Firma APK: la build firma con la chiave dei Secrets ANDROID_KEYSTORE_BASE64, ANDROID_STORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD.
   Se ne manca uno la build si ferma subito (niente più APK firmati con la chiave di debug), e si ferma anche se l'impronta
   dell'APK non è quella qui sotto (`IMPRONTA_ATTESA` in `build-apk.yml`).
@@ -136,7 +137,8 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
   è precedente al modulo (`TABELLE_NUOVE`).
 - Telefono: `menuInvio.js` rifà le funzioni di `window.Android` dell'app originale — apri/condividi (`expo-sharing`,
   `expo-intent-launcher`), "Salva con nome" (cartella scelta con SAF), invio su WhatsApp (`react-native-share`, testo anche negli appunti).
-- Prova della parte web: `python3 test/menu-suite.py` (Playwright, pagina aperta da file con una finta suite). Non gira ancora su GitHub.
+- Prova della parte web: `python3 test/menu-suite.py` (Playwright, pagina aperta da file con una finta suite). Gira anche su GitHub
+  prima della build: se fallisce l'APK non viene creato.
 - Se la compilazione Android fallisce, il passo "Compila l'APK" scrive le righe d'errore nel riepilogo della build.
 
 ## Linee guida UX (pacchetto build 60)
@@ -145,6 +147,8 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
   e sono sempre scritti anche a parole. Niente bordo colorato solo a sinistra sulle schede: lo stato si mostra con un contorno intero.
 - Testi: `S.muted` 15pt, etichette 13pt; pulsanti ≥ 50px, chip ≥ 46px.
 - Errori di compilazione: `useErrori()` + prop `errore` su `Campo`/`Selettore` + `{riepilogo}` sopra il pulsante. Niente `Alert` per dati mancanti.
+- "Annulla" funziona solo entro `MINUTI_ANNULLA` (10) dalla registrazione: lo controlla il database con la colonna `creato_il`
+  (istante vero della scrittura, diverso da `data_ora` per le registrazioni in ritardo). Dopo resta la correzione.
 - Registrazioni frequenti (scarico, temperatura, pulizia): nessuna conferma preventiva, avviso con "Annulla" (`mostra(testo, { testo: 'Annulla', onPress })`) e funzioni `annullaUscita` / `annullaTemperatura` / `annullaSanificazione`.
 - Cambi di vista: `Segmenti`, non `Chips`.
 - Componenti UI comuni: `Icona` (MaterialCommunityIcons da @expo/vector-icons, niente emoji), `Bottone icona=`, `Sezione` (blocchi apribili),
