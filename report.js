@@ -223,36 +223,47 @@ export function htmlPacchettoASL({ temperature, carichi, sanificazioni, nonConfo
 }
 
 /**
- * Disposizione dei tavoli per i camerieri: una pianta per ogni sala usata (vista dall'alto, in scala) e l'elenco delle tavolate.
- * sale = [{ sala, piano }] (vedi sale.js).
+ * Disposizione dei tavoli per i camerieri: la pianta di ogni sala usata (vista dall'alto, in scala, con porte e pilastri)
+ * e l'elenco delle tavolate con la lunghezza da preparare. sale = [{ sala, piano }] (vedi sale.js).
  */
 export function htmlDisposizioneSale({ data, servizio, sale = [] }, imp = {}) {
   const PX = 46; // punti per metro nella pianta
-  const blocchi = sale.map(({ sala, piano }) => ({ sala, d: disponi(sala, piano) })).filter((b) => b.d.tavolate.length > 0);
+  const m = (n) => `${num(Math.round(n * 10) / 10)} m`;
+  const blocchi = sale.map(({ sala, piano }) => ({ sala, d: disponi(sala, piano) })).filter((b) => b.d.tavolate.length > 0 || b.d.problemi.length > 0);
   const corpo = blocchi.map(({ sala, d }) => {
-    const w = sala.L * PX, h = sala.W * PX;
-    const tavoli = d.tavolate.map((t) => {
-      const x = (t.x - t.len / 2 + sala.L / 2) * PX, y = (t.z - LARGO_TAVOLO / 2 + sala.W / 2) * PX, tw = t.len * PX, th = LARGO_TAVOLO * PX;
-      const giunti = []; let a = 0;
-      t.pezzi.slice(0, -1).forEach((p) => { a += p; giunti.push(`<line x1="${x + a * PX}" y1="${y}" x2="${x + a * PX}" y2="${y + th}" stroke="#999" stroke-width="1"/>`); });
-      const chi = t.prenotata ? `${t.numeroPersone || '?'} su ${t.posti}` : `${t.posti} posti`;
-      return `<rect x="${x}" y="${y}" width="${tw}" height="${th}" rx="3" fill="${t.prenotata ? '#DCEBD2' : '#fff'}" stroke="${t.troppi ? '#C0392B' : '#222'}" stroke-width="${t.troppi ? 2.5 : 1.3}"/>${giunti.join('')}
-        <text x="${x + tw / 2}" y="${y + th / 2 - 3}" text-anchor="middle" font-size="13" font-weight="700">${esc(t.sigla)}</text>
-        <text x="${x + tw / 2}" y="${y + th / 2 + 11}" text-anchor="middle" font-size="9">${esc(chi)}</text>
-        ${t.nome.trim() ? `<text x="${x + tw / 2}" y="${y - 5}" text-anchor="middle" font-size="10" font-weight="700">${esc(t.nome.trim().slice(0, Math.max(8, Math.round(t.len * 9))))}</text>` : ''}`;
+    const w = Math.max(...sala.contorno.map((p) => p[0])), h = Math.max(...sala.contorno.map((p) => p[1]));
+    const muri = `<polygon points="${sala.contorno.map((p) => `${p[0] * PX},${p[1] * PX}`).join(' ')}" fill="#F7F5EC" stroke="#222" stroke-width="3"/>`;
+    const ostacoli = sala.ostacoli.map((o) => `<rect x="${o.x * PX}" y="${o.y * PX}" width="${o.w * PX}" height="${o.h * PX}" fill="#9a9a92"/>`).join('');
+    const porte = sala.porte.map((p) => {
+      const vert = p.x1 === p.x2, mx = (p.x1 + p.x2) / 2 * PX, my = (p.y1 + p.y2) / 2 * PX;
+      const dentroX = vert ? (p.x1 > w / 2 ? -1 : 1) : 0, dentroY = vert ? 0 : (p.y1 > h / 2 ? -1 : 1);
+      return `<line x1="${p.x1 * PX}" y1="${p.y1 * PX}" x2="${p.x2 * PX}" y2="${p.y2 * PX}" stroke="#F7F5EC" stroke-width="5"/>
+        <line x1="${p.x1 * PX}" y1="${p.y1 * PX}" x2="${p.x2 * PX}" y2="${p.y2 * PX}" stroke="#9C4524" stroke-width="2.5" stroke-dasharray="5 3"/>
+        <text x="${mx + dentroX * 8}" y="${my + dentroY * 13 + 3}" text-anchor="${vert ? (dentroX > 0 ? 'start' : 'end') : 'middle'}" font-size="9" fill="#9C4524" font-weight="700">${esc(p.nome)}</text>`;
     }).join('');
-    const tot = d.tavolate.reduce((s, t) => ({ posti: s.posti + t.posti, persone: s.persone + t.numeroPersone, t180: s.t180 + t.t180, t90: s.t90 + t.t90 }), { posti: 0, persone: 0, t180: 0, t90: 0 });
-    const righe = d.tavolate.map((t) => `<tr><td><b>${esc(t.sigla)}</b></td><td>${[t.t180 ? `${t.t180} × 180` : '', t.t90 ? `${t.t90} × 90` : ''].filter(Boolean).join(' + ')}</td>
+    const tavoli = d.tavolate.map((t) => {
+      const lw = (t.asse === 'x' ? t.len : LARGO_TAVOLO) * PX, lh = (t.asse === 'x' ? LARGO_TAVOLO : t.len) * PX, x = t.x * PX - lw / 2, y = t.y * PX - lh / 2;
+      const chi = t.prenotata ? `${t.numeroPersone || '?'} pers.` : 'libera';
+      const nome = t.nome.trim().slice(0, 16);
+      const testi = t.asse === 'x'
+        ? `<text x="${t.x * PX}" y="${t.y * PX - 3}" text-anchor="middle" font-size="12" font-weight="700">${esc(t.sigla)}${nome ? ` ${esc(nome)}` : ''}</text>
+           <text x="${t.x * PX}" y="${t.y * PX + 10}" text-anchor="middle" font-size="9">${esc(chi)} · ${m(t.len)}</text>`
+        : `<g transform="rotate(-90 ${t.x * PX} ${t.y * PX})"><text x="${t.x * PX}" y="${t.y * PX - 3}" text-anchor="middle" font-size="12" font-weight="700">${esc(t.sigla)}${nome ? ` ${esc(nome)}` : ''}</text>
+           <text x="${t.x * PX}" y="${t.y * PX + 10}" text-anchor="middle" font-size="9">${esc(chi)} · ${m(t.len)}</text></g>`;
+      return `<rect x="${x}" y="${y}" width="${lw}" height="${lh}" rx="3" fill="${t.prenotata ? '#DCEBD2' : '#fff'}" stroke="${t.troppi ? '#C0392B' : '#222'}" stroke-width="${t.troppi ? 2.5 : 1.3}"/>${testi}`;
+    }).join('');
+    const tot = d.tavolate.reduce((s, t) => ({ posti: s.posti + t.posti, persone: s.persone + t.numeroPersone, metri: s.metri + t.len }), { posti: 0, persone: 0, metri: 0 });
+    const righe = d.tavolate.map((t) => `<tr><td><b>${esc(t.sigla)}</b></td><td>${esc(sala.file[t.fila].nome)}</td><td>${m(t.len)}</td>
       <td>${t.posti}</td><td>${esc(t.nome)}</td><td${t.troppi ? ' class="nc"' : ''}>${t.numeroPersone || ''}</td><td>${esc(t.ora)}</td><td>${esc(t.note)}</td></tr>`).join('');
     return `<div class="sala"><h2>${esc(sala.nome)}</h2>
-      <div class="kv">${d.tavolate.length} tavolate · ${tot.posti} posti · ${tot.persone} persone prenotate · tavoli: ${tot.t180} da 180, ${tot.t90} da 90</div>
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="-6 -16 ${w + 12} ${h + 26}" style="width:${Math.min(100, Math.round(sala.L / 16 * 100))}%;max-height:105mm;display:block;margin:6px auto 8px">
-        <rect x="0" y="0" width="${w}" height="${h}" fill="#F7F5EC" stroke="#222" stroke-width="3"/>${tavoli}</svg>
-      <table><thead><tr><th>Tavolo</th><th>Tavoli uniti</th><th>Posti</th><th>Prenotazione</th><th>Persone</th><th>Ora</th><th>Note</th></tr></thead><tbody>${righe}</tbody></table>
+      <div class="kv">${d.tavolate.length} tavolate · ${tot.persone} persone · ${tot.posti} posti · ${m(tot.metri)} di tavoli da preparare</div>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="-8 -8 ${w * PX + 16} ${h * PX + 16}" style="width:${Math.min(100, Math.round(w / 16 * 100))}%;max-height:${w > h ? 95 : 120}mm;display:block;margin:6px auto 8px">
+        ${muri}${ostacoli}${tavoli}${porte}</svg>
+      <table><thead><tr><th>Tavolo</th><th>Fila</th><th>Lunghezza</th><th>Posti</th><th>Prenotazione</th><th>Persone</th><th>Ora</th><th>Note</th></tr></thead><tbody>${righe}</tbody></table>
       ${d.problemi.length ? `<div class="avvisoGiorni"><b>Da controllare:</b> ${d.problemi.map(esc).join(' · ')}</div>` : ''}</div>`;
   }).join('');
   const stile = '<style>.sala{page-break-inside:avoid;margin-bottom:14px} h2{font-size:15px;margin:10px 0 2px} .firma{display:none}</style>';
-  return wrapDoc('Disposizione dei tavoli', stile + (corpo || '<p>Nessun tavolo disposto.</p>'), imp, `${fmtData(data)} · ${servizio}`);
+  return wrapDoc('Disposizione dei tavoli', stile + (corpo || '<p>Nessuna tavolata.</p>'), imp, `${fmtData(data)} · ${servizio}`);
 }
 
 export { esc, fmtData, fmtDataOra };

@@ -16,13 +16,12 @@ IMMAGINI = sys.argv[1] if len(sys.argv) > 1 else None
 
 # i dati veri, come li prepara la suite (sale.js)
 PREPARA = """
-import { salaCon, datiScenaSala, pianoBase, disponi } from './sale.js';
-const stalla = salaCon('stalla'), panoramica = salaCon('panoramica');
-const t = (id, t180, t90, nome = '', persone = '', ora = '') => ({ id, t180, t90, nome, persone, ora, note: '' });
-const piano = { file: [[t('a', 2, 0, 'Battesimo Rossi', '10', '13:00'), t('b', 1, 1), t('c', 1, 0, 'Bianchi', '8')], [t('d', 3, 0), t('e', 0, 1), t('f', 1, 0)]] };
-const altra = { file: [[t('g', 1, 0), t('h', 0, 1)]] };
-console.log(JSON.stringify({ stalla: datiScenaSala(stalla, piano), panoramica: datiScenaSala(panoramica, altra, { scuro: true, scelto: 'h' }),
-  posti: disponi(stalla, piano).tavolate.reduce((s, x) => s + x.posti, 0) }));
+import { SALE, datiScenaSala, disponi } from './sale.js';
+const t = (id, persone, nome = '', ora = '', len = null) => ({ id, nome, persone: String(persone || ''), ora, note: '', len });
+const piano = { file: [[t('a', 10, 'Battesimo Rossi', '13:00'), t('b', 8), t('c', 8, 'Bianchi', '', 1.8)], [t('d', 14), t('e', 2), t('f', 6)]] };
+const altra = { file: [[t('g', 6)], [t('h', 0, '', '', 0.9)]] };
+console.log(JSON.stringify({ stalla: datiScenaSala(SALE.stalla, piano), panoramica: datiScenaSala(SALE.panoramica, altra, { scuro: true, scelto: 'h' }),
+  posti: disponi(SALE.stalla, piano).tavolate.reduce((s, x) => s + x.posti, 0) }));
 """
 DATI = json.loads(subprocess.run(['node', '--input-type=module', '-e', PREPARA], cwd=RADICE, capture_output=True, text=True, check=True).stdout)
 
@@ -59,7 +58,7 @@ with sync_playwright() as p:
         ok(s['tavolate'] == 6, f"{nome}: sei tavolate nella sala antica stalla ({s['tavolate']})")
         ok(s['sedie'] == DATI['posti'], f"{nome}: una sedia per ogni posto stimato ({s['sedie']} sedie, {DATI['posti']} posti)")
         ok(pg.evaluate("window.__colori()") > 12, f'{nome}: la sala è disegnata')
-        dentro = pg.evaluate("""()=>{const d=window.__ultimi.sala;return [[-d.L/2,-d.W/2],[d.L/2,-d.W/2],[-d.L/2,d.W/2],[d.L/2,d.W/2]].every(([x,z])=>{const [a,b]=window.__schermoPunto(x,z);return a>0&&a<innerWidth&&b>0&&b<innerHeight})}""")
+        dentro = pg.evaluate("""()=>window.__ultimi.sala.contorno.every(([x,y])=>{const [a,b]=window.__schermoPunto(x,y);return a>0&&a<innerWidth&&b>0&&b<innerHeight})""")
         ok(dentro, f'{nome}: la sala sta intera nel riquadro')
         ok(ricevuti() == [], f'{nome}: nessun messaggio prima di un tocco')
         if IMMAGINI:
@@ -79,7 +78,7 @@ with sync_playwright() as p:
         pg.click('#z-alto'); ferma()
         tocchi = 0
         for tid in 'abcdef':
-            x, y = pg.evaluate("id=>window.__schermoTavolata(id)", tid)
+            x, y = pg.evaluate("id=>window.__schermoTag(id)", tid)   # i tag non si coprono: ognuno si tocca al suo centro
             pg.evaluate("([x,y])=>window.__tocca(x,y)", [x, y])
             if ricevuti()[-1] == {'tipo': 'tavolata', 'id': tid}: tocchi += 1
         ok(tocchi == 6, f"{nome}: dall'alto ogni tavolata risponde al tocco ({tocchi}/6)")
@@ -91,6 +90,7 @@ with sync_playwright() as p:
         pg.wait_for_timeout(400); ferma()
         s = pg.evaluate("window.__scena()")
         ok(s['tavolate'] == 2 and s['sedie'] == 9 and s['scelto'] == 'h' and s['sala'].startswith('panoramica'), f'{nome}: la sala panoramica sostituisce la prima {s}')
+        ok(pg.evaluate("window.__colori()") > 12, f'{nome}: la sala panoramica (a L) è disegnata')
         ok(pg.evaluate("document.documentElement.classList.contains('scuro')"), f'{nome}: tema scuro applicato')
         if IMMAGINI:
             pg.screenshot(path=os.path.join(IMMAGINI, f'sale-{nome}-panoramica.png'))

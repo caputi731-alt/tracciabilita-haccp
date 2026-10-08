@@ -50,18 +50,20 @@ test('registri: note e giorni mancanti nelle temperature, lotti impiegati nelle 
 
 test('disposizione dei tavoli per i camerieri: pianta, elenco, nomi in sicurezza, avvisi', async () => {
   const { htmlDisposizioneSale } = await import('../report.js');
-  const { salaCon } = await import('../sale.js');
-  const t = (id, t180, t90, nome = '', persone = '', ora = '') => ({ id, t180, t90, nome, persone, ora, note: '' });
+  const { SALE } = await import('../sale.js');
+  const t = (id, persone, nome = '', ora = '', len = null) => ({ id, nome, persone: String(persone || ''), ora, note: '', len });
   const html = htmlDisposizioneSale({ data: '2026-10-11', servizio: 'Pranzo', sale: [
-    { sala: salaCon('stalla'), piano: { file: [[t('a', 2, 0, 'Rossi <b>', '10', '13:00'), t('b', 0, 1, 'Bianchi', '4')], [t('c', 1, 1)]] } },
-    { sala: salaCon('panoramica'), piano: { file: [] } },
+    { sala: SALE.stalla, piano: { file: [[t('a', 10, 'Rossi <b>', '13:00'), t('b', 4, 'Bianchi', '', 0.9)], [t('c', 0, '', '', 1.8)]] } },
+    { sala: SALE.panoramica, piano: { file: [[], []] } },
   ] }, { nome_attivita: 'Ristorante di prova' });
   assert.match(html, /Disposizione dei tavoli/);
   assert.match(html, /11\/10\/2026 · Pranzo/);
   assert.ok(html.includes('Rossi &lt;b&gt;') && !html.includes('Rossi <b>'));
-  assert.equal((html.match(/<rect /g) || []).length, 4);        // la sala e tre tavolate
+  assert.equal((html.match(/<rect [^>]*rx="3"/g) || []).length, 3);        // tre tavolate
+  assert.equal((html.match(/<polygon /g) || []).length, 1);
   assert.match(html, /Sala antica stalla/);
   assert.ok(!html.includes('Sala panoramica'), 'una sala senza tavoli non si stampa');
-  assert.match(html, /3 tavolate · 21 posti · 14 persone prenotate · tavoli: 3 da 180, 2 da 90/);
+  assert.match(html, /3 tavolate · 14 persone · 19 posti · 5,9 m di tavoli da preparare/);
+  assert.match(html, /Ingresso/);
   assert.match(html, /S2 Bianchi: 4 persone su 3 posti/);
 });

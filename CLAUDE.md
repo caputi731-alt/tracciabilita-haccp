@@ -145,23 +145,30 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
 - `Vista3D.js` è la WebView comune alle due scene (cucine e sale): manda i dati, riceve i messaggi, gestisce "il 3D non parte".
 
 ## Sale e tavoli (scelte di Luca dell'8/10/2026)
-- Sezione "Sale" nella barra in basso (`SaleScreen.js`): disposizione dei tavoli nelle due sale mensa per un giorno e un servizio
-  (Pranzo/Cena), con la prenotazione scritta sul tavolo (nome, persone, ora, note). Niente anagrafica clienti, niente elenco prenotazioni.
-- `sale.js` (puro, `test/sale.test.mjs`): solo gli spazi "sala mensa" delle due piante, come rettangoli (`SALE`: sala panoramica e sala
-  antica stalla; misure ricavate dalle piante, approssimate, che Luca corregge da "Misure": `salaCon`). Niente zone esterne.
-- Disposizione GUIDATA, non libera (quella libera sarebbe confusionaria): file parallele al lato lungo, in ogni fila delle tavolate
-  (tavoli 180×90 e 90×90 uniti in linea). Luca sceglie quante file, quante tavolate e da quali tavoli sono fatte; le posizioni le calcola
-  `disponi`. Regole fisse: nessun tavolo a meno di 80 cm da un muro (`DAL_MURO`, passano i camerieri: non si può forzare), 1,2 m fra file e
-  fra tavolate (`TRA_TAVOLI`). Il numero di tavoli posseduti non si conosce: nessun limite, si mostra solo quanti ne servono.
-- Posti (`posti`): 80 cm a persona sui lati lunghi più i capotavola; un 90 da solo fa al massimo 3. Più persone dei posti = segnalato
-  in rosso, non bloccato.
-- Tabella `disposizioni` (nel backup, in `TABELLE_NUOVE`), tre tipi di riga: `giorno` (data + servizio, con prenotazioni; ogni modifica
-  si salva subito), `modello` (disposizione con un nome, senza prenotazioni, da applicare a un giorno) e `misure`.
-- `sale/index.html`: la sala in 3D (usa `../cucine/three.min.js`), una sedia per ogni posto stimato, tag con sigla (P1, S3…), nome e
-  persone; vista di sbieco o dall'alto. Riceve `window.__sala(datiScenaSala(...))`, manda `{ tipo: 'tavolata', id }`. Se il 3D non parte
-  la schermata funziona lo stesso dall'elenco. Prova: `python3 test/sale-vista.py` (anche su GitHub prima della build).
-- Per i camerieri: `htmlDisposizioneSale` (report.js) → PDF con pianta dall'alto ed elenco, condiviso con `condividiPdf` (WhatsApp);
-  oppure lo stesso dispositivo tenuto in sala. I telefoni non si sincronizzano fra loro.
+- Sezione "Sale" nella barra in basso (`SaleScreen.js`): le prenotazioni di un giorno e di un servizio (Pranzo/Cena) sistemate nelle
+  due sale mensa. Niente anagrafica clienti, niente elenco prenotazioni separato dai tavoli.
+- Si parte dalla PRENOTAZIONE ("riempiamo la sala in base alle prenotazioni"): nome, persone, ora, note. Dalle persone l'app ricava
+  quanto deve essere lunga la tavolata (`lunghezzaPer`, 80 cm a persona); con quali tavoli e allunghe comporla lo decide chi apparecchia,
+  perché i tavoli hanno lunghezze diverse e non si sa quanti sono: NON modellare i singoli tavoli (la prima versione, build 83, lo faceva
+  ed è stata scartata). La lunghezza si corregge a mano (`len`), a passi di 10 cm.
+- Posti (`posti(len)`): una persona ogni 80 cm sui due lati lunghi più i capotavola; sotto 1,2 m (il tavolo da 90 da solo) al massimo 3.
+  Più persone dei posti = segnalato in rosso, non bloccato.
+- `sale.js` (puro, `test/sale.test.mjs`): `SALE` descrive le due sale come sono davvero, dal disegno confermato da Luca (misure STIMATE
+  dalle piante, ±20%): contorno (la panoramica è a L), pilastri e paravento, porte, zone libere di 1,5 m davanti alle porte, e le FILE
+  fisse dove stanno i tavoli, con i `tratti` utilizzabili già fuori da passaggi, pilastri e zone libere e ad almeno 80 cm dai muri.
+  Antica stalla: l'ingresso è solo quello di sinistra vicino alle scale, verso la cucina conta solo la porta in fondo. Panoramica: la
+  porta dello spogliatoio non conta. Se Luca dà misure vere si cambiano qui (e i test controllano che le file restino valide).
+- Disposizione guidata, non libera: in ogni fila le tavolate stanno nell'ordine in cui arrivano, `disponi` le mette nei tratti con
+  almeno 1,2 m fra una e l'altra (`TRA_TAVOLI`). `entra` / `restoFila` dicono cosa c'è ancora posto di aggiungere.
+- Tabella `disposizioni` (nel backup, in `TABELLE_NUOVE`), due tipi di riga: `giorno` (data + servizio, con prenotazioni; ogni modifica
+  si salva subito) e `modello` (disposizione con un nome, senza prenotazioni, lunghezze fissate, da applicare a un giorno).
+  `pianoPulito` legge anche i piani della build 83 (`t180`/`t90`).
+- `sale/index.html`: la sala in 3D (usa `../cucine/three.min.js`) con la sua forma vera, porte con cartello, zone libere in rosso, una
+  sedia per ogni posto stimato, tag con sigla (P1, S3…), nome, persone e metri; vista di sbieco o dall'alto (girata come nel PDF).
+  Riceve `window.__sala(datiScenaSala(...))`, manda `{ tipo: 'tavolata', id }`. Se il 3D non parte la schermata funziona lo stesso
+  dall'elenco. Prova: `python3 test/sale-vista.py` (anche su GitHub prima della build).
+- Per i camerieri: `htmlDisposizioneSale` (report.js) → PDF con pianta dall'alto ed elenco delle tavolate con la lunghezza da preparare,
+  condiviso con `condividiPdf` (WhatsApp); oppure lo stesso dispositivo tenuto in sala. I telefoni non si sincronizzano fra loro.
 
 ## Modulo Menù (suite Tenuta Coppa)
 - La suite nasce da questa app: il Menù (prima app a parte, repository `menu-tenuta-coppa`) entra come modulo.

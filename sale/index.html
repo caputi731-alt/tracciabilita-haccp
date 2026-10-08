@@ -27,7 +27,8 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 <script>
 'use strict';
 /* La suite manda la sala e le tavolate già al loro posto con window.__sala(dati) (vedi datiScenaSala in sale.js) e riceve:
-   { tipo:'pronta' } · { tipo:'senza3d' } · { tipo:'errore', testo } · { tipo:'tavolata', id } (una tavolata toccata) */
+   { tipo:'pronta' } · { tipo:'senza3d' } · { tipo:'errore', testo } · { tipo:'tavolata', id } (una tavolata toccata).
+   Dall'alto la sala è girata come nel disegno e nel PDF dei camerieri: x verso destra, y verso il basso. */
 (function(){
   window.__inviati = [];
   const invia = (m) => { window.__inviati.push(m); const RN = window.ReactNativeWebView; if (RN && RN.postMessage) RN.postMessage(JSON.stringify(m)); };
@@ -43,7 +44,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
   const scene = new THREE.Scene(), FOV = 30, cam = new THREE.PerspectiveCamera(FOV, 1.2, 0.1, 400);
   const S = (c, o) => new THREE.MeshStandardMaterial(Object.assign({ color: c, metalness: 0, roughness: .8 }, o || {}));
   const m = { tovaglia: S(0xfbfaf4, { roughness: .9 }), piano: S(0xffffff, { roughness: .7 }), sedia: S(0x8a6a4a), sediaOk: S(0x2f6b2a), sediaCrit: S(0xb3261e),
-    muro: S(0xf4f1e4, { roughness: .9 }), cima: S(0x2f4f23, { roughness: .7 }), base: S(0x4a4f45) };
+    muro: S(0xf4f1e4, { roughness: .9 }), cima: S(0x2f4f23, { roughness: .7 }), base: S(0x4a4f45), pilastro: S(0xb9b3a3, { roughness: .95 }), soglia: S(0x9C4524) };
   scene.add(new THREE.HemisphereLight(0xffffff, 0x9aa08c, 0.9));
   const sun = new THREE.DirectionalLight(0xffffff, 0.55); sun.position.set(-6, 16, 10); sun.castShadow = true;
   const sc = sun.shadow.camera; sc.left = -16; sc.right = 16; sc.top = 14; sc.bottom = -14; sc.near = 1; sc.far = 60; sun.shadow.mapSize.set(1024, 1024); sun.shadow.bias = -0.0006; scene.add(sun);
@@ -75,38 +76,77 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
   let stanza = null, misura = '', tavoli = null, bersagli = [], perId = {}, scelto = null, sporco = true, scatola = null;
   const butta = (g) => { if (!g) return; scene.remove(g); g.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material && o.material.map) { o.material.map.dispose(); o.material.dispose(); } }); };
 
+  /* la sala com'è davvero: muri lungo il contorno, pilastri e paravento, porte, zone libere davanti alle porte.
+     Nella scena il centro della sala è in (0, 0): X = x − cx, Z = y − cy. */
+  let cx = 0, cy = 0;
+  function cartello(testo){
+    const cv = document.createElement('canvas'); cv.width = 256; cv.height = 72; const g = cv.getContext('2d');
+    g.font = '800 34px Manrope, system-ui, sans-serif'; const w = Math.min(244, g.measureText(testo).width + 40), x0 = 128 - w / 2;
+    g.beginPath(); g.moveTo(x0 + 28, 8); g.arcTo(x0 + w, 8, x0 + w, 64, 28); g.arcTo(x0 + w, 64, x0, 64, 28); g.arcTo(x0, 64, x0, 8, 28); g.arcTo(x0, 8, x0 + w, 8, 28); g.closePath();
+    g.fillStyle = '#9C4524'; g.fill(); g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(testo, 128, 38, 220);
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthTest: false, transparent: true })); sp.renderOrder = 9;
+    sp.userData.base = [256, 72]; sp.userData.cartello = true; return sp;
+  }
+  let cartelli = [];
   function costruisciSala(sala){
-    butta(stanza); stanza = new THREE.Group(); scene.add(stanza);
-    const L = sala.L, W = sala.W, TH = 0.14;
-    const base = new THREE.Mesh(new THREE.BoxGeometry(L + 0.5, 0.12, W + 0.5), m.base); base.position.y = -0.065; base.castShadow = true; stanza.add(base);
-    const tx = parquet(); tx.repeat.set(L / 1.2, W / 0.6);
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(L, W), new THREE.MeshStandardMaterial({ map: tx, roughness: .85 })); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; stanza.add(floor);
-    [['f', L, 0.4, 0, W / 2 + TH / 2], ['b', L, 1.0, 0, -W / 2 - TH / 2], ['l', W, 1.0, -L / 2 - TH / 2, 0], ['r', W, 0.4, L / 2 + TH / 2, 0]].forEach(([n, len, h, x, z]) => {
-      const oriz = n === 'f' || n === 'b';
-      const w = new THREE.Mesh(new THREE.BoxGeometry(oriz ? len + 2 * TH : TH, h, oriz ? TH : len), m.muro), c = new THREE.Mesh(new THREE.BoxGeometry(oriz ? len + 2 * TH : TH + 0.02, 0.06, oriz ? TH + 0.02 : len), m.cima);
-      w.position.set(x, h / 2, z); c.position.set(x, h + 0.03, z); w.castShadow = w.receiveShadow = true; stanza.add(w, c);
+    butta(stanza); stanza = new THREE.Group(); scene.add(stanza); cartelli = [];
+    const P = sala.contorno, xs = P.map(p => p[0]), ys = P.map(p => p[1]), x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+    cx = (x0 + x1) / 2; cy = (y0 + y1) / 2; const L = x1 - x0, W = y1 - y0, TH = 0.16;
+    const forma = new THREE.Shape(); P.forEach((p, i) => { const X = p[0] - cx, Y = -(p[1] - cy); if (i) forma.lineTo(X, Y); else forma.moveTo(X, Y); });
+    const tx = parquet(); tx.repeat.set(1 / 1.2, 1 / 0.6);
+    const floor = new THREE.Mesh(new THREE.ShapeGeometry(forma), new THREE.MeshStandardMaterial({ map: tx, roughness: .85 })); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; stanza.add(floor);
+    const sotto = new THREE.Mesh(new THREE.ExtrudeGeometry(forma, { depth: 0.12, bevelEnabled: false }), m.base); sotto.rotation.x = -Math.PI / 2; sotto.position.y = -0.125; stanza.add(sotto);
+    // muri: bassi verso chi guarda (in basso e a destra nel disegno), più alti dietro; interrotti dove c'è una porta
+    P.forEach((a, i) => {
+      const b = P[(i + 1) % P.length], oriz = a[1] === b[1], da = oriz ? Math.min(a[0], b[0]) : Math.min(a[1], b[1]), aa = oriz ? Math.max(a[0], b[0]) : Math.max(a[1], b[1]);
+      const fisso = oriz ? a[1] : a[0], davanti = oriz ? fisso > cy + W * 0.25 : fisso > cx + L * 0.25, h = davanti ? 0.4 : 1.1;
+      const buchi = sala.porte.filter(p => oriz ? (p.y1 === p.y2 && Math.abs(p.y1 - fisso) < 0.01) : (p.x1 === p.x2 && Math.abs(p.x1 - fisso) < 0.01))
+        .map(p => oriz ? [Math.min(p.x1, p.x2), Math.max(p.x1, p.x2)] : [Math.min(p.y1, p.y2), Math.max(p.y1, p.y2)]).filter(q => q[1] > da && q[0] < aa).sort((u, v) => u[0] - v[0]);
+      let p0 = da; const pezzi = []; buchi.forEach(q => { if (q[0] > p0 + 0.01) pezzi.push([p0, q[0]]); p0 = Math.max(p0, q[1]); }); if (aa > p0 + 0.01) pezzi.push([p0, aa]);
+      // verso fuori: dalla parte opposta al centro del contorno rispetto al muro
+      const fuori = (oriz ? (fisso >= cy ? 1 : -1) : (fisso >= cx ? 1 : -1)) * ((oriz ? (a[1] > y0 + 0.01 && a[1] < y1 - 0.01) : (a[0] > x0 + 0.01 && a[0] < x1 - 0.01)) ? dentroVerso(P, a, b) : 1);
+      pezzi.forEach(([u, v]) => {
+        const l = v - u, mid = (u + v) / 2, w = new THREE.Mesh(new THREE.BoxGeometry(oriz ? l : TH, h, oriz ? TH : l), m.muro), c = new THREE.Mesh(new THREE.BoxGeometry(oriz ? l : TH + 0.02, 0.06, oriz ? TH + 0.02 : l), m.cima);
+        const X = oriz ? mid - cx : fisso - cx + fuori * TH / 2, Z = oriz ? fisso - cy + fuori * TH / 2 : mid - cy;
+        w.position.set(X, h / 2, Z); c.position.set(X, h + 0.03, Z); w.castShadow = w.receiveShadow = true; stanza.add(w, c);
+      });
     });
-    scatola = [-L / 2 - 0.4, L / 2 + 0.4, -W / 2 - 0.4, W / 2 + 0.4];
+    (sala.ostacoli || []).forEach(o => { const h = o.nome ? 1.5 : 1.1, me = new THREE.Mesh(new THREE.BoxGeometry(o.w, h, o.h), o.nome ? m.muro : m.pilastro); me.position.set(o.x + o.w / 2 - cx, h / 2, o.y + o.h / 2 - cy); me.castShadow = me.receiveShadow = true; stanza.add(me); });
+    (sala.zone || []).forEach(z => { const me = new THREE.Mesh(new THREE.PlaneGeometry(z.w, z.h), new THREE.MeshBasicMaterial({ color: 0xB3261E, transparent: true, opacity: .16 })); me.rotation.x = -Math.PI / 2; me.position.set(z.x + z.w / 2 - cx, 0.01, z.y + z.h / 2 - cy); stanza.add(me); });
+    sala.porte.forEach(p => {
+      const oriz = p.y1 === p.y2, l = oriz ? Math.abs(p.x2 - p.x1) : Math.abs(p.y2 - p.y1), X = (p.x1 + p.x2) / 2 - cx, Z = (p.y1 + p.y2) / 2 - cy;
+      const soglia = new THREE.Mesh(new THREE.BoxGeometry(oriz ? l : 0.2, 0.03, oriz ? 0.2 : l), m.soglia); soglia.position.set(X, 0.015, Z); stanza.add(soglia);
+      const sp = cartello(p.nome); sp.position.set(X, 1.35, Z); stanza.add(sp); cartelli.push(sp);
+    });
+    scatola = [x0 - cx - 0.4, x1 - cx + 0.4, y0 - cy - 0.4, y1 - cy + 0.4];
+  }
+  /* per un muro interno al rettangolo d'ingombro (la rientranza della cucina): 1 se "fuori" è nel verso positivo, −1 altrimenti */
+  function dentroVerso(P, a, b){
+    const oriz = a[1] === b[1], mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2, e = 0.05, px = oriz ? mx : mx + e, py = oriz ? my + e : my;
+    let dentro = false; for (let i = 0, j = P.length - 1; i < P.length; j = i++) { const xi = P[i][0], yi = P[i][1], xj = P[j][0], yj = P[j][1]; if ((yi > py) !== (yj > py) && px < (xj - xi) * (py - yi) / (yj - yi) + xi) dentro = !dentro; }
+    const positivoFuori = !dentro, base = oriz ? (a[1] >= cy ? 1 : -1) : (a[0] >= cx ? 1 : -1);
+    return (positivoFuori ? 1 : -1) * base;
   }
 
   function costruisciTavoli(tavolate){
     butta(tavoli); tavoli = new THREE.Group(); scene.add(tavoli); bersagli = []; perId = {};
-    const B = (W, H, T, mat, x, y, z, id) => { const me = new THREE.Mesh(new THREE.BoxGeometry(W, H, T), mat); me.position.set(x, y, z); me.castShadow = me.receiveShadow = true; me.userData.id = id; tavoli.add(me); bersagli.push(me); return me; };
     (tavolate || []).forEach(t => {
-      const D = 0.9, ms = t.c === 'ok' ? m.sediaOk : t.c === 'crit' ? m.sediaCrit : m.sedia;
-      // i tavoli uniti: una tovaglia sola, con una riga sottile dove si toccano
-      B(t.len, 0.62, D, m.tovaglia, t.x, 0.42, t.z, t.id); B(t.len + 0.02, 0.03, D + 0.02, m.piano, t.x, 0.745, t.z, t.id);
-      let a = -t.len / 2; t.pezzi.slice(0, -1).forEach(p => { a += p; B(0.012, 0.033, D + 0.022, m.muro, t.x + a, 0.746, t.z, t.id); });
+      const D = 0.9, ms = t.c === 'ok' ? m.sediaOk : t.c === 'crit' ? m.sediaCrit : m.sedia, X = t.x - cx, Z = t.y - cy;
+      // ogni tavolata è un gruppo disegnato lungo X e poi girato se la fila è verticale
+      const G = new THREE.Group(); G.position.set(X, 0, Z); if (t.asse === 'y') G.rotation.y = Math.PI / 2; tavoli.add(G);
+      const B = (W, H, T, mat, x, y, z) => { const me = new THREE.Mesh(new THREE.BoxGeometry(W, H, T), mat); me.position.set(x, y, z); me.castShadow = me.receiveShadow = true; me.userData.id = t.id; G.add(me); bersagli.push(me); return me; };
+      B(t.len, 0.62, D, m.tovaglia, 0, 0.42, 0); B(t.len + 0.02, 0.03, D + 0.02, m.piano, 0, 0.745, 0);
       // una sedia per posto: sui due lati lunghi, distribuite, e a capotavola
-      const sedia = (x, z, giro) => { B(0.42, 0.06, 0.42, ms, x, 0.45, z, t.id); const s = B(giro ? 0.05 : 0.42, 0.42, giro ? 0.42 : 0.05, ms, x + (giro ? giro * 0.2 : 0), 0.66, z + (giro ? 0 : (z > t.z ? 0.2 : -0.2)), t.id); return s; };
-      for (let i = 0; i < t.lati; i++) { const x = t.x - t.len / 2 + (i + 0.5) * t.len / t.lati; sedia(x, t.z + D / 2 + 0.3, 0); sedia(x, t.z - D / 2 - 0.3, 0); }
-      if (t.capotavola >= 1) sedia(t.x - t.len / 2 - 0.3, t.z, -1);
-      if (t.capotavola >= 2) sedia(t.x + t.len / 2 + 0.3, t.z, 1);
-      const sp = etichetta(t.titolo, t.breve, t.c); sp.position.set(t.x, 1.55, t.z); sp.userData.id = t.id; sp.userData.casa = sp.position.clone(); tavoli.add(sp); bersagli.push(sp);
-      const box = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(t.len + 0.9, 0.9, D + 0.9)), new THREE.LineBasicMaterial({ color: 0x9C4524 }));
-      box.position.set(t.x, 0.45, t.z); box.visible = false; tavoli.add(box);
-      const alone = new THREE.Mesh(new THREE.PlaneGeometry(t.len + 1.0, D + 1.0), new THREE.MeshBasicMaterial({ color: 0x9C4524, transparent: true, opacity: .3 }));
-      alone.rotation.x = -Math.PI / 2; alone.position.set(t.x, 0.012, t.z); alone.visible = false; tavoli.add(alone);
+      const sedia = (x, z, giro) => { B(0.42, 0.06, 0.42, ms, x, 0.45, z).userData.sedia = true; B(giro ? 0.05 : 0.42, 0.42, giro ? 0.42 : 0.05, ms, x + (giro ? giro * 0.2 : 0), 0.66, z + (giro ? 0 : (z > 0 ? 0.2 : -0.2))); };
+      for (let i = 0; i < t.lati; i++) { const x = -t.len / 2 + (i + 0.5) * t.len / t.lati; sedia(x, D / 2 + 0.3, 0); sedia(x, -D / 2 - 0.3, 0); }
+      if (t.capotavola >= 1) sedia(-t.len / 2 - 0.3, 0, -1);
+      if (t.capotavola >= 2) sedia(t.len / 2 + 0.3, 0, 1);
+      const lx = t.asse === 'y' ? D : t.len, lz = t.asse === 'y' ? t.len : D;
+      const sp = etichetta(t.titolo, t.breve, t.c); sp.position.set(X, 1.55, Z); sp.userData.id = t.id; sp.userData.casa = sp.position.clone(); tavoli.add(sp); bersagli.push(sp);
+      const box = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(lx + 0.9, 0.9, lz + 0.9)), new THREE.LineBasicMaterial({ color: 0x9C4524 }));
+      box.position.set(X, 0.45, Z); box.visible = false; tavoli.add(box);
+      const alone = new THREE.Mesh(new THREE.PlaneGeometry(lx + 1.0, lz + 1.0), new THREE.MeshBasicMaterial({ color: 0x9C4524, transparent: true, opacity: .3 }));
+      alone.rotation.x = -Math.PI / 2; alone.position.set(X, 0.014, Z); alone.visible = false; tavoli.add(alone);
       perId[t.id] = { sp, box, alone };
     });
   }
@@ -134,7 +174,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
     if (!scatola) return;
     // di sbieco si prova da più angoli e si tiene quello in cui la sala viene più grande; dall'alto la sala è una pianta
     let meglio = null;
-    (dallAlto ? [[0, 0.02], [-Math.PI / 2, 0.02]] : [[-0.3, 0.8], [-0.6, 0.85], [-0.95, 0.85], [-1.25, 0.8]]).forEach(([th, ph]) => { const a = adatta(th, ph); if (!meglio || a.r < meglio.r * 0.97) meglio = { th, ph, r: a.r, t: a.t }; });
+    (dallAlto ? [[0, 0.02]] : [[-0.3, 0.8], [-0.6, 0.85], [0.3, 0.8]]).forEach(([th, ph]) => { const a = adatta(th, ph); if (!meglio || a.r < meglio.r * 0.97) meglio = { th, ph, r: a.r, t: a.t }; });
     T0 = meglio.th; P0 = meglio.ph; raggio = meglio.r;
     mira.theta = T0; mira.phi = P0; mira.zoom = 1; mira.target.copy(meglio.t);
     if (subito) { st.theta = T0; st.phi = P0; st.zoom = 1; st.target.copy(meglio.t); }
@@ -149,7 +189,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
   /* i tag restano alti uguali sullo schermo e non si coprono: quelli che si toccano si spostano in su */
   function sistemaTag(){
     cam.updateMatrixWorld();
-    const W = window.innerWidth, H = window.innerHeight, pxAlta = H < 380 ? 40 : 48, perPx = 2 * Math.tan(FOV * Math.PI / 360) / Math.max(1, H);
+    const W = window.innerWidth, H = window.innerHeight, pxAlta = H < 380 ? 32 : 38, perPx = 2 * Math.tan(FOV * Math.PI / 360) / Math.max(1, H);
     const su = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 1), v = new THREE.Vector3(), tag = [];
     Object.keys(perId).forEach(id => {
       const sp = perId[id].sp; sp.position.copy(sp.userData.casa); sp.updateMatrixWorld(); sp.getWorldPosition(v);
@@ -157,6 +197,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
       sp.scale.set(a * sp.userData.base[0] / sp.userData.base[1], a, 1); v.project(cam);
       tag.push({ sp, d, x: (v.x + 1) / 2 * W, y: (1 - v.y) / 2 * H, w: hpx * sp.userData.base[0] / sp.userData.base[1] * sp.userData.pieno, h: hpx * 0.86, su: 0 });
     });
+    cartelli.forEach(sp => { sp.getWorldPosition(v); const a = (H < 380 ? 17 : 20) * perPx * v.distanceTo(cam.position); sp.scale.set(a * sp.userData.base[0] / sp.userData.base[1], a, 1); });
     tag.sort((a, b) => b.y - a.y);
     for (let i = 0; i < tag.length; i++) {
       const t = tag[i];
@@ -210,7 +251,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
     window.__ultimi = dati;
     try {
       document.documentElement.classList.toggle('scuro', !!dati.scuro);
-      const nuova = dati.sala.id + '|' + dati.sala.L + '|' + dati.sala.W;
+      const nuova = dati.sala.id + '|' + JSON.stringify(dati.sala.contorno);
       if (nuova !== misura) { misura = nuova; costruisciSala(dati.sala); toccata = false; inquadra(true); }
       costruisciTavoli(dati.tavolate);
       evidenzia(dati.scelto && perId[dati.scelto] ? dati.scelto : null);
@@ -219,11 +260,12 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
   };
   /* per le prove automatiche */
   const sulloSchermo = (v) => { cam.updateMatrixWorld(); v.project(cam); return [(v.x + 1) / 2 * window.innerWidth, (1 - v.y) / 2 * window.innerHeight]; };
-  window.__scena = () => ({ tavolate: Object.keys(perId).length, sedie: tavoli ? tavoli.children.filter(o => o.isMesh && o.geometry.parameters.height === 0.06 && o.geometry.parameters.width === 0.42).length : 0, scelto, sala: misura });
+  window.__scena = () => ({ tavolate: Object.keys(perId).length, sedie: bersagli.filter(o => o.userData.sedia).length, scelto, sala: misura });
   window.__tocca = tocca;
   window.__ferma = () => ferma;
-  window.__schermoTavolata = (id) => { const t = window.__ultimi.tavolate.find(x => x.id === id); return sulloSchermo(new THREE.Vector3(t.x, 0.76, t.z)); };
-  window.__schermoPunto = (x, z) => sulloSchermo(new THREE.Vector3(x, 0, z));
+  window.__schermoTavolata = (id) => { const t = window.__ultimi.tavolate.find(x => x.id === id); return sulloSchermo(new THREE.Vector3(t.x - cx, 0.76, t.y - cy)); };
+  window.__schermoTag = (id) => { const v = new THREE.Vector3(); perId[id].sp.getWorldPosition(v); return sulloSchermo(v); };
+  window.__schermoPunto = (x, y) => sulloSchermo(new THREE.Vector3(x - cx, 0, y - cy));
   window.__colori = () => { renderer.render(scene, cam); const gl = renderer.getContext(), w = gl.drawingBufferWidth, h = gl.drawingBufferHeight, px = new Uint8Array(4), s = new Set();
     for (let i = 1; i < 24; i++) for (let j = 1; j < 24; j++) { gl.readPixels(Math.floor(w * i / 24), Math.floor(h * j / 24), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); if (px[3]) s.add((px[0] >> 4) + ',' + (px[1] >> 4) + ',' + (px[2] >> 4)); } return s.size; };
   // i tag usano Manrope: quando il carattere è pronto si ridisegnano

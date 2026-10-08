@@ -1,6 +1,6 @@
 import * as SQLite from 'expo-sqlite';
 import { oggiLocale, piuGiorni, limitiGiorni, giornoDi, daIsoLocale, arrotonda, ALLERGENI } from './utile';
-import { ID_SALE, SERVIZI, pianoPulito, senzaPrenotazioni, totali as totaliSale } from './sale';
+import { SALE, ID_SALE, SERVIZI, pianoPulito, senzaPrenotazioni, totali as totaliSale } from './sale';
 
 let apertura = null;
 
@@ -782,14 +782,14 @@ export async function collegaPosto(posto, { punto_controllo_id = null, area_id =
 }
 
 /* ---------- sale e tavoli ----------
-   Tabella `disposizioni`, tre tipi di riga: 'giorno' (la disposizione di una data e di un servizio, con le prenotazioni),
-   'modello' (una disposizione con un nome, senza prenotazioni) e 'misure' (le misure delle sale corrette da Luca).
+   Tabella `disposizioni`, due tipi di riga: 'giorno' (la disposizione di una data e di un servizio, con le prenotazioni)
+   e 'modello' (una disposizione con un nome, senza prenotazioni).
    `dati` è il JSON { panoramica: piano, stalla: piano } (vedi sale.js). */
 
 const leggiJson = (testo, vuoto) => { try { return JSON.parse(testo); } catch (e) { return vuoto; } };
 const pianiPuliti = (dati, prepara) => {
   const out = {};
-  ID_SALE.forEach((id) => { out[id] = prepara((dati && dati[id]) || null); });
+  ID_SALE.forEach((id) => { out[id] = prepara(SALE[id], (dati && dati[id]) || null); });
   return out;
 };
 
@@ -815,7 +815,8 @@ export async function salvaDisposizioneGiorno(data, servizio, dati) {
 export async function giorniConPrenotazioni(da) {
   const righe = await query("SELECT data, servizio, dati FROM disposizioni WHERE tipo = 'giorno' AND data >= ? ORDER BY data, servizio DESC", [da]);
   return righe.map((r) => {
-    const t = totaliSale(Object.values(pianiPuliti(leggiJson(r.dati, {}), pianoPulito)));
+    const piani = pianiPuliti(leggiJson(r.dati, {}), pianoPulito);
+    const t = totaliSale(ID_SALE.map((id) => [SALE[id], piani[id]]));
     return { data: r.data, servizio: r.servizio, persone: t.persone, prenotate: t.prenotate };
   }).filter((r) => r.prenotate > 0);
 }
@@ -839,21 +840,6 @@ export async function salvaModelloSale(nome, dati) {
 }
 
 export const eliminaModelloSale = (id) => exec("DELETE FROM disposizioni WHERE tipo = 'modello' AND id = ?", [id]);
-
-/** Misure delle sale corrette da Luca: { panoramica: { L, W }, stalla: { L, W } } (solo quelle cambiate). */
-export async function misureSale() {
-  const r = await queryOne("SELECT dati FROM disposizioni WHERE tipo = 'misure'");
-  return r ? leggiJson(r.dati, {}) : {};
-}
-
-export async function salvaMisureSale(misure) {
-  const testo = JSON.stringify(misure || {});
-  const d = await getDb();
-  await d.withTransactionAsync(async () => {
-    await exec("DELETE FROM disposizioni WHERE tipo = 'misure'");
-    await exec("INSERT INTO disposizioni (tipo, dati, aggiornato) VALUES ('misure', ?, ?)", [testo, new Date().toISOString()]);
-  });
-}
 
 /* ---------- dati del modulo Menù ----------
    L'app web del Menù salva qui il suo archivio (prima stava in IndexedDB): coppie chiave → testo JSON.
