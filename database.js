@@ -1,5 +1,5 @@
 import * as SQLite from 'expo-sqlite';
-import { oggiLocale, piuGiorni, limitiGiorni, giornoDi, daIsoLocale, arrotonda } from './utile';
+import { oggiLocale, piuGiorni, limitiGiorni, giornoDi, daIsoLocale, arrotonda, ALLERGENI } from './utile';
 
 let apertura = null;
 
@@ -1009,6 +1009,44 @@ export async function allergeniRicetta(ricettaId) {
     try { JSON.parse(r.allergeni || '[]').forEach((a) => set.add(a)); } catch (e) {}
   });
   return [...set];
+}
+
+/**
+ * Ricette viste dal Menù: per ognuna gli allergeni come numeri da 1 a 14 (la posizione in ALLERGENI), quanti ingredienti ha
+ * e quanti di questi hanno allergeni non ancora verificati sull'etichetta (prodotti nati dalle fatture) o non riconosciuti.
+ * Una ricetta senza ingredienti non dice niente sugli allergeni: il Menù la tratta come "da completare".
+ */
+export async function ricettePerMenu() {
+  const ricette = await query('SELECT id, nome, categoria FROM ricette WHERE attiva = 1 ORDER BY nome COLLATE NOCASE');
+  const righe = await query(
+    `SELECT ri.ricetta_id, p.denominazione, p.allergeni, p.allergeni_verificati
+     FROM ricetta_ingredienti ri JOIN prodotti p ON p.id = ri.prodotto_id`);
+  const per = {};
+  for (const r of righe) (per[r.ricetta_id] = per[r.ricetta_id] || []).push(r);
+  return ricette.map((r) => {
+    const numeri = new Set();
+    const dubbi = new Set();
+    for (const ing of per[r.id] || []) {
+      if (!ing.allergeni_verificati) dubbi.add(ing.denominazione);
+      for (const nome of leggiAllergeni(ing.allergeni)) {
+        const n = ALLERGENI.indexOf(nome) + 1;
+        if (n) numeri.add(n); else dubbi.add(ing.denominazione);
+      }
+    }
+    return {
+      id: r.id, nome: r.nome, categoria: r.categoria || '', ingredienti: (per[r.id] || []).length,
+      allergeni: [...numeri].sort((a, b) => a - b), daVerificare: [...dubbi].sort(),
+    };
+  });
+}
+
+/** Ricetta con il nome di una portata del Menù: se esiste già (stesso nome, maiuscole a parte) si usa quella. */
+export async function creaRicettaDaPortata(nome) {
+  const pulito = String(nome || '').replace(/\s+/g, ' ').trim();
+  if (!pulito) throw new Error('Scrivi il nome della portata');
+  const esistente = await queryOne('SELECT id FROM ricette WHERE attiva = 1 AND lower(nome) = lower(?)', [pulito]);
+  if (esistente) return esistente.id;
+  return (await exec('INSERT INTO ricette (nome) VALUES (?)', [pulito])).lastInsertRowId;
 }
 
 /** Lotti utilizzabili di un prodotto in ordine FIFO. I lotti scaduti sono esclusi (salvo ancheScaduti). */

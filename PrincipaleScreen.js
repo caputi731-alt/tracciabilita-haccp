@@ -57,6 +57,7 @@ export default function PrincipaleScreen({ navigation, route }) {
   const [menuAperto, setMenuAperto] = useState(false); // il Menù è stato aperto almeno una volta
   const [menuProfondo, setMenuProfondo] = useState(false); // schermata interna del Menù (modifica, anteprima...)
   const [tastiera, setTastiera] = useState(false);
+  const [ritorni, setRitorni] = useState(0); // quante volte si è tornati a questa schermata da un'altra
   const comandiMenu = useRef(null);
   const mostrata = useRef('oggi');
   const margini = useSafeAreaInsets();
@@ -71,6 +72,8 @@ export default function PrincipaleScreen({ navigation, route }) {
 
   // tasto indietro di Android: nel Menù chiude prima quello che è aperto lì; dalle altre sezioni si torna a Oggi,
   // da Oggi si esce dall'app
+  useFocusEffect(useCallback(() => { setRitorni((n) => n + 1); }, []));
+
   useFocusEffect(useCallback(() => {
     const ascolto = BackHandler.addEventListener('hardwareBackPress', () => {
       if (sezione === 'oggi') return false;
@@ -114,7 +117,8 @@ export default function PrincipaleScreen({ navigation, route }) {
         {menuAperto && (
           <Riparo visibile={sezione === 'menu'}>
             {Menu
-              ? <Menu attiva={sezione === 'menu'} comandi={comandiMenu} suEsci={esciDalMenu} suVista={setMenuProfondo} />
+              ? <Menu attiva={sezione === 'menu'} aggiorna={ritorni} comandi={comandiMenu} suEsci={esciDalMenu}
+                suVista={setMenuProfondo} suApri={navigation.navigate} />
               : sezione === 'menu' && (
                 <View style={[S.screen, { justifyContent: 'center' }]}>
                   <Vuoto icona="alert-circle-outline" titolo="Il menù non si è aperto" testo="Le altre sezioni funzionano normalmente." />

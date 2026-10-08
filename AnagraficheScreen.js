@@ -23,7 +23,8 @@ export default function AnagraficheScreen({ route }) {
         <Segmenti opzioni={Object.keys(SCHEDE)} valore={scheda} onChange={setScheda} />
       </View>
       <View style={{ flex: 1 }}>
-        <Corrente />
+        {/* dal Menù si arriva qui per completare la ricetta di una portata */}
+        <Corrente apriId={scheda === 'Ricette' ? route?.params?.ricetta : undefined} />
       </View>
     </View>
   );

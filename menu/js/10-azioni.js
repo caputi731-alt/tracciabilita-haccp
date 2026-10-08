@@ -74,17 +74,18 @@ document.addEventListener('click',e=>{
       const pos=state.menus.indexOf(m);state.menus=state.menus.filter(x=>x!==m);save();ui.view=ui.back||'cal';render();
       toast('Menù eliminato',{label:'Annulla',fn:()=>{state.menus.splice(Math.min(pos,state.menus.length),0,m);save();render(true)}})});break;
     case 'listTab':ui.listTab=d.v;render(true);break;
-    case 'editDish':{const x=d.id&&state.dishes.find(z=>z.id===d.id),al=[...(x&&x.alg||[])];ui.sheet={type:'dish',id:d.id||null,alg:al,none:!!x&&x.algSet===true&&!al.length};renderSheet();break}
+    case 'editDish':{const x=d.id&&state.dishes.find(z=>z.id===d.id),al=[...(x&&x.alg||[])];ui.sheet={type:'dish',id:d.id||null,alg:al,none:!!x&&x.algSet===true&&!al.length,rid:x&&x.rid||null};renderSheet();break}
     case 'algT':{const sh=ui.sheet,n=+d.n,A=sh.alg,i=A.indexOf(n);i<0?A.push(n):A.splice(i,1);A.sort((a,b)=>a-b);b.classList.toggle('on',i<0);
       sh.touched=true;if(A.length){sh.none=false;$('.algs [data-a=algNone]')?.classList.remove('on')}break}
     case 'algNone':{const sh=ui.sheet;sh.none=!sh.none;sh.touched=true;if(sh.none){sh.alg.length=0;document.querySelectorAll('.algs button.on').forEach(x=>x.classList.remove('on'))}b.classList.toggle('on',sh.none);break}
-    case 'saveDish':{
-      const name=$('#dname').value.trim(),cat=$('#dcat').value;if(!name){toast('Scrivi il nome della portata');break}
-      const alg=[...(ui.sheet.alg||[])];
-      const en=($('#den')?.value||'').trim();
-      const algSet=alg.length>0||!!ui.sheet.none;
-      if(ui.sheet.id){const x=state.dishes.find(z=>z.id===ui.sheet.id);x.name=name;x.cat=cat;x.alg=alg;x.algSet=algSet;x.en=en}else state.dishes.push({id:uid(),name,cat,alg,algSet,en});
-      save();ui.sheet=null;renderSheet();render(true);toast('Portata salvata');break}
+    case 'saveDish':saveDishNow();break;
+    // crea nella suite una ricetta con il nome della portata, la collega, salva la portata e apre la ricetta per gli ingredienti
+    case 'mkRecipe':{const name=$('#dname').value.trim();if(!name){toast('Scrivi prima il nome della portata');break}
+      const R=RIC();b.disabled=true;
+      R.crea(oneLine(name)).then(async id=>{await R.carica();if(!ui.sheet||ui.sheet.type!=='dish')return;
+        ui.sheet.rid=id;if(saveDishNow('Ricetta creata: ora aggiungi gli ingredienti'))R.apri(id)})
+        .catch(e=>{b.disabled=false;toast('Ricetta non creata: '+(e.message||e))});break}
+    case 'openRecipe':RIC()&&RIC().apri(+d.id);break;
     case 'delDish':{const id=ui.sheet.id;ask({title:'Eliminare la portata?',text:"Viene tolta dall'archivio. I menù già composti restano come sono, allergeni compresi.",ok:'Elimina',danger:true}).then(ok=>{if(!ok)return;
       delDish(id);save();ui.sheet=null;renderSheet();render(true);toast('Portata eliminata')});break}
     case 'closeSheet':ui.sheet=null;renderSheet();break;
@@ -171,7 +172,8 @@ document.addEventListener('input',e=>{
 });
 document.addEventListener('change',async e=>{
   const el=e.target,d=el.dataset;
-  if(d.fc){const m=getMenu(ui.editId);if(m){m[d.fc]=el.checked;save();if(d.re)render(true)}}
+  if(el.id==='dric'){const sh=ui.sheet;if(sh&&sh.type==='dish'){sh.rid=+el.value||null;$('#ricinfo').innerHTML=ricInfo(sh.rid);$('#algman').hidden=!!sh.rid}} // ricetta scelta per la portata
+  else if(d.fc){const m=getMenu(ui.editId);if(m){m[d.fc]=el.checked;save();if(d.re)render(true)}}
   else if(d.pk==='all'){ui.pickAll=el.checked;$('#pklist').innerHTML=pickListHTML()}
   else if(d.oc){ost()[d.oc]=el.checked;paintOstia()}
   else if(d.spc){sp()[d.spc]=el.checked;paintSp()}
@@ -244,3 +246,13 @@ function readImage(src){ // accetta un File oppure un data URI (dall'app Android
   });
 }
 let rzT;window.addEventListener('resize',()=>{clearTimeout(rzT);rzT=setTimeout(mountPreviews,150)});
+
+// salva la portata aperta nella scheda (archivio portate); false se manca il nome
+function saveDishNow(msg){
+  const sh=ui.sheet,name=$('#dname').value.trim(),cat=$('#dcat').value;if(!name){toast('Scrivi il nome della portata');return false}
+  const alg=[...(sh.alg||[])],en=($('#den')?.value||'').trim(),algSet=alg.length>0||!!sh.none;
+  const x=sh.id?state.dishes.find(z=>z.id===sh.id):null,rid=RIC()?(sh.rid||null):(x&&x.rid||null); // fuori dalla suite il collegamento non si tocca
+  if(x){x.name=name;x.cat=cat;x.alg=alg;x.algSet=algSet;x.en=en;if(rid)x.rid=rid;else delete x.rid}
+  else state.dishes.push(Object.assign({id:uid(),name,cat,alg,algSet,en},rid?{rid}:{}));
+  save();ui.sheet=null;renderSheet();render(true);toast(msg||'Portata salvata');return true;
+}

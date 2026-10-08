@@ -97,3 +97,44 @@ test('prossimo menù in calendario', () => {
   assert.equal(prossimoMenu(null, '2026-10-08'), null);
   assert.equal(prossimoMenu('non json', '2026-10-08'), null);
 });
+
+test('domande sulle ricette: elenco e creazione, errori compresi', async () => {
+  const { rispondiRicette, scriptRicette } = await import('../menuPonte.js');
+  const visti = [];
+  const pagina = { window: { __suiteRisposta: (id, ok, v) => visti.push([id, ok, v]), __suiteRicette: (l) => visti.push(['elenco', l.length]) } };
+  const ricette = { elenco: async () => [{ id: 1, nome: 'Ragù "della nonna"' }], crea: async (nome) => { if (!nome) throw new Error('Scrivi il nome'); return 7; } };
+  vm.runInNewContext(await rispondiRicette({ tipo: 'ricette', id: 1 }, ricette), pagina);
+  vm.runInNewContext(await rispondiRicette({ tipo: 'creaRicetta', id: 2, nome: 'Ragù' }, ricette), pagina);
+  vm.runInNewContext(await rispondiRicette({ tipo: 'creaRicetta', id: 3 }, ricette), pagina);
+  vm.runInNewContext(scriptRicette([{ id: 1 }, { id: 2 }]), pagina);
+  assert.equal(JSON.stringify(visti), JSON.stringify([[1, true, [{ id: 1, nome: 'Ragù "della nonna"' }]], [2, true, 7], [3, false, 'Scrivi il nome'], ['elenco', 2]]));
+  assert.equal(await rispondiRicette({ tipo: 'kvGet', id: 4 }, ricette), null);
+});
+
+test('eventi del Menù per il resto della suite: portate con la ricetta collegata', async () => {
+  const { eventiMenu } = await import('../menuPonte.js');
+  const stato = JSON.stringify({
+    dishes: [{ id: 'a', name: 'Orecchiette\nalle cime di rapa', rid: 5 }, { id: 'b', name: 'Agnello' }],
+    templates: [{ id: 't', heading: 'Menù di domenica' }],
+    menus: [
+      { id: 'm2', date: '2026-11-01', templateId: 't', client: ' Bianchi ', guests: '40', guestsKids: 5, status: 'confermata',
+        sections: [{ name: 'Primi', items: [{ dishId: 'a', name: 'Orecchiette alle cime di rapa' }, { dishId: 'a', name: 'Orecchiette al pomodoro' }, { name: 'Fuori archivio' }] }],
+        kidsSections: [{ name: 'Bimbi', items: [{ dishId: 'b', name: 'Agnello' }] }] },
+      { id: 'm1', date: '2026-10-17', time: '13:00', heading: 'Battesimo', sections: [] },
+      { id: 'senza-data', date: '' },
+    ],
+  });
+  const e = eventiMenu(stato);
+  assert.deepEqual(e.map((x) => x.id), ['m1', 'm2']);
+  assert.deepEqual(e[0], { id: 'm1', data: '2026-10-17', ora: '13:00', stato: 'bozza', titolo: 'Battesimo', cliente: '', ospiti: 0, bambini: 0, portate: [] });
+  assert.equal(e[1].titolo, 'Menù di domenica');
+  assert.deepEqual([e[1].cliente, e[1].ospiti, e[1].bambini], ['Bianchi', 40, 5]);
+  assert.deepEqual(e[1].portate.map((p) => [p.nome, p.sezione, p.bambini, p.portataId, p.ricettaId]), [
+    ['Orecchiette alle cime di rapa', 'Primi', false, 'a', 5],
+    ['Orecchiette al pomodoro', 'Primi', false, 'a', null], // testo cambiato nel menù: non segue più la ricetta
+    ['Fuori archivio', 'Primi', false, null, null],
+    ['Agnello', 'Bimbi', true, 'b', null],
+  ]);
+  assert.deepEqual(eventiMenu('non è json'), []);
+  assert.deepEqual(eventiMenu(null), []);
+});

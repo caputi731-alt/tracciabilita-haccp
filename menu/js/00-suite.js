@@ -46,6 +46,25 @@
     set(k, v) { return this.setMany([[k, v]]); },
   };
 
+  // Ricette della suite: una portata dell'archivio può collegarsi a una ricetta e prenderne gli allergeni (vedi 03-pagine.js).
+  // ogni ricetta: { id, nome, categoria, ingredienti (quanti), allergeni [1..14], daVerificare [nomi di ingredienti] }
+  const ridisegna = () => {
+    try {
+      const a = document.activeElement;
+      const scrivendo = a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName);
+      if (typeof render === 'function' && typeof ui !== 'undefined' && !ui.sheet && !scrivendo && document.querySelector('#app > *')) render(true);
+    } catch (e) { /* la pagina non è ancora pronta: si disegnerà da sola */ }
+  };
+  const imposta = (elenco) => { window.SuiteRicette.elenco = Array.isArray(elenco) ? elenco : []; ridisegna(); };
+  window.SuiteRicette = {
+    elenco: [],
+    carica: () => chiedi('ricette').then(imposta),
+    crea: (nome) => chiedi('creaRicetta', { nome }),
+    apri: (id) => invia('apriRicetta', { ricetta: id }),
+  };
+  // la suite manda l'elenco aggiornato ogni volta che si torna al Menù
+  window.__suiteRicette = imposta;
+
   // niente autoBackup: i dati stanno nel database della suite e finiscono nel suo backup
   window.Android = {
     version: () => String(dati.build || ''),

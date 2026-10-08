@@ -20,12 +20,17 @@ PAGINA = 'file://' + os.path.join(RADICE, 'menu', 'index.html')
 FINTA = """(()=>{
   const leggi=()=>JSON.parse(sessionStorage.getItem('__archivio')||'{}'),scrivi=a=>sessionStorage.setItem('__archivio',JSON.stringify(a));
   window.__ricevuti=[];
+  window.__ricette=[{id:1,nome:'Orecchiette alle cime di rapa',categoria:'',ingredienti:3,allergeni:[1,4],daVerificare:[]},
+    {id:2,nome:'Ricetta vuota',categoria:'',ingredienti:0,allergeni:[],daVerificare:[]},
+    {id:3,nome:'Con farina da fattura',categoria:'',ingredienti:2,allergeni:[1],daVerificare:['Farina 00']}];
   window.ReactNativeWebView={
     injectedObjectJson:()=>JSON.stringify({build:'prova-123',fontScale:1.3}),
     postMessage:(s)=>{const m=JSON.parse(s),a=leggi();let v=null;
       if(m.tipo==='kvGet')v=m.k in a?a[m.k]:null;
       else if(m.tipo==='kvKeys')v=Object.keys(a).sort();
       else if(m.tipo==='kvSetMany'){m.pairs.forEach(([k,x])=>{if(x===null)delete a[k];else a[k]=x});scrivi(a)}
+      else if(m.tipo==='ricette')v=window.__ricette;
+      else if(m.tipo==='creaRicetta'){const id=100+window.__ricette.length;window.__ricette.push({id,nome:m.nome,categoria:'',ingredienti:0,allergeni:[],daVerificare:[]});window.__ricevuti.push(m);v=id}
       else{window.__ricevuti.push(m);return}
       setTimeout(()=>window.__suiteRisposta(m.id,true,v),0)}};
 })();"""
@@ -180,6 +185,44 @@ with sync_playwright() as p:
     pg.evaluate("document.documentElement.classList.remove('scuro')")
     ok(fondo == 'rgb(18, 20, 15)' and scuro == senza, 'tema scuro: cambia il contorno, le pagine dei menù restano su carta chiara e identiche')
     ok(len(con) > 300 and con == senza, f'pagine dei menù identiche a prima in tutti i template ({len(con)} elementi confrontati)')
+
+    # ---------- portate collegate alle ricette della suite: gli allergeni vengono dalla ricetta ----------
+    pg.evaluate("""()=>{state.dishes.push({id:'d-or',name:'Orecchiette alle cime di rapa',cat:state.categories[1],alg:[9],algSet:true},{id:'d-vu',name:'Piatto senza ingredienti',cat:state.categories[1]});
+      const m=getMenu('m1');m.allergens=true;m.sections[1].items=[{dishId:'d-or',name:'Orecchiette alle cime di rapa'},{dishId:'d-vu',name:'Piatto senza ingredienti'}];save();
+      ui.view='dishes';render()}""")
+    pg.wait_for_function("window.SuiteRicette.elenco.length===3")
+    prima_alg = pg.evaluate("algNums(getMenu('m1').sections[1].items[0])")
+    pg.click("[data-a=editDish][data-id=d-or]")
+    pg.select_option('#dric', '1')
+    nascosti = pg.evaluate("[document.getElementById('algman').hidden,document.getElementById('ricinfo').textContent]")
+    pg.click('[data-a=saveDish]')
+    r = pg.evaluate("""()=>{const it=getMenu('m1').sections[1].items[0],t=tplOf(getMenu('m1'));
+      return{rid:state.dishes.find(d=>d.id==='d-or').rid,alg:algNums(it),st:algState(it),pagina:pageHTML(getMenu('m1'),t,'tavolo','it').includes('<span class="alg">1,4</span>')}}""")
+    ok(prima_alg == [9] and nascosti[0] is True and '1. Cereali con glutine, 4. Pesce' in nascosti[1],
+       'scheda della portata: scelta la ricetta, i suoi allergeni prendono il posto di quelli a mano')
+    ok(r == {'rid': 1, 'alg': [1, 4], 'st': 'ok', 'pagina': True}, 'portata collegata: sul menù escono gli allergeni della ricetta')
+    stati = pg.evaluate("""()=>{const d=state.dishes.find(x=>x.id==='d-vu'),it=getMenu('m1').sections[1].items[1],o={};
+      d.rid=2;o.vuota=[algState(it),algTodo(getMenu('m1')).includes(it)];d.rid=3;o.dubbia=[algState(it),algNums(it)];
+      d.rid=99;o.sparita=[algState(it),algNums(it)];delete d.rid;
+      const a=getMenu('m1').sections[1].items[0];a.name='Orecchiette senza glutine';o.cambiata=[algState(a),algNums(a)];a.name='Orecchiette alle cime di rapa';return o}""")
+    ok(stati['vuota'] == ['manca', True] and stati['dubbia'] == ['verifica', [1]],
+       'ricetta senza ingredienti o con ingredienti non verificati: la portata resta da controllare')
+    ok(stati['sparita'] == ['manca', []] and stati['cambiata'] == ['verifica', [9]],
+       'ricetta eliminata o testo cambiato nel menù: tornano le regole di sempre, con avviso')
+    pg.evaluate("window.__suiteRicette(window.__ricette.map(r=>r.id===1?{...r,allergeni:[1,4,7]}:r))")
+    ok(pg.evaluate("algNums(getMenu('m1').sections[1].items[0])") == [1, 4, 7], 'ricetta modificata nella suite: gli allergeni del menù si aggiornano')
+    pg.evaluate("window.__ricevuti.length=0;ui.view='dishes';render()")
+    pg.click("[data-a=editDish][data-id=d-vu]")
+    pg.click('[data-a=mkRecipe]')
+    pg.wait_for_function("window.__ricevuti.some(m=>m.tipo==='apriRicetta')")
+    nuova = pg.evaluate("""()=>({crea:window.__ricevuti.find(m=>m.tipo==='creaRicetta').nome,apri:window.__ricevuti.find(m=>m.tipo==='apriRicetta').ricetta,
+      rid:state.dishes.find(d=>d.id==='d-vu').rid,st:algState(getMenu('m1').sections[1].items[1]),foglio:!!ui.sheet})""")
+    ok(nuova == {'crea': 'Piatto senza ingredienti', 'apri': 103, 'rid': 103, 'st': 'manca', 'foglio': False},
+       '"Crea la ricetta da questa portata": ricetta creata nella suite, collegata e aperta per gli ingredienti')
+    elim = pg.evaluate("""()=>{delDish('d-or');const it=getMenu('m1').sections[1].items[0];return[it.alg,algState(it)]}""")
+    ok(elim == [[1, 4], 'ok'], "portata eliminata dall'archivio: i menù si tengono gli allergeni della ricetta")
+    anno = pg.evaluate("[ANNO_SC,DID_MSG.includes('anno scolastico '+ANNO_SC),normalize({v:3,settings:{didMsg:DID_MSG_ANNO('2025/2026')}}).settings.didMsg,normalize({v:3,settings:{didMsg:'mio testo 2025/2026'}}).settings.didMsg]")
+    ok(anno[1] and anno[2] is None and anno[3] == 'mio testo 2025/2026', f"fattoria didattica: l'anno scolastico del messaggio si aggiorna da solo ({anno[0]}), un testo personalizzato resta")
 
     ricevuti.clear()
     pg.evaluate("""async()=>{const m=getMenu('m1');const f=[await waFile(m,'proposta','pdf'),await waFile(m,'proposta','jpg')];

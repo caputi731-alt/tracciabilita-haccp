@@ -4,7 +4,9 @@
  * I dati stanno nel database della suite (tabella menu_dati); PDF, condivisione e WhatsApp passano da menuInvio.js.
  *
  * Proprietà: attiva (la sezione è quella mostrata), comandi (ref che riceve { indietro, salva }),
- * suEsci (il tasto indietro non ha più niente da chiudere), suVista(profonda) (schermata interna: via la barra in basso).
+ * suEsci (il tasto indietro non ha più niente da chiudere), suVista(profonda) (schermata interna: via la barra in basso),
+ * suApri(rotta, parametri) (apre una schermata della suite, per esempio la ricetta di una portata),
+ * aggiorna (numero che cambia quando si torna alla schermata principale: la pagina riceve le ricette aggiornate).
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Linking, PixelRatio, ActivityIndicator } from 'react-native';
@@ -12,16 +14,17 @@ import { WebView } from 'react-native-webview';
 import { COLORS, S, TEMA_SCURO } from './theme';
 import { Vuoto } from './UI';
 import { BUILD } from './build';
-import { menuLeggi, menuChiavi, menuScrivi } from './database';
+import { menuLeggi, menuChiavi, menuScrivi, ricettePerMenu, creaRicettaDaPortata } from './database';
 import {
-  PAGINA_MENU, leggiMessaggio, rispondiArchivio, destinazione, scriptAvviso, scriptSalvato,
+  PAGINA_MENU, leggiMessaggio, rispondiArchivio, rispondiRicette, scriptRicette, destinazione, scriptAvviso, scriptSalvato,
 } from './menuPonte';
 
 const ARCHIVIO = { leggi: menuLeggi, chiavi: menuChiavi, scrivi: menuScrivi };
+const RICETTE = { elenco: ricettePerMenu, crea: creaRicettaDaPortata };
 // le librerie di condivisione si caricano solo quando servono: un loro problema non blocca il resto dell'app
 const invio = () => require('./menuInvio');
 
-export default function MenuScreen({ attiva = true, comandi, suEsci, suVista }) {
+export default function MenuScreen({ attiva = true, aggiorna = 0, comandi, suEsci, suVista, suApri }) {
   const web = useRef(null);
   const caricata = useRef(false);
   const attese = useRef([]); // chi aspetta che la pagina abbia scritto le ultime modifiche
@@ -56,16 +59,25 @@ export default function MenuScreen({ attiva = true, comandi, suEsci, suVista }) 
     return () => { comandi.current = null; };
   }, [comandi, esegui]);
 
+  // Le ricette si modificano in un'altra parte della suite mentre la pagina resta aperta: ogni volta che si torna
+  // al Menù la pagina riceve l'elenco aggiornato, così gli allergeni delle portate collegate sono quelli di adesso.
+  useEffect(() => {
+    if (!attiva || !caricata.current) return;
+    ricettePerMenu().then((elenco) => esegui(scriptRicette(elenco))).catch(() => {});
+  }, [attiva, aggiorna, esegui]);
+
   const messaggio = useCallback(async (evento) => {
     const m = leggiMessaggio(evento.nativeEvent.data);
     if (!m) return;
-    const risposta = await rispondiArchivio(m, ARCHIVIO);
+    const risposta = (await rispondiArchivio(m, ARCHIVIO)) || (await rispondiRicette(m, RICETTE));
     if (risposta) { esegui(risposta); return; }
     try {
       if (m.tipo === 'indietro') {
         if (!m.gestito && suEsci) suEsci();
       } else if (m.tipo === 'salvato') {
         attese.current.slice().forEach((f) => f());
+      } else if (m.tipo === 'apriRicetta') {
+        if (suApri) suApri('Anagrafiche', { scheda: 'Ricette', ricetta: Number(m.ricetta) || null });
       } else if (m.tipo === 'vista') {
         if (suVista) suVista(!!m.profonda);
       } else if (m.tipo === 'saveFile') {
@@ -83,7 +95,7 @@ export default function MenuScreen({ attiva = true, comandi, suEsci, suVista }) 
     } catch (e) {
       avvisa(m.tipo === 'shareFiles' ? 'Non è stato possibile inviare i file' : 'Non è stato possibile preparare il file');
     }
-  }, [esegui, avvisa, suEsci, suVista]);
+  }, [esegui, avvisa, suEsci, suVista, suApri]);
 
   const richiesta = useCallback((r) => {
     const dove = destinazione(r.url);

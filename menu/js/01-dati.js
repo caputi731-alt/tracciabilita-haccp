@@ -48,7 +48,10 @@ const SEED={
 };
 const DRINK_PRESETS=['Vini in bottiglia Cantina Crifo, acqua minerale','Liquori e caffè','Vino Nero di Troia Cantina Crifo, acqua minerale, liquori e caffè.','Acqua minerale'];
 const SUNDAY={layout:'verticale',heading:'Menù di domenica',headingKids:'Menù bambini',drinks:'Vini in bottiglia Cantina Crifo, acqua minerale\nLiquori e caffè',drinksKids:'Acqua minerale',priceAdult:50,priceKid:25,kidLabel:'Bambini fino a 10 anni'};
-const DID_MSG="Buongiorno,\nle invio la presentazione della fattoria didattica di Tenuta Coppa per l'anno scolastico 2026/2027 e la scheda di partecipazione.\nPer prenotare basta compilare la scheda e rispedirla qui su WhatsApp oppure a info@tenutacoppa.it.\nResto a disposizione per qualsiasi informazione.\nUn cordiale saluto,\nTenuta Coppa – 347 154 9100";
+// anno scolastico in corso: da luglio vale quello che comincia a settembre
+const ANNO_SC=(()=>{const d=new Date(),y=d.getFullYear();return d.getMonth()>=6?`${y}/${y+1}`:`${y-1}/${y}`})();
+const DID_MSG_ANNO=a=>"Buongiorno,\nle invio la presentazione della fattoria didattica di Tenuta Coppa per l'anno scolastico "+a+" e la scheda di partecipazione.\nPer prenotare basta compilare la scheda e rispedirla qui su WhatsApp oppure a info@tenutacoppa.it.\nResto a disposizione per qualsiasi informazione.\nUn cordiale saluto,\nTenuta Coppa – 347 154 9100";
+const DID_MSG=DID_MSG_ANNO(ANNO_SC);
 const DID_FILES=[
   {k:'brochure',l:'Presentazione fattoria didattica',sub:'PDF · laboratori, giornata e costi',file:'assets/didattica/brochure.pdf',name:'Masseria-Didattica-Tenuta-Coppa-2026-2027.pdf',mime:'application/pdf',thumbs:['assets/didattica/br-1.jpg','assets/didattica/br-2.jpg']},
   {k:'scheda',l:'Scheda di partecipazione',sub:'Word · da compilare e rispedire',file:'assets/didattica/scheda.docx',name:'Scheda-partecipazione-Tenuta-Coppa-2026-2027.docx',mime:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',thumbs:['assets/didattica/sc-1.jpg']}
@@ -86,7 +89,7 @@ function defaultTemplates(){
 }
 function defaultState(){
   const dishes=[];Object.entries(SEED).forEach(([c,l])=>l.forEach(n=>dishes.push({id:uid(),name:n,cat:c,en:EN_DISHES[enKey(n)]||''})));
-  return{v:3,settings:{venue:'Tenuta Coppa',drinkPresets:[...DRINK_PRESETS],didMsg:DID_MSG},categories:[...DEF_CATS],dishes,templates:defaultTemplates(),menus:[],didattica:{}};
+  return{v:3,settings:{venue:'Tenuta Coppa',drinkPresets:[...DRINK_PRESETS]},categories:[...DEF_CATS],dishes,templates:defaultTemplates(),menus:[],didattica:{}};
 }
 
 /* ---------- Utilità ---------- */

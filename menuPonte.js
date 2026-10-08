@@ -58,6 +58,23 @@ export async function rispondiArchivio(m, archivio) {
   }
 }
 
+/** Script che consegna alla pagina l'elenco aggiornato delle ricette (dopo che sono state modificate nella suite). */
+export const scriptRicette = (elenco) => `window.__suiteRicette&&window.__suiteRicette(${comeLetterale(elenco || [])});true;`;
+
+/**
+ * Domande sulle ricette (ricette, creaRicetta): restituisce lo script di risposta, oppure null se il messaggio
+ * non le riguarda. `ricette` = { elenco(), crea(nome) }.
+ */
+export async function rispondiRicette(m, ricette) {
+  if (!m || !['ricette', 'creaRicetta'].includes(m.tipo)) return null;
+  try {
+    const valore = m.tipo === 'ricette' ? await ricette.elenco() : await ricette.crea(String(m.nome || ''));
+    return scriptRisposta(m.id, true, valore);
+  } catch (e) {
+    return scriptRisposta(m.id, false, String((e && e.message) || e));
+  }
+}
+
 /** Dove va un indirizzo chiesto dalla pagina: 'pagina' (resta nella WebView), 'fuori' (altra app) o 'niente'. */
 export function destinazione(url) {
   const u = String(url || '');
@@ -100,5 +117,42 @@ export function prossimoMenu(testoStato, oggi) {
     };
   } catch (e) {
     return null;
+  }
+}
+
+/**
+ * Eventi del Menù letti dallo stato salvato dall'app web, per il resto della suite (allergeni dell'evento, fabbisogno,
+ * produzioni): data, cliente, ospiti e, per ogni portata, la ricetta collegata nell'archivio portate (ricettaId, null se
+ * non c'è o se in quel menù il testo della portata è stato cambiato). Ordinati per data; [] se lo stato non si legge.
+ */
+export function eventiMenu(testoStato) {
+  try {
+    const stato = JSON.parse(testoStato);
+    const portate = new Map((stato.dishes || []).filter(Boolean).map((d) => [d.id, d]));
+    const unaRiga = (t) => String(t || '').replace(/\s+/g, ' ').trim();
+    return (stato.menus || []).filter((m) => m && typeof m.date === 'string' && m.date).map((m) => {
+      const modello = (stato.templates || []).find((t) => t && t.id === m.templateId);
+      const righe = [];
+      for (const [sezioni, bambini] of [[m.sections, false], [m.kidsSections, true]]) {
+        for (const s of sezioni || []) {
+          for (const i of (s && s.items) || []) {
+            const d = i.dishId ? portate.get(i.dishId) : null;
+            const stessa = !!d && unaRiga(d.name) === unaRiga(i.name);
+            righe.push({
+              nome: unaRiga(i.name), sezione: s.name || '', bambini,
+              portataId: d ? d.id : null, ricettaId: stessa && d.rid ? d.rid : null,
+            });
+          }
+        }
+      }
+      return {
+        id: m.id, data: m.date, ora: m.time || '', stato: m.status || 'bozza',
+        titolo: String(m.heading || '').trim() || (modello && modello.heading) || 'Menù',
+        cliente: String(m.client || '').trim(),
+        ospiti: Number(m.guests) || 0, bambini: Number(m.guestsKids) || 0, portate: righe,
+      };
+    }).sort((a, b) => (a.data + a.ora < b.data + b.ora ? -1 : a.data + a.ora > b.data + b.ora ? 1 : 0));
+  } catch (e) {
+    return [];
   }
 }

@@ -89,6 +89,8 @@ function normalize(s){
     const ord=d.templates.map(t=>t.id),pos=t=>{const i=ord.indexOf(t.id);return i<0?999:i};
     s.templates=s.templates.map((t,i)=>[t,i]).sort((a,b)=>pos(a[0])-pos(b[0])||a[1]-b[1]).map(x=>x[0]); // nuovi template al loro posto, quelli creati da te in fondo
   }
+  // messaggio della fattoria didattica mai personalizzato: non resta fermo all'anno scolastico in cui è stato salvato
+  if(s.settings&&typeof s.settings.didMsg==='string'&&s.settings.didMsg.replace(/\d{4}\/\d{4}/,'#')===DID_MSG_ANNO('#'))delete s.settings.didMsg;
   return{v:3,didattica:s.didattica||{},lastOstia:s.lastOstia||null,lastSp:s.lastSp||null,settings:{...d.settings,...(s.settings||{})},
     categories:Array.isArray(s.categories)&&s.categories.length?s.categories:d.categories,
     dishes:(Array.isArray(s.dishes)?s.dishes:d.dishes).map(x=>x.en===undefined&&EN_DISHES[enKey(x.name)]?{...x,en:EN_DISHES[enKey(x.name)]}:x),

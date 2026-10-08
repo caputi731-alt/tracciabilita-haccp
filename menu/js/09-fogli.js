@@ -35,21 +35,22 @@ function renderSheet(){
     <label class="fld"><span>Nome</span><textarea class="inp" id="dname" rows="3" style="min-height:90px">${esc(d.name)}</textarea></label>
     <label class="fld"><span>Nome in inglese</span><textarea class="inp" id="den" rows="2" style="min-height:70px" placeholder="Per i menù in inglese">${esc(d.en||'')}</textarea></label>
     <p class="hint" style="margin:-6px 2px 12px">Vai a capo per spezzare la riga sul menù, come in Canva.</p>
-    <label class="fld"><span>Allergeni</span></label>
-    ${algChips(sh)}<p class="hint" style="margin:-8px 2px 12px">Se non ne contiene tocca “Nessuno”: così l'app sa che li hai controllati.</p>
+    ${RIC()?ricField(sh):''}
+    <div id="algman" ${RIC()&&sh.rid?'hidden':''}><label class="fld"><span>Allergeni</span></label>
+    ${algChips(sh)}<p class="hint" style="margin:-8px 2px 12px">Se non ne contiene tocca “Nessuno”: così l'app sa che li hai controllati.</p></div>
     <label class="fld"><span>Categoria</span><select class="inp" id="dcat">${allCats().map(c=>`<option ${c===d.cat?'selected':''}>${esc(c)}</option>`).join('')}</select></label>
     <div class="btns ${sh.id?'two':''}"><button class="btn pri" data-a="saveDish">Salva</button>${sh.id?`<button class="btn danger" data-a="delDish">${I.trash}Elimina</button>`:''}</div>
     ${sh.id?'<p class="hint">Cambiare il nome o eliminare la portata non tocca i menù già composti. Gli allergeni invece valgono per tutti i menù che la usano.</p>':''}`;
   }else if(sh.type==='item'){
-    const it=secList(getMenu(ui.editId),sh.kids)[sh.s].items[sh.i],st=algState(it);
+    const it=secList(getMenu(ui.editId),sh.kids)[sh.s].items[sh.i],st=algState(it),rr=ricettaItem(it);
     h=head('Portata in questo menù')+`
     <label class="fld"><span>Testo stampato</span><textarea class="inp" id="iname" rows="3" style="min-height:90px">${esc(it.name)}</textarea></label>
     <p class="hint" style="margin:-6px 2px 12px">La modifica del testo vale solo per questo menù, l'archivio resta com'è.</p>
     <label class="fld"><span>Allergeni</span></label>
-    ${st==='manca'?`<p class="hint" style="color:#8A5A12;margin:-2px 2px 8px">Non sono mai stati indicati per questa portata.</p>`:st==='verifica'?`<p class="hint" style="color:#8A5A12;margin:-2px 2px 8px">Il testo è diverso da quello dell'archivio: controlla che questi allergeni valgano ancora.</p>`:''}
+    ${rr?ricInfo(rr.id)+'<p class="hint" style="margin:0 2px 12px">Se cambi il testo qui sopra, per questo menù la portata non segue più la ricetta e gli allergeni vanno indicati a mano.</p>':`${st==='manca'?`<p class="hint" style="color:#8A5A12;margin:-2px 2px 8px">Non sono mai stati indicati per questa portata.</p>`:st==='verifica'?`<p class="hint" style="color:#8A5A12;margin:-2px 2px 8px">Il testo è diverso da quello dell'archivio: controlla che questi allergeni valgano ancora.</p>`:''}
     ${algChips(sh)}
     ${st!=='ok'?`<label class="tog" style="margin:-6px 0 10px"><input type="checkbox" id="algok">Li ho controllati, vanno bene così</label>`:''}
-    <p class="hint" style="margin:0 2px 12px">Se il testo è quello dell'archivio gli allergeni vengono salvati nell'archivio e valgono per tutti i menù; se lo hai cambiato valgono solo qui.</p>
+    <p class="hint" style="margin:0 2px 12px">Se il testo è quello dell'archivio gli allergeni vengono salvati nell'archivio e valgono per tutti i menù; se lo hai cambiato valgono solo qui.</p>`}
     <button class="btn pri wide" data-a="saveItem">Salva</button>`;
   }else if(sh.type==='wa'&&sh.step===2){
     const nf=sh.files.length,cosa=nf>1?`i ${nf} file`:sh.files[0].mime==='application/pdf'?'il PDF':sh.files[0].mime.startsWith('image/')?"l'immagine":'il file';

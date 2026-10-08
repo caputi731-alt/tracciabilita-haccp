@@ -19,6 +19,7 @@
   flush().then(ok=>{if(ok)cleanBlobs()});
   if(ls.get(AUTO_KEY)==='1')setTimeout(autoCopy,4000); // modifiche della volta scorsa non ancora copiate
   render();
+  if(window.SuiteRicette)window.SuiteRicette.carica().catch(()=>{}); // ricette della suite per gli allergeni delle portate collegate
   loadFonts().then(mountPreviews);
   try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
   if(!AND&&'serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});

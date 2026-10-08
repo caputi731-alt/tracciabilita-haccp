@@ -13,21 +13,42 @@ function priceLines(m,kidsCol){
   return L;
 }
 // allergeni: i numeri vengono dall'archivio portate, così una correzione vale per tutti i menù
-const algNums=i=>{if(i.alg)return i.alg;const d=i.dishId&&state.dishes.find(x=>x.id===i.dishId);return d&&d.alg||[]};
+// Dentro la suite una portata dell'archivio può essere collegata a una ricetta (d.rid): i suoi allergeni sono allora quelli
+// calcolati dagli ingredienti della ricetta e nel Menù non si modificano. Vale finché nel menù il testo è quello dell'archivio:
+// se lo cambi è un altro piatto e torna a valere la regola di sempre. Fuori dalla suite (SuiteRicette assente) resta tutto a mano.
+const RIC=()=>window.SuiteRicette||null;
+const ricettaDi=d=>{const R=RIC();return d&&d.rid&&R?R.elenco.find(r=>r.id===d.rid)||null:null};
+// una ricetta senza ingredienti non dice niente ('manca'); con ingredienti dagli allergeni non verificati va controllata ('verifica')
+const ricState=r=>!r.ingredienti?'manca':r.daVerificare.length?'verifica':'ok';
+const ricettaItem=i=>{const d=dishOf(i);return d&&!itemChanged(i)?ricettaDi(d):null};
+const algNums=i=>{const r=ricettaItem(i);if(r)return r.allergeni;if(i.alg)return i.alg;const d=i.dishId&&state.dishes.find(x=>x.id===i.dishId);return d&&d.alg||[]};
 // Una portata ha gli allergeni "impostati" se ne ha almeno uno oppure se è stato scelto "Nessuno".
 const dishSet=d=>!!d&&((Array.isArray(d.alg)&&d.alg.length>0)||d.algSet===true);
 const itemChanged=i=>{const d=dishOf(i);return!!d&&oneLine(d.name)!==oneLine(i.name)};
 // 'ok', 'manca' (mai indicati) oppure 'verifica' (testo cambiato rispetto all'archivio: quelli ereditati possono non valere più)
-const algState=i=>Array.isArray(i.alg)?'ok':!dishSet(dishOf(i))?'manca':itemChanged(i)?'verifica':'ok';
+const algState=i=>{const r=ricettaItem(i);return r?ricState(r):Array.isArray(i.alg)?'ok':!dishSet(dishOf(i))?'manca':itemChanged(i)?'verifica':'ok'};
 const shownSecs=m=>{const l=tplOf(m).layout;return(l==='evento'||l==='libretto')&&m.kids!==false?allSecs(m):m.sections};
 const algTodo=m=>m.allergens?shownSecs(m).flatMap(s=>s.items).filter(i=>algState(i)!=='ok'):[];
 // eliminando una portata dall'archivio, i menù che la usano si tengono i suoi allergeni
 function delDish(id){
   const d=state.dishes.find(z=>z.id===id);if(!d)return;
-  if(dishSet(d))state.menus.forEach(m=>allSecs(m).forEach(sec=>sec.items.forEach(i=>{if(i.dishId===id&&!Array.isArray(i.alg))i.alg=[...(d.alg||[])]})));
+  const r=ricettaDi(d),alg=r&&ricState(r)!=='manca'?r.allergeni:dishSet(d)?(d.alg||[]):null; // collegata a una ricetta: restano quelli della ricetta
+  if(alg)state.menus.forEach(m=>allSecs(m).forEach(sec=>sec.items.forEach(i=>{if(i.dishId===id&&(!Array.isArray(i.alg)||(r&&!itemChanged(i))))i.alg=[...alg]})));
   state.dishes=state.dishes.filter(z=>z.id!==id);
 }
 const algChips=sh=>`<div class="algs"><button class="${sh.none?'on':''}" data-a="algNone">Nessuno</button>${ALLERGENI.map((a,i)=>`<button class="${(sh.alg||[]).includes(i+1)?'on':''}" data-a="algT" data-n="${i+1}">${i+1}. ${esc(a)}</button>`).join('')}</div>`;
+const algTxt=r=>r.allergeni.length?r.allergeni.map(n=>`${n}. ${esc(ALLERGENI[n-1])}`).join(', '):'nessuno';
+// riquadro della ricetta collegata (o il pulsante per crearla), nella scheda della portata
+function ricInfo(rid){
+  const R=RIC(),r=rid&&R.elenco.find(x=>x.id===rid);
+  if(!r)return`<button class="btn wide" data-a="mkRecipe" style="margin:-4px 0 12px">${I.plus}Crea la ricetta da questa portata</button>`;
+  const st=ricState(r);
+  return`<div class="card ${st==='ok'?'':'warn'}" style="margin:-4px 0 12px;font-size:14px">${st==='manca'?'La ricetta <b>'+esc(r.nome)+'</b> non ha ancora ingredienti: finché non li aggiungi, sui menù questa portata risulta da controllare.'
+    :st==='verifica'?`Allergeni dalla ricetta <b>${esc(r.nome)}</b>: ${algTxt(r)}. Da controllare: ${r.daVerificare.length===1?'un ingrediente ha':'alcuni ingredienti hanno'} gli allergeni non ancora verificati sull'etichetta (${esc(r.daVerificare.join(', '))}).`
+    :`Allergeni dalla ricetta <b>${esc(r.nome)}</b>: ${algTxt(r)}.`}<br>Si correggono nella ricetta, non qui.
+    <button class="btn" style="margin-top:8px;width:100%" data-a="openRecipe" data-id="${r.id}">${I.pen}Apri la ricetta</button></div>`;
+}
+const ricField=sh=>`<label class="fld"><span>Ricetta</span><select class="inp" id="dric"><option value="">Nessuna (allergeni a mano)</option>${RIC().elenco.map(r=>`<option value="${r.id}" ${r.id===sh.rid?'selected':''}>${esc(r.nome)}</option>`).join('')}</select></label><div id="ricinfo">${ricInfo(sh.rid)}</div>`;
 const algOf=(m,i)=>{if(!m.allergens)return'';const n=algNums(i);return n.length?`<span class="alg">${n.join(',')}</span>`:''};
 function algLegend(m,secs){
   if(!m.allergens)return'';

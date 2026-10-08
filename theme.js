@@ -2,7 +2,7 @@ import { StyleSheet, Appearance } from 'react-native';
 import { oggiLocale, daIsoLocale } from './utile';
 
 export {
-  aNumero, numeroPerCampo, oggiLocale, isoLocale, piuGiorni, giornoDi, arrotonda, escHtml,
+  ALLERGENI, aNumero, numeroPerCampo, oggiLocale, isoLocale, piuGiorni, giornoDi, arrotonda, escHtml,
 } from './utile';
 
 // Tavolozza della suite (Material Design 3, dal mockup approvato l'8/10/2026): verdi oliva e un accento terracotta.
@@ -87,11 +87,6 @@ const SCURO = {
 /** Il tema segue quello del telefono e si decide all'avvio: cambiando tema nelle impostazioni, l'app lo prende alla riapertura. */
 export const TEMA_SCURO = Appearance.getColorScheme() === 'dark';
 export const COLORS = TEMA_SCURO ? SCURO : CHIARO;
-
-export const ALLERGENI = [
-  'Glutine', 'Crostacei', 'Uova', 'Pesce', 'Arachidi', 'Soia', 'Latte',
-  'Frutta a guscio', 'Sedano', 'Senape', 'Sesamo', 'Solfiti', 'Lupini', 'Molluschi',
-];
 
 export const CATEGORIE_PRODOTTO = [
   'Carne', 'Pesce', 'Ortofrutta', 'Latticini', 'Salumi', 'Secco/Dispensa',

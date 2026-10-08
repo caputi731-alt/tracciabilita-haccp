@@ -210,6 +210,27 @@ test('annulla: solo entro pochi minuti dalla registrazione, poi resta la correzi
   await assert.rejects(db.annullaSanificazione(san), /non si può più annullare/);
 });
 
+test('ricette per il Menù: allergeni come numeri, ingredienti da verificare, creazione dalla portata', async () => {
+  const forn = await db.salvaFornitore({ ragione_sociale: 'Fornitore ricette' });
+  const farina = (await db.salvaProdotto({ denominazione: 'Farina tipo 0', unita_misura: 'kg', allergeni: ['Glutine'] })).lastInsertRowId;
+  const acciughe = (await db.salvaProdotto({ denominazione: 'Acciughe', unita_misura: 'kg', allergeni: ['Pesce'] })).lastInsertRowId;
+  // prodotto nato da una fattura: allergeni non ancora controllati sull'etichetta
+  const dubbio = (await db.exec("INSERT INTO prodotti (denominazione, unita_misura, allergeni, allergeni_verificati) VALUES ('Semola da fattura', 'kg', '[]', 0)")).lastInsertRowId;
+  assert.ok(forn && farina && acciughe && dubbio);
+  const piena = await db.salvaRicetta({ nome: 'Orecchiette alle acciughe', categoria: '', porzioni: 4, procedura: '', ingredienti: [{ prodotto_id: farina, quantita: 1, unita_misura: 'kg' }, { prodotto_id: acciughe, quantita: 0.2, unita_misura: 'kg' }] });
+  const conDubbio = await db.salvaRicetta({ nome: 'Pane di semola', categoria: '', porzioni: 1, procedura: '', ingredienti: [{ prodotto_id: dubbio, quantita: 1, unita_misura: 'kg' }] });
+  const nuova = await db.creaRicettaDaPortata('  Agnello   al forno ');
+  assert.equal(await db.creaRicettaDaPortata('agnello al forno'), nuova, 'stesso nome: non se ne crea una seconda');
+  await assert.rejects(db.creaRicettaDaPortata('  '), /nome/);
+  const elenco = await db.ricettePerMenu();
+  const di = (id) => elenco.find((r) => r.id === id);
+  assert.deepEqual([di(piena).allergeni, di(piena).ingredienti, di(piena).daVerificare], [[1, 4], 2, []]);
+  assert.deepEqual([di(conDubbio).allergeni, di(conDubbio).ingredienti, di(conDubbio).daVerificare], [[], 1, ['Semola da fattura']]);
+  assert.deepEqual([di(nuova).nome, di(nuova).ingredienti, di(nuova).allergeni], ['Agnello al forno', 0, []]);
+  await db.eliminaRicetta(piena);
+  assert.equal((await db.ricettePerMenu()).some((r) => r.id === piena), false, 'le ricette eliminate non arrivano al Menù');
+});
+
 /* ---------- giacenze, produzioni, temperature flessibili, giorni locali ---------- */
 
 test('scarico: mai più della giacenza, neanche con un doppio tocco; annulla riporta la quantità giusta', async () => {

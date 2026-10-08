@@ -83,3 +83,9 @@ export function backupDaEliminare(nomi, giorni = 3, prefisso = 'backup-haccp-') 
   }
   return via;
 }
+
+/** I 14 allergeni del Reg. UE 1169/2011, nell'ordine ufficiale: nel Menù hanno i numeri da 1 a 14 nella stessa posizione. */
+export const ALLERGENI = [
+  'Glutine', 'Crostacei', 'Uova', 'Pesce', 'Arachidi', 'Soia', 'Latte',
+  'Frutta a guscio', 'Sedano', 'Senape', 'Sesamo', 'Solfiti', 'Lupini', 'Molluschi',
+];

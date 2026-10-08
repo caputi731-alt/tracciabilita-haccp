@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Modal, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, CATEGORIE_PRODOTTO, UNITA, aNumero, numeroPerCampo } from './theme';
@@ -12,7 +12,7 @@ import { stampa, htmlTabellaAllergeni } from './report';
 
 const VUOTA = { nome: '', categoria: '', porzioni: '', procedura: '', ingredienti: [] };
 
-export default function RicetteScreen() {
+export default function RicetteScreen({ apriId }) {
   const [ricette, setRicette] = useState([]);
   const [prodotti, setProdotti] = useState([]);
   const [form, setForm] = useState(null);
@@ -26,6 +26,7 @@ export default function RicetteScreen() {
   const apri = async (r) => {
     if (r) {
       const piena = await getRicetta(r.id);
+      if (!piena) return;
       setForm({
         ...piena,
         porzioni: piena.porzioni != null ? String(piena.porzioni) : '',
@@ -37,6 +38,9 @@ export default function RicetteScreen() {
       setForm({ ...VUOTA, ingredienti: [] });
     }
   };
+
+  // aperta dal Menù su una ricetta precisa ("Crea e apri la ricetta" di una portata)
+  useEffect(() => { if (apriId) apri({ id: apriId }).catch(() => {}); }, [apriId]);
 
   const set = (k) => (v) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -61,6 +65,11 @@ export default function RicetteScreen() {
     });
     return [...set0];
   };
+
+  // ingredienti nati dalle fatture, con allergeni non ancora controllati sull'etichetta
+  const daVerificare = () => (form ? form.ingredienti
+    .map((ing) => prodotti.find((x) => x.id === ing.prodotto_id))
+    .filter((p) => p && !p.allergeni_verificati).map((p) => p.denominazione) : []);
 
   const { errori, segnala, azzera, riepilogo } = useErrori();
 
@@ -158,6 +167,18 @@ export default function RicetteScreen() {
                 {allergeniCalcolati().length ? allergeniCalcolati().join(', ') : 'Nessuno (dai prodotti scelti)'}
               </Text>
             </View>
+
+            {form.ingredienti.filter((i) => i.prodotto_id).length === 0 && (
+              <Text style={[S.muted, { color: COLORS.warning, marginBottom: 8 }]}>
+                Senza ingredienti la ricetta non dice niente sugli allergeni: nel Menù la portata collegata resta "da controllare".
+              </Text>
+            )}
+            {daVerificare().length > 0 && (
+              <Text style={[S.muted, { color: COLORS.warning, marginBottom: 8 }]}>
+                Allergeni da verificare sull'etichetta per: {daVerificare().join(', ')}. Aprili in Anagrafiche → Prodotti e salvali:
+                fino ad allora nel Menù la portata collegata resta "da controllare".
+              </Text>
+            )}
 
             <Campo label="Procedura" value={form.procedura} onChange={set('procedura')} multiline />
 

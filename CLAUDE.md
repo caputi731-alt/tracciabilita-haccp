@@ -134,6 +134,14 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
   e forme di `theme.js`; la barra delle sezioni del Menù diventa una riga di linguette in alto (Calendario, Proposte, Stampe, Didattica,
   Impostazioni). Se cambia la tavolozza in `theme.js` va aggiornata anche lì. Le pagine dei menù (`.pg`) non devono cambiare:
   lo controlla `test/menu-suite.py`. Dopo ogni disegno la pagina chiama `window.suiteVista()` e manda `{ tipo: 'vista', profonda }`.
+- Dati condivisi (tappa 3, scelte di Luca del 8/10/2026): l'archivio del Menù resta quello dell'app web (chiave `state` di `menu_dati`),
+  non viene convertito in tabelle; niente anagrafica clienti. Le portate dell'archivio possono collegarsi a una ricetta (`rid` sulla
+  portata, id di `ricette`): gli allergeni vengono allora solo dalla ricetta e nel Menù non si modificano (`ricettaItem`, `algNums`,
+  `algState` in `menu/js/03-pagine.js`). Ricetta senza ingredienti = "manca"; ingredienti con `allergeni_verificati = 0` = "verifica";
+  se nel menù il testo della portata è cambiato, il collegamento non vale e restano le regole a mano. La suite fornisce le ricette con
+  `ricettePerMenu()` (allergeni come numeri 1–14 = posizione in `ALLERGENI`, ora in utile.js) e le rimanda alla pagina a ogni ritorno
+  al Menù (`scriptRicette`); "Crea la ricetta da questa portata" usa `creaRicettaDaPortata` e apre Anagrafiche → Ricette (`apriId`).
+  Per leggere gli eventi dal resto della suite: `eventiMenu(testoStato)` in menuPonte.js (portate con `ricettaId`).
 - Ponte pagina ↔ suite: `menu/js/00-suite.js` (lato pagina, caricato per primo) e `menuPonte.js` (lato suite, senza dipendenze
   dal telefono, provato in `test/menuPonte.test.mjs`). La pagina manda messaggi JSON `{ tipo, ... }`; la suite risponde
   eseguendo `window.__suiteRisposta(id, ok, valore)`.
