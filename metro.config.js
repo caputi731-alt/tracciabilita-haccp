@@ -10,6 +10,7 @@ const prima = config.resolver.resolveRequest;
 config.resolver.resolveRequest = (ctx, nome, piattaforma) => {
   if (piattaforma === 'web') {
     if (nome === 'expo-sqlite') return { type: 'sourceFile', filePath: path.join(__dirname, 'test', 'anteprima', 'sqlite.js') };
+    if (nome === 'react-native-aes-crypto') return { type: 'sourceFile', filePath: path.join(__dirname, 'test', 'anteprima', 'aes.js') };
     if (FINTI.includes(nome)) return { type: 'sourceFile', filePath: path.join(__dirname, 'test', 'anteprima', 'vuoto.js') };
   }
   return (prima || ctx.resolveRequest)(ctx, nome, piattaforma);

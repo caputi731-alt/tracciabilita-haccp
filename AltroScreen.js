@@ -17,6 +17,7 @@ const GRUPPI = [
   {
     titolo: 'Cucina',
     voci: [
+      { titolo: 'Magazzino', rotta: 'Magazzino', desc: 'Giacenze, scarichi e rintracciabilità dei lotti', icona: 'package-variant-closed' },
       { titolo: 'Carico merce', rotta: 'CaricoMerce', desc: 'Da fattura PDF o a mano', icona: 'truck-delivery-outline' },
       { titolo: 'Eventi', rotta: 'Eventi', desc: 'Fabbisogno e costo dei menù in calendario', icona: 'calendar-star' },
       { titolo: 'Produzioni', rotta: 'Produzioni', desc: 'Prepara un piatto e collega i lotti', icona: 'pot-steam-outline' },

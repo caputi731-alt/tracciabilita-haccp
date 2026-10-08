@@ -3,7 +3,7 @@
  * (provato in test/sale.test.mjs). La scena 3D è la pagina sale/index.html, la schermata è SaleScreen.js.
  *
  * Si parte dalla prenotazione (scelta di Luca: "riempiamo la sala in base alle prenotazioni"): nome, persone e ora.
- * Dalle persone si ricava quanto deve essere LUNGA la tavolata (80 cm a persona); con quali tavoli e allunghe comporla
+ * Dalle persone si ricava quanto deve essere LUNGA la tavolata (75 cm a persona); con quali tavoli e allunghe comporla
  * lo decide chi apparecchia, perché i tavoli hanno lunghezze diverse. La lunghezza si può correggere a mano.
  * Ogni sala ha delle FILE fisse dove stanno i tavoli, già fuori dai passaggi e dalle zone libere davanti alle porte:
  * le posizioni lungo la fila le calcola `disponi`.
@@ -13,7 +13,7 @@
  */
 
 export const LARGO = 0.9;           // profondità dei tavoli
-export const A_PERSONA = 0.8;       // 80 cm di tavolo a persona sui lati lunghi (scelta di Luca: non devono stare stretti)
+export const A_PERSONA = 0.75;      // 75 cm di tavolo a persona sui lati lunghi (scelta di Luca)
 export const TRA_TAVOLI = 1.2;      // fra due tavolate della stessa fila: sedie più passaggio
 export const DAVANTI_PORTA = 1.5;   // zona libera davanti a ogni porta
 export const LUNGA_MIN = 0.6, LUNGA_MAX = 14;
@@ -27,21 +27,6 @@ const rett = (x, y, w, h) => ({ x, y, w, h });
  *   sull'altro asse, `tratti` = pezzi di fila utilizzabili [da, a] lungo l'asse.
  */
 export const SALE = {
-  panoramica: {
-    id: 'panoramica', nome: 'Sala panoramica', sigla: 'P',
-    contorno: [[0, 0], [2.9, 0], [2.9, 1.3], [6.5, 1.3], [6.5, 10], [0, 10]],
-    ostacoli: [{ ...rett(3.95, 1.3, 1.55, 1.7), nome: 'Paravento' }],
-    porte: [
-      { x1: 2.45, y1: 10, x2: 3.95, y2: 10, nome: 'Ingresso' },
-      { x1: 3.95, y1: 1.4, x2: 3.95, y2: 2.6, nome: 'Cucina' },
-      { x1: 6.5, y1: 2.4, x2: 6.5, y2: 3.2, nome: 'Bagni' },
-    ],
-    zone: [rett(2.25, 8.5, 1.9, 1.5), rett(2.45, 1.3, 1.5, 1.7), rett(5.0, 2.2, 1.5, 1.2), rett(5.5, 1.3, 1.0, 0.9)],
-    file: [
-      { id: 'A', nome: 'Fila A · finestre', asse: 'y', c: 1.25, tratti: [[0.8, 9.2]] },
-      { id: 'B', nome: 'Fila B · lato cucina', asse: 'y', c: 4.85, tratti: [[3.8, 8.4]] },
-    ],
-  },
   stalla: {
     id: 'stalla', nome: 'Sala antica stalla', sigla: 'S',
     contorno: [[0, 0], [15.8, 0], [15.8, 6.5], [0, 6.5]],
@@ -61,6 +46,21 @@ export const SALE = {
       { id: 'B', nome: 'Fila B · lato ingresso', asse: 'x', c: 4.75, tratti: [[0.8, 6.4], [8.55, 15.0]] },
     ],
   },
+  panoramica: {
+    id: 'panoramica', nome: 'Sala panoramica', sigla: 'P',
+    contorno: [[0, 0], [2.9, 0], [2.9, 1.3], [6.5, 1.3], [6.5, 10], [0, 10]],
+    ostacoli: [{ ...rett(3.95, 1.3, 1.55, 1.7), nome: 'Paravento' }],
+    porte: [
+      { x1: 2.45, y1: 10, x2: 3.95, y2: 10, nome: 'Ingresso' },
+      { x1: 3.95, y1: 1.4, x2: 3.95, y2: 2.6, nome: 'Cucina' },
+      { x1: 6.5, y1: 2.4, x2: 6.5, y2: 3.2, nome: 'Bagni' },
+    ],
+    zone: [rett(2.25, 8.5, 1.9, 1.5), rett(2.45, 1.3, 1.5, 1.7), rett(5.0, 2.2, 1.5, 1.2), rett(5.5, 1.3, 1.0, 0.9)],
+    file: [
+      { id: 'A', nome: 'Fila A · finestre', asse: 'y', c: 1.25, tratti: [[0.8, 9.2]] },
+      { id: 'B', nome: 'Fila B · lato cucina', asse: 'y', c: 4.85, tratti: [[3.8, 8.4]] },
+    ],
+  },
 };
 export const ID_SALE = Object.keys(SALE);
 export const SERVIZI = ['Pranzo', 'Cena'];
@@ -68,9 +68,10 @@ export const SERVIZI = ['Pranzo', 'Cena'];
 const intero = (n) => Math.max(0, Math.floor(Number(n) || 0));
 const arrotonda = (n) => Math.round(n * 1000) / 1000 + 0;   // + 0: mai "-0"
 const decimo = (n) => Math.round(n * 10) / 10;
+const decimoInSu = (n) => Math.ceil(n * 10 - 1e-6) / 10;
 
 /**
- * Stima realistica dei posti di una tavolata lunga `len`: una persona ogni 80 cm su ognuno dei due lati lunghi, più un
+ * Stima realistica dei posti di una tavolata lunga `len`: una persona ogni 75 cm su ognuno dei due lati lunghi, più un
  * capotavola per testa. Sotto 1,2 m (il tavolo da 90 da solo) si sta al massimo in 3, non in 4 (scelta di Luca).
  * → { posti, lati (persone per lato lungo), capotavola }
  */
@@ -86,7 +87,7 @@ export function posti(len) {
 export function lunghezzaPer(persone) {
   const n = intero(persone);
   if (n <= 3) return 0.9;
-  return decimo(Math.max(1.2, Math.ceil((n - 2) / 2) * A_PERSONA));
+  return decimoInSu(Math.max(1.2, Math.ceil((n - 2) / 2) * A_PERSONA));
 }
 
 /** Lunghezza di una tavolata: quella corretta a mano, se c'è, altrimenti quella calcolata dalle persone. */
@@ -129,23 +130,19 @@ export const senzaPrenotazioni = (sala, p) => ({
 });
 
 /**
- * Mette in fila le tavolate nei tratti utilizzabili, nell'ordine in cui sono: ognuna nel primo tratto dove entra ancora,
- * con almeno 1,2 m dalla precedente; lo spazio che avanza in un tratto si divide in parti uguali.
+ * Mette in fila le tavolate nei tratti utilizzabili: ognuna, nell'ordine in cui sono, nel primo tratto dove entra ancora
+ * (anche uno prima di quello dell'ultima messa: una fila spezzata dall'ingresso non resta mezza vuota),
+ * con almeno 1,2 m dalla vicina; lo spazio che avanza in un tratto si divide in parti uguali.
  * → [{ t, da, a }] più quelle che non entrano (`fuori`).
  */
 function sistema(fila, tavolate) {
   const messe = [], fuori = [];
-  let k = 0, usato = 0, quante = 0;
-  const gruppi = fila.tratti.map(() => []);
+  const gruppi = fila.tratti.map(() => []), usato = fila.tratti.map(() => 0);
   tavolate.forEach((t) => {
     const len = lunghezza(t);
-    while (k < fila.tratti.length) {
-      const spazio = fila.tratti[k][1] - fila.tratti[k][0];
-      if (usato + (quante ? TRA_TAVOLI : 0) + len <= spazio + 1e-9) break;
-      k += 1; usato = 0; quante = 0;
-    }
-    if (k >= fila.tratti.length) { fuori.push(t); return; }
-    usato += (quante ? TRA_TAVOLI : 0) + len; quante += 1;
+    const k = fila.tratti.findIndex(([da, a], i) => usato[i] + (gruppi[i].length ? TRA_TAVOLI : 0) + len <= a - da + 1e-9);
+    if (k < 0) { fuori.push(t); return; }
+    usato[k] += (gruppi[k].length ? TRA_TAVOLI : 0) + len;
     gruppi[k].push(t);
   });
   gruppi.forEach((g, i) => {

@@ -7,7 +7,7 @@ Preparazione (i pacchetti servono solo qui e non vanno salvati in package.json):
 Uso:
     python3 test/anteprima/vedi.py dist-web <cartella immagini> [passo ...]
 Ogni passo è "nome:testo da toccare>altro testo" (vuoto = solo la Home); "=Testo" tocca l'ultimo elemento con quel testo esatto.
-I dati di prova sono in seme.sql; con VUOTO=1 il database parte vuoto. La vista 3D delle cucine si vede (pagina vera in un iframe). Limiti: il modulo Menù (WebView), la fotocamera
+I dati di prova sono in seme.sql (PIN di prova: 123456); con VUOTO=1 il database parte vuoto. La vista 3D delle cucine si vede (pagina vera in un iframe). Limiti: il modulo Menù (WebView), la fotocamera
 e i file del telefono nel browser non ci sono; l'aspetto su Android può differire in piccoli dettagli.
 """
 import sys, os, threading, functools, http.server, json

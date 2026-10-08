@@ -90,8 +90,7 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
   `prima-del-ripristino.json` resta in chiaro (non esce dall'app). Interfaccia in `RiquadroPin.js` (riquadro nella schermata Backup e `ModalePin`).
   I calcoli li fa il modulo nativo `react-native-aes-crypto` (PBKDF2-SHA256 300.000 giri, AES-256-CBC + HMAC-SHA256): in JavaScript
   sul telefono (Hermes) sarebbero troppo lenti, misurato. Nei test lo sostituisce `test/aes-finto.mjs`, che deve fare gli stessi calcoli
-  del codice Android della libreria. La sezione Conti userà lo stesso PIN (`verificaPin`); a quel punto va rivisto "Ho dimenticato il PIN",
-  che oggi permette di sceglierne uno nuovo senza conoscere il vecchio.
+  del codice Android della libreria. Lo stesso PIN apre incassi e costi; "Ho dimenticato il PIN" chiede il PUK (vedi "Incassi e costi").
 - Foto: sempre tramite `useFoto()` (UI.js), che copia in `documentDirectory/foto/` (`foto.js`); mai salvare URI della cache.
   Visualizzazione con `AnteprimaFoto`. Il backup automatico copia le foto nella sottocartella `foto` e `recuperaFotoMancanti` le riporta dopo una reinstallazione.
 - Stati del lotto: disponibile, esaurito, bloccato (richiamo), annullato. Usare `statoDopo()` quando cambia la giacenza: bloccato/annullato non si perdono.
@@ -103,17 +102,19 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
 
 ## Aspetto e navigazione della suite (tappa 2)
 - Mockup approvato da Luca l'8/10/2026 (Material Design 3, verdi oliva e terracotta): artifact "Suite Tenuta Coppa — Mockup".
-- `PrincipaleScreen.js` è la rotta `Home`: barra in basso con Oggi (`HomeScreen.js`), Magazzino (`MagazzinoScreen.js`),
-  Sale (`SaleScreen.js`), Menù (`MenuScreen.js`) e Altro (`AltroScreen.js`, tutte le altre funzioni). Il tasto indietro da
-  Magazzino/Menù/Altro torna a Oggi. Quando arriverà la sezione Conti prenderà un posto nella barra.
-  La barra si nasconde con la tastiera aperta e nelle schermate interne del Menù. Non esiste più la rotta `Menu`:
-  le sezioni ricevono una `navigation` in cui `navigate('Menu')` porta alla linguetta.
+- `PrincipaleScreen.js` è la rotta `Home`: barra in basso con Cucina (`HomeScreen.js`, la mappa delle cucine), Sala (`SaleScreen.js`),
+  Gestione e Altro (`AltroScreen.js`, tutte le altre funzioni, Magazzino compreso), scelta di Luca del 9/10/2026.
+  Gestione ha due linguette: Menù (`MenuScreen.js`) e Incassi (`IncassiScreen.js`). Il tasto indietro dalle altre sezioni torna a Cucina.
+  La barra (e le linguette di Gestione) si nascondono con la tastiera aperta e nelle schermate interne del Menù. Non esistono le
+  rotte `Menu` e `SezioneMagazzino`: le sezioni ricevono una `navigation` in cui `navigate('Menu')` porta a Gestione → Menù e
+  `navigate('SezioneMagazzino')` (il pavimento della cucina) apre la schermata `Magazzino`.
 - `HomeScreen.js`: riquadro dei controlli di oggi (anello disegnato con due mezzi cerchi, senza librerie grafiche),
   stato di temperature/pulizie/scadenze, cose da sistemare, prossimo menù (`prossimoMenu` in menuPonte.js) e pulsante "Registra".
 - Carattere Manrope: `caratteri.js` aggancia `Text` e `TextInput` e sceglie il file in base a `fontWeight` (500/700/800).
   Negli stili si continua a scrivere solo `fontWeight`; non mettere `fontFamily` a mano (tranne nelle intestazioni di navigazione).
 - Schermate interne: intestazione chiara (`COLORS.bg`), senza ombra.
-- Anteprima nel browser per controllare l'aspetto senza telefono: `test/anteprima/vedi.py` (istruzioni nel file).
+- Anteprima nel browser per controllare l'aspetto senza telefono: `test/anteprima/vedi.py` (istruzioni nel file; PIN di prova 123456,
+  con un finto motore di cifratura `test/anteprima/aes.js` che vale solo lì).
   `metro.config.js` serve solo a quello (piattaforma "web") e non cambia l'APK. Usarla prima di ogni modifica visibile.
 - Tema scuro: segue il telefono e si decide all'avvio (`TEMA_SCURO` e le due tavolozze `CHIARO`/`SCURO` in `theme.js`, stesse chiavi;
   `COLORS` resta fisso finché l'app è aperta). Mai colori scritti a mano nelle schermate: sopra un fondo `azione` il testo è
@@ -145,21 +146,21 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
 - `Vista3D.js` è la WebView comune alle due scene (cucine e sale): manda i dati, riceve i messaggi, gestisce "il 3D non parte".
 
 ## Sale e tavoli (scelte di Luca dell'8/10/2026)
-- Sezione "Sale" nella barra in basso (`SaleScreen.js`): le prenotazioni di un giorno e di un servizio (Pranzo/Cena) sistemate nelle
+- Sezione "Sala" nella barra in basso (`SaleScreen.js`): le prenotazioni di un giorno e di un servizio (Pranzo/Cena) sistemate nelle
   due sale mensa. Niente anagrafica clienti, niente elenco prenotazioni separato dai tavoli.
 - Si parte dalla PRENOTAZIONE ("riempiamo la sala in base alle prenotazioni"): nome, persone, ora, note. Dalle persone l'app ricava
-  quanto deve essere lunga la tavolata (`lunghezzaPer`, 80 cm a persona); con quali tavoli e allunghe comporla lo decide chi apparecchia,
+  quanto deve essere lunga la tavolata (`lunghezzaPer`, 75 cm a persona); con quali tavoli e allunghe comporla lo decide chi apparecchia,
   perché i tavoli hanno lunghezze diverse e non si sa quanti sono: NON modellare i singoli tavoli (la prima versione, build 83, lo faceva
   ed è stata scartata). La lunghezza si corregge a mano (`len`), a passi di 10 cm.
-- Posti (`posti(len)`): una persona ogni 80 cm sui due lati lunghi più i capotavola; sotto 1,2 m (il tavolo da 90 da solo) al massimo 3.
+- Posti (`posti(len)`): una persona ogni 75 cm sui due lati lunghi più i capotavola; sotto 1,2 m (il tavolo da 90 da solo) al massimo 3.
   Più persone dei posti = segnalato in rosso, non bloccato.
 - `sale.js` (puro, `test/sale.test.mjs`): `SALE` descrive le due sale come sono davvero, dal disegno confermato da Luca (misure STIMATE
   dalle piante, ±20%): contorno (la panoramica è a L), pilastri e paravento, porte, zone libere di 1,5 m davanti alle porte, e le FILE
   fisse dove stanno i tavoli, con i `tratti` utilizzabili già fuori da passaggi, pilastri e zone libere e ad almeno 80 cm dai muri.
   Antica stalla: l'ingresso è solo quello di sinistra vicino alle scale, verso la cucina conta solo la porta in fondo. Panoramica: la
   porta dello spogliatoio non conta. Se Luca dà misure vere si cambiano qui (e i test controllano che le file restino valide).
-- Disposizione guidata, non libera: in ogni fila le tavolate stanno nell'ordine in cui arrivano, `disponi` le mette nei tratti con
-  almeno 1,2 m fra una e l'altra (`TRA_TAVOLI`). `entra` / `restoFila` dicono cosa c'è ancora posto di aggiungere.
+- Disposizione guidata, non libera: `disponi` mette ogni tavolata nel primo tratto della fila in cui entra ancora (una fila spezzata
+  dall'ingresso non deve restare mezza vuota), con almeno 1,2 m fra una e l'altra (`TRA_TAVOLI`). L'antica stalla viene per prima. `entra` / `restoFila` dicono cosa c'è ancora posto di aggiungere.
 - Tabella `disposizioni` (nel backup, in `TABELLE_NUOVE`), due tipi di riga: `giorno` (data + servizio, con prenotazioni; ogni modifica
   si salva subito) e `modello` (disposizione con un nome, senza prenotazioni, lunghezze fissate, da applicare a un giorno).
   `pianoPulito` legge anche i piani della build 83 (`t180`/`t90`).
@@ -169,6 +170,17 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
   dall'elenco. Prova: `python3 test/sale-vista.py` (anche su GitHub prima della build).
 - Per i camerieri: `htmlDisposizioneSale` (report.js) → PDF con pianta dall'alto ed elenco delle tavolate con la lunghezza da preparare,
   condiviso con `condividiPdf` (WhatsApp); oppure lo stesso dispositivo tenuto in sala. I telefoni non si sincronizzano fra loro.
+
+## Incassi e costi (Gestione → Incassi, scelte di Luca del 9/10/2026)
+- `conti.js` (puro, `test/conti.test.mjs`) + `IncassiScreen.js`. Incassi: una riga per giorno (tabella `incassi`), divisa per metodo
+  (contanti, POS, altro), senza distinguere pranzo e cena, IVA INCLUSA; il netto si ricava togliendo l'IVA al 10% (`IVA_RISTORAZIONE`).
+- Costi: la merce è automatica (`merceTra`: quantità × `prezzo_unitario` dei carichi del periodo, IVA esclusa; i carichi senza prezzo
+  si contano a parte e non si stimano; è la merce caricata, non quella consumata); personale e altre spese si scrivono a mano
+  (tabella `spese`, `CATEGORIE_SPESA`). Risultato del mese = incassi netti − costi. Tutte e due le tabelle sono nel backup (`TABELLE_NUOVE`).
+- Si vede solo dopo il PIN del titolare (`costiSbloccati` / `sbloccaCosti`, 10 minuti); senza PIN impostato la schermata chiede di impostarlo.
+- PUK (`pin.js`, `RiquadroPin.js`): dieci cifre create dal telefono insieme al primo PIN (o dal pulsante "Crea il codice PUK" per chi
+  aveva già il PIN) e mostrate una volta sola. Da quando esiste, "Ho dimenticato il PIN" lo chiede (`pinDimenticato`); dopo l'uso se ne
+  crea uno nuovo. Finché non esiste, il PIN si cambia ancora liberamente e il riquadro del PIN lo segnala. Il PUK non apre i backup.
 
 ## Modulo Menù (suite Tenuta Coppa)
 - La suite nasce da questa app: il Menù (prima app a parte, repository `menu-tenuta-coppa`) entra come modulo.

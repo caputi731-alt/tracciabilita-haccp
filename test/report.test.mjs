@@ -63,7 +63,7 @@ test('disposizione dei tavoli per i camerieri: pianta, elenco, nomi in sicurezza
   assert.equal((html.match(/<polygon /g) || []).length, 1);
   assert.match(html, /Sala antica stalla/);
   assert.ok(!html.includes('Sala panoramica'), 'una sala senza tavoli non si stampa');
-  assert.match(html, /3 tavolate · 14 persone · 19 posti · 5,9 m di tavoli da preparare/);
+  assert.match(html, /3 tavolate · 14 persone · 19 posti · 5,7 m di tavoli da preparare/);
   assert.match(html, /Ingresso/);
   assert.match(html, /S2 Bianchi: 4 persone su 3 posti/);
 });

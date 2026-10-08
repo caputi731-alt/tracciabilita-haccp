@@ -17,25 +17,25 @@ const dentro = (p, r) => p.x >= r.x - 1e-9 && p.x <= r.x + r.w + 1e-9 && p.y >= 
 const ingombro = (t) => (t.asse === 'x' ? { x: t.x - t.len / 2, y: t.y - LARGO / 2, w: t.len, h: LARGO } : { x: t.x - LARGO / 2, y: t.y - t.len / 2, w: LARGO, h: t.len });
 const siToccano = (a, b, aria = 0) => a.x < b.x + b.w + aria - 1e-6 && b.x < a.x + a.w + aria - 1e-6 && a.y < b.y + b.h + aria - 1e-6 && b.y < a.y + a.h + aria - 1e-6;
 
-test('posti: 80 cm a persona sui lati più i capotavola; sotto 1,2 m al massimo in 3', () => {
+test('posti: 75 cm a persona sui lati più i capotavola; sotto 1,2 m al massimo in 3', () => {
   assert.deepEqual(posti(0.9), { posti: 3, lati: 1, capotavola: 1 });
   assert.equal(posti(1.1).posti, 3);
   assert.equal(posti(1.2).posti, 4);
-  assert.equal(posti(1.6).posti, 6);
+  assert.equal(posti(1.5).posti, 6);
   assert.equal(posti(1.8).posti, 6);
-  assert.equal(posti(2.4).posti, 8);
-  assert.equal(posti(3.2).posti, 10);
+  assert.equal(posti(2.3).posti, 8);
+  assert.equal(posti(3).posti, 10);
   assert.equal(posti(0.3).posti, 0);
 });
 
 test('dalla prenotazione alla lunghezza della tavolata, correggibile a mano', () => {
-  assert.deepEqual([1, 3, 4, 5, 6, 7, 8, 10, 20].map(lunghezzaPer), [0.9, 0.9, 1.2, 1.6, 1.6, 2.4, 2.4, 3.2, 7.2]);
+  assert.deepEqual([1, 3, 4, 5, 6, 7, 8, 10, 20, 30].map(lunghezzaPer), [0.9, 0.9, 1.2, 1.5, 1.5, 2.3, 2.3, 3, 6.8, 10.5]);
   // in ogni tavolata calcolata le persone ci stanno, e in una più corta di 80 cm no
   for (let n = 1; n <= 40; n++) {
     assert.ok(posti(lunghezzaPer(n)).posti >= n, `${n} persone`);
     if (n > 4) assert.ok(posti(lunghezzaPer(n) - 0.8).posti < n, `${n} persone: tavolata troppo lunga`);
   }
-  assert.equal(lunghezza(T(10)), 3.2);
+  assert.equal(lunghezza(T(10)), 3);
   assert.equal(lunghezza(T(10, { len: 3.6 })), 3.6);
   assert.equal(lunghezza(T(0)), 0.9);
   assert.equal(lunghezza(T(4, { len: 99 })), 14);
@@ -78,16 +78,28 @@ test('disponi: tavolate nei tratti, distanziate, mai sopra pilastri o davanti al
       ingombri.slice(i + 1).forEach((q, j) => assert.ok(!siToccano(r, q, TRA_TAVOLI - 0.01), `${d.tavolate[i].sigla} e ${d.tavolate[i + 1 + j].sigla} troppo vicine`));
     });
     assert.deepEqual(Object.values(sigle(sala, piano)), [1, 2, 3, 4, 5].map((n) => `${sala.sigla}${n}`));
-    assert.deepEqual([d.tavolate[0].sigla, d.tavolate[0].len, d.tavolate[0].posti, d.tavolate[0].prenotata], [`${sala.sigla}1`, 3.2, 10, true]);
+    assert.deepEqual([d.tavolate[0].sigla, d.tavolate[0].len, d.tavolate[0].posti, d.tavolate[0].prenotata], [`${sala.sigla}1`, 3, 10, true]);
   }
   // nella stalla la fila dell'ingresso è spezzata in due: una tavolata lunga salta al secondo tratto
-  const d = disponi(stalla, { file: [[], [T(12), T(14)]] });
+  let d = disponi(stalla, { file: [[], [T(12), T(16)]] });
   assert.ok(d.ok);
   assert.ok(d.tavolate[0].x + d.tavolate[0].len / 2 <= 6.4 + 1e-6 && d.tavolate[1].x - d.tavolate[1].len / 2 >= 8.55 - 1e-6);
+  // …e il tratto prima dell'ingresso non resta vuoto: una tavolata troppo lunga per la sinistra va a destra,
+  // ma la fila non è piena e la prossima torna a sinistra (errore visto da Luca nella build 84)
+  const lunga = { file: [[], [nuovaTavolata({ len: 6.4 })]] };
+  assert.equal(restoFila(stalla, lunga, 1), 5.6);
+  d = disponi(stalla, { file: [[], [...lunga.file[1], T(10)]] });
+  assert.ok(d.ok);
+  const destra = ingombro(d.tavolate.find((t) => t.len === 6.4)), sinistra = ingombro(d.tavolate.find((t) => t.len === 3));
+  assert.ok(destra.x >= 8.55 - 1e-6 && sinistra.x + sinistra.w <= 6.4 + 1e-6);
+  // l'antica stalla viene per prima; il tratto a destra dell'ingresso è un po' più lungo di quello a sinistra
+  assert.deepEqual(Object.keys(SALE), ['stalla', 'panoramica']);
+  const [sx, dx] = stalla.file[1].tratti.map(([da, a]) => a - da);
+  assert.ok(dx > sx && dx - sx < 1.5);
 });
 
 test('disponi: segnala la tavolata che non entra e la prenotazione con più persone dei posti', () => {
-  const piano = { file: [[T(20), T(14)], []] };       // 7,2 m + 5,6 m + passaggio in 8,4 m di fila
+  const piano = { file: [[T(20), T(14)], []] };       // 6,8 m + 4,5 m + passaggio in 8,4 m di fila
   let d = disponi(panoramica, piano);
   assert.ok(!d.ok && d.tavolate.length === 1 && /P2 non entra nella fila a/.test(d.problemi[0]), d.problemi.join('; '));
   d = disponi(panoramica, { file: [[T(4, { nome: 'Bianchi', len: 0.9 })], []] });
@@ -110,10 +122,10 @@ test('piani: pulizia (anche dei piani della prima versione), modello senza preno
   assert.deepEqual(pianoPulito(stalla, null), pianoVuoto(stalla));
   const m = senzaPrenotazioni(panoramica, p);
   assert.deepEqual(m.file[0].map((t) => [t.nome, t.persone, t.len]), [['', '', 4], ['', '', 4.5]]);
-  assert.equal(m.file[1][0].len, 1.6);
-  assert.deepEqual(totali([[panoramica, p], [stalla, { file: [[T(3)]] }]]), { tavolate: 4, prenotate: 4, posti: 12 + 12 + 6 + 3, persone: 27, metri: 11 });
+  assert.equal(m.file[1][0].len, 1.5);
+  assert.deepEqual(totali([[panoramica, p], [stalla, { file: [[T(3)]] }]]), { tavolate: 4, prenotate: 4, posti: 12 + 14 + 6 + 3, persone: 27, metri: 10.9 });
   const s = datiScenaSala(panoramica, { file: [[T(9, { nome: 'Verdi', ora: '13:00' })], [nuovaTavolata({ len: 1.8 })]] }, { scuro: true });
-  assert.deepEqual([s.tavolate[0].titolo, s.tavolate[0].breve, s.tavolate[0].c, s.tavolate[0].asse], ['P1 · Verdi', '9 pers. · 3,2 m · 13:00', 'ok', 'y']);
+  assert.deepEqual([s.tavolate[0].titolo, s.tavolate[0].breve, s.tavolate[0].c, s.tavolate[0].asse], ['P1 · Verdi', '9 pers. · 3 m · 13:00', 'ok', 'y']);
   assert.deepEqual([s.tavolate[1].titolo, s.tavolate[1].breve, s.tavolate[1].c], ['P2', 'libera · 1,8 m', 'neutro']);
   assert.equal(s.sala.contorno.length, 6);
   assert.doesNotThrow(() => JSON.stringify(s));
@@ -141,7 +153,7 @@ test('database: disposizione di un giorno e di un servizio, modelli con un nome'
   await assert.rejects(() => salvaModelloSale('  ', dati));
   const modelli = await modelliSale();
   assert.deepEqual(modelli.map((m) => m.nome), ['Battesimo 60', 'domenica']);
-  assert.deepEqual([modelli[1].dati.stalla.file[0][0].nome, modelli[1].dati.stalla.file[0][0].len], ['', 3.2]);  // niente prenotazioni, lunghezza fissata
+  assert.deepEqual([modelli[1].dati.stalla.file[0][0].nome, modelli[1].dati.stalla.file[0][0].len], ['', 3]);  // niente prenotazioni, lunghezza fissata
   await eliminaModelloSale(modelli[0].id);
   assert.equal((await modelliSale()).length, 1);
 

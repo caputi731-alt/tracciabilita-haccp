@@ -118,7 +118,7 @@ function SchedaTavolata({ sala, piano, fila, tavolata, sigla, nuova, onSalva, on
             </Text>
             <Text style={{ fontSize: 14, color: troppi ? COLORS.danger : COLORS.primaryDark }}>
               {troppi ? `${persone} persone starebbero strette: allunga la tavolata o dividi il gruppo.`
-                : '80 cm a persona. Componila con i tavoli e le allunghe che avete: se viene più lunga o più corta, correggi qui.'}
+                : '75 cm a persona. Componila con i tavoli e le allunghe che avete: se viene più lunga o più corta, correggi qui.'}
             </Text>
           </View>
           {!!t.len && !!persone && (

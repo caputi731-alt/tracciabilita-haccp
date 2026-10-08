@@ -1,6 +1,7 @@
 import * as SQLite from 'expo-sqlite';
 import { oggiLocale, piuGiorni, limitiGiorni, giornoDi, daIsoLocale, arrotonda, ALLERGENI } from './utile';
 import { SALE, ID_SALE, SERVIZI, pianoPulito, senzaPrenotazioni, totali as totaliSale } from './sale';
+import { CATEGORIE_SPESA } from './conti';
 
 let apertura = null;
 
@@ -231,6 +232,24 @@ async function preparaSchema() {
       servizio TEXT,
       dati TEXT NOT NULL,
       aggiornato TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS incassi (
+      giorno TEXT PRIMARY KEY,
+      contanti REAL NOT NULL DEFAULT 0,
+      pos REAL NOT NULL DEFAULT 0,
+      altro REAL NOT NULL DEFAULT 0,
+      note TEXT,
+      aggiornato TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS spese (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      giorno TEXT NOT NULL,
+      categoria TEXT NOT NULL,
+      descrizione TEXT,
+      importo REAL NOT NULL,
+      creato_il TEXT
     );
 
     CREATE TABLE IF NOT EXISTS registro_modifiche (
@@ -697,7 +716,7 @@ async function elencoTabelle() {
 const TABELLE_LOCALI = ['preferenze'];
 
 /** Tabelle aggiunte dopo i primi backup: se il backup da ripristinare non le contiene, non vengono svuotate. */
-const TABELLE_NUOVE = ['menu_dati', 'cucina_posti', 'disposizioni'];
+const TABELLE_NUOVE = ['menu_dati', 'cucina_posti', 'disposizioni', 'incassi', 'spese'];
 
 export async function esportaTutto() {
   const tabelle = (await elencoTabelle()).filter((t) => !TABELLE_LOCALI.includes(t));
@@ -840,6 +859,59 @@ export async function salvaModelloSale(nome, dati) {
 }
 
 export const eliminaModelloSale = (id) => exec("DELETE FROM disposizioni WHERE tipo = 'modello' AND id = ?", [id]);
+
+/* ---------- incassi e costi ----------
+   Incassi: una riga per giorno, divisa per metodo di pagamento, IVA inclusa. Spese: personale e altre spese scritte a mano.
+   La merce non si scrive: è il valore dei carichi del periodo (quantità × prezzo della fattura, IVA esclusa). Calcoli in conti.js. */
+
+const GIORNO = /^\d{4}-\d{2}-\d{2}$/;
+const importo = (v, nome) => {
+  const n = v === null || v === undefined || v === '' ? 0 : Number(v);
+  if (!Number.isFinite(n) || n < 0 || n > 10000000) throw new Error(`Importo non valido: ${nome}`);
+  return Math.round(n * 100) / 100;
+};
+
+export const incassiTra = (da, a) => query('SELECT * FROM incassi WHERE giorno >= ? AND giorno <= ? ORDER BY giorno DESC', [da, a]);
+
+/** Salva l'incasso di un giorno (sostituisce quello che c'era); con tutti gli importi a zero e senza note lo toglie. */
+export async function salvaIncasso({ giorno, contanti, pos, altro, note }) {
+  if (!GIORNO.test(String(giorno))) throw new Error('Data non valida');
+  if (giorno > oggiLocale()) throw new Error('Non si possono registrare incassi per giorni futuri.');
+  const v = [importo(contanti, 'contanti'), importo(pos, 'POS'), importo(altro, 'altro')];
+  const testo = String(note || '').trim();
+  if (v[0] + v[1] + v[2] === 0 && !testo) return exec('DELETE FROM incassi WHERE giorno = ?', [giorno]);
+  return exec(
+    `INSERT INTO incassi (giorno, contanti, pos, altro, note, aggiornato) VALUES (?,?,?,?,?,?)
+     ON CONFLICT(giorno) DO UPDATE SET contanti = excluded.contanti, pos = excluded.pos, altro = excluded.altro,
+       note = excluded.note, aggiornato = excluded.aggiornato`,
+    [giorno, ...v, testo, new Date().toISOString()]);
+}
+
+export const speseTra = (da, a) => query('SELECT * FROM spese WHERE giorno >= ? AND giorno <= ? ORDER BY giorno DESC, id DESC', [da, a]);
+
+export async function salvaSpesa({ id, giorno, categoria, descrizione, importo: quanto }) {
+  if (!GIORNO.test(String(giorno))) throw new Error('Data non valida');
+  if (!CATEGORIE_SPESA.includes(categoria)) throw new Error('Categoria non valida');
+  const v = importo(quanto, 'spesa');
+  if (v <= 0) throw new Error('Scrivi un importo maggiore di zero');
+  const testo = String(descrizione || '').trim();
+  if (id) return exec('UPDATE spese SET giorno = ?, categoria = ?, descrizione = ?, importo = ? WHERE id = ?', [giorno, categoria, testo, v, id]);
+  return exec('INSERT INTO spese (giorno, categoria, descrizione, importo, creato_il) VALUES (?,?,?,?,?)', [giorno, categoria, testo, v, new Date().toISOString()]);
+}
+
+export const eliminaSpesa = (id) => exec('DELETE FROM spese WHERE id = ?', [id]);
+
+/**
+ * La merce caricata nel periodo: { valore (IVA esclusa), carichi, senzaPrezzo }.
+ * I carichi annullati non contano; quelli senza prezzo si contano a parte e non entrano nel valore.
+ */
+export async function merceTra(da, a) {
+  const r = await queryOne(
+    `SELECT COALESCE(SUM(CASE WHEN prezzo_unitario IS NOT NULL THEN quantita_iniziale * prezzo_unitario ELSE 0 END), 0) AS valore,
+            COUNT(*) AS carichi, SUM(CASE WHEN prezzo_unitario IS NULL THEN 1 ELSE 0 END) AS senzaPrezzo
+     FROM lotti WHERE stato != 'annullato' AND data_ricevimento >= ? AND data_ricevimento < ?`, limitiGiorni(da, a));
+  return { valore: Math.round((r.valore || 0) * 100) / 100, carichi: r.carichi || 0, senzaPrezzo: r.senzaPrezzo || 0 };
+}
 
 /* ---------- dati del modulo Menù ----------
    L'app web del Menù salva qui il suo archivio (prima stava in IndexedDB): coppie chiave → testo JSON.

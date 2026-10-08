@@ -13,3 +13,6 @@ UPDATE prodotti SET fornitore_abituale_id = 1, allergeni_verificati = 1;
 INSERT INTO ricette (nome, porzioni) VALUES ('Orecchiette con burrata', 10), ('Agnello al forno', 4);
 INSERT INTO ricetta_ingredienti (ricetta_id, prodotto_id, quantita, unita_misura) VALUES (1,2,1,'kg'),(1,1,800,'g'),(2,3,1.4,'kg');
 INSERT INTO cucina_posti (posto, punto_controllo_id, area_id) VALUES ('g9',1,NULL),('g1',2,NULL),('p1',3,NULL);
+INSERT INTO preferenze (chiave, valore) VALUES ('pin_giri','300000'),('pin_sale','00000000000000000000000000000000'),('pin_chiave','fccbcd943850f0247036422d47226b25f86a3e387e666ebce3649c5959a2ba95');
+INSERT INTO incassi (giorno, contanti, pos, altro, note) VALUES (date('now','localtime'),420,1180.5,0,''),(date('now','localtime','-1 day'),310,640,0,''),(date('now','localtime','-2 day'),150,2200,900,'Battesimo Rossi'),(date('now','localtime','-4 day'),95,480,0,'');
+INSERT INTO spese (giorno, categoria, descrizione, importo) VALUES (date('now','localtime','-3 day'),'Personale','Stipendi',2400),(date('now','localtime','-5 day'),'Altre spese','Bolletta della luce',380.4);

@@ -1,5 +1,5 @@
 /**
- * PIN del titolare su questo telefono. Per ora protegge i backup (vedi protezione.js); la sezione Conti userà lo stesso PIN.
+ * PIN del titolare su questo telefono: protegge i backup (vedi protezione.js) e apre costi, margini e incassi.
  *
  * Il PIN non viene salvato: nelle preferenze (locali, mai dentro i backup) restano il "sale" e la chiave ricavata dal PIN,
  * che serve per cifrare il backup automatico senza chiedere il PIN ogni giorno. Chi ha in mano il telefono sbloccato
@@ -7,7 +7,7 @@
  */
 import { leggiPreferenza, salvaPreferenza } from './database';
 import {
-  GIRI, CIFRE_PIN, derivaChiave, proteggi, apri, eProtetto, datiChiave, uguali, pinValido, casuali, provaMotore,
+  GIRI, CIFRE_PIN, derivaChiave, derivaDaCodice, proteggi, apri, eProtetto, datiChiave, uguali, pinValido, casuali, provaMotore,
 } from './protezione';
 
 /** { chiave, sale, giri } del PIN di questo telefono, oppure null se il PIN non è impostato. */
@@ -39,6 +39,61 @@ export async function verificaPin(pin) {
   const s = await segretoDelTelefono();
   if (!s || !pinValido(pin)) return false;
   return uguali(await derivaChiave(pin, s.sale, s.giri), s.chiave);
+}
+
+/* ---------- PUK: il codice per scegliere un nuovo PIN quando quello vecchio è stato dimenticato ----------
+   Dieci cifre generate dal telefono e mostrate una volta sola, da scrivere su carta. Come per il PIN, nelle preferenze
+   restano solo sale e chiave ricavata. Da quando esiste un PUK, "Ho dimenticato il PIN" lo chiede sempre (scelta di Luca):
+   chi ha solo il telefono in mano non può più cambiarsi il PIN per vedere incassi e costi. */
+
+export const CIFRE_PUK = 10;
+export const pukValido = (puk) => new RegExp(`^[0-9]{${CIFRE_PUK}}$`).test(String(puk ?? '').replace(/[\s-]/g, ''));
+const soloCifre = (puk) => String(puk ?? '').replace(/[\s-]/g, '');
+/** Il PUK come si scrive su carta: 12345-67890. */
+export const pukScritto = (puk) => `${soloCifre(puk).slice(0, 5)}-${soloCifre(puk).slice(5)}`;
+
+export const pukImpostato = async () => !!(await leggiPreferenza('puk_sale')) && !!(await leggiPreferenza('puk_chiave'));
+
+/** Crea (o sostituisce) il PUK e lo restituisce: va mostrato subito, poi non si può più rileggere. */
+export async function creaPuk() {
+  await provaMotore();
+  // cifre a caso da byte a caso: ogni cifra da un byte sotto 250, così sono tutte ugualmente probabili
+  let cifre = '';
+  while (cifre.length < CIFRE_PUK) {
+    const esa = await casuali(16);
+    for (let i = 0; i + 1 < esa.length && cifre.length < CIFRE_PUK; i += 2) {
+      const b = parseInt(esa.slice(i, i + 2), 16);
+      if (b < 250) cifre += String(b % 10);
+    }
+  }
+  const sale = await casuali(16);
+  const chiave = await derivaDaCodice(cifre, sale, GIRI);
+  await salvaPreferenza('puk_giri', String(GIRI));
+  await salvaPreferenza('puk_sale', sale);
+  await salvaPreferenza('puk_chiave', chiave);
+  return cifre;
+}
+
+export async function verificaPuk(puk) {
+  const sale = await leggiPreferenza('puk_sale'), chiave = await leggiPreferenza('puk_chiave');
+  if (!sale || !chiave || !pukValido(puk)) return false;
+  return uguali(await derivaDaCodice(soloCifre(puk), sale, Number(await leggiPreferenza('puk_giri')) || GIRI), chiave);
+}
+
+/**
+ * PIN dimenticato: ne imposta uno nuovo. Se su questo telefono esiste un PUK serve quello giusto (errore con `pukErrato`);
+ * se non è mai stato creato, il PIN si può ancora cambiare liberamente (com'era prima del PUK).
+ */
+export async function pinDimenticato(nuovoPin, puk = null) {
+  if (await pukImpostato()) {
+    if (!(await verificaPuk(puk))) {
+      const e = new Error('PUK non corretto');
+      e.pukErrato = true;
+      throw e;
+    }
+  }
+  await impostaPin(nuovoPin);
+  bloccaCosti();
 }
 
 /** Testo da scrivere nel file di backup: cifrato se il PIN è impostato, altrimenti il JSON com'era. */

@@ -44,6 +44,12 @@ export const casuali = (byte) => motore().randomKey(byte);
  */
 export async function derivaChiave(pin, sale, giri = GIRI) {
   if (!pinValido(pin)) throw new Error(`Il PIN deve avere ${CIFRE_PIN} cifre.`);
+  return derivaDaCodice(pin, sale, giri);
+}
+
+/** Come derivaChiave, per un codice di sole cifre di lunghezza qualsiasi (il PUK). */
+export async function derivaDaCodice(pin, sale, giri = GIRI) {
+  if (!/^[0-9]{4,20}$/.test(String(pin ?? ''))) throw new Error('Codice non valido.');
   if (!esadecimale(sale, 32)) throw new Error('File di backup non valido.');
   const n = Number(giri);
   if (!Number.isInteger(n) || n < 10000 || n > 5000000) throw new Error('File di backup non valido.');
