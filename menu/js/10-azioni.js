@@ -86,6 +86,7 @@ document.addEventListener('click',e=>{
         ui.sheet.rid=id;if(saveDishNow('Ricetta creata: ora aggiungi gli ingredienti'))R.apri(id)})
         .catch(e=>{b.disabled=false;toast('Ricetta non creata: '+(e.message||e))});break}
     case 'openRecipe':RIC()&&RIC().apri(+d.id);break;
+    case 'evento':if(!m.date){toast('Indica prima la data del menù');break}RIC()&&RIC().evento(m.id);break;
     case 'delDish':{const id=ui.sheet.id;ask({title:'Eliminare la portata?',text:"Viene tolta dall'archivio. I menù già composti restano come sono, allergeni compresi.",ok:'Elimina',danger:true}).then(ok=>{if(!ok)return;
       delDish(id);save();ui.sheet=null;renderSheet();render(true);toast('Portata eliminata')});break}
     case 'closeSheet':ui.sheet=null;renderSheet();break;

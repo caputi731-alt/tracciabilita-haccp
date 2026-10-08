@@ -61,6 +61,8 @@
     carica: () => chiedi('ricette').then(imposta),
     crea: (nome) => chiedi('creaRicetta', { nome }),
     apri: (id) => invia('apriRicetta', { ricetta: id }),
+    // apre nella suite il fabbisogno e il costo del menù (prima scrive le ultime modifiche)
+    evento: (id) => Promise.resolve(typeof flush === 'function' ? flush() : null).then(() => invia('apriEvento', { evento: id }), () => invia('apriEvento', { evento: id })),
   };
   // la suite manda l'elenco aggiornato ogni volta che si torna al Menù
   window.__suiteRicette = imposta;

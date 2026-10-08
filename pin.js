@@ -72,3 +72,23 @@ export async function leggiBackup(testo, pin = null) {
   if (!mio) { await salvaSegreto({ sale, giri, chiave }); adottato = true; }
   return { dump, protetto: true, adottato };
 }
+
+/* ---------- costi e margini: visibili solo dopo il PIN del titolare ---------- */
+
+const MINUTI_SBLOCCO = 10;
+let costiFinoA = 0;
+
+/** I costi sono stati sbloccati da poco con il PIN? (vale per qualche minuto, poi il PIN va rimesso) */
+export const costiSbloccati = () => Date.now() < costiFinoA;
+
+/** Sblocca i costi con il PIN; se è sbagliato lancia un errore con `pinErrato`. */
+export async function sbloccaCosti(pin) {
+  if (!(await verificaPin(pin))) {
+    const e = new Error('PIN non corretto');
+    e.pinErrato = true;
+    throw e;
+  }
+  costiFinoA = Date.now() + MINUTI_SBLOCCO * 60000;
+}
+
+export const bloccaCosti = () => { costiFinoA = 0; };

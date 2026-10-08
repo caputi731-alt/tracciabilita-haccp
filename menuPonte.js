@@ -123,13 +123,18 @@ export function prossimoMenu(testoStato, oggi) {
 /**
  * Eventi del Menù letti dallo stato salvato dall'app web, per il resto della suite (allergeni dell'evento, fabbisogno,
  * produzioni): data, cliente, ospiti e, per ogni portata, la ricetta collegata nell'archivio portate (ricettaId, null se
- * non c'è o se in quel menù il testo della portata è stato cambiato). Ordinati per data; [] se lo stato non si legge.
+ * non c'è o se in quel menù il testo della portata è stato cambiato) e i prezzi a persona. Ordinati per data; [] se lo stato non si legge.
  */
 export function eventiMenu(testoStato) {
   try {
     const stato = JSON.parse(testoStato);
     const portate = new Map((stato.dishes || []).filter(Boolean).map((d) => [d.id, d]));
     const unaRiga = (t) => String(t || '').replace(/\s+/g, ' ').trim();
+    const prezzo = (suo, delModello) => {
+      const v = suo === undefined || suo === null ? delModello : suo;
+      const n = v === undefined || v === null || String(v).trim() === '' ? NaN : Number(String(v).replace(',', '.'));
+      return Number.isFinite(n) ? n : null;
+    };
     return (stato.menus || []).filter((m) => m && typeof m.date === 'string' && m.date).map((m) => {
       const modello = (stato.templates || []).find((t) => t && t.id === m.templateId);
       const righe = [];
@@ -149,7 +154,11 @@ export function eventiMenu(testoStato) {
         id: m.id, data: m.date, ora: m.time || '', stato: m.status || 'bozza',
         titolo: String(m.heading || '').trim() || (modello && modello.heading) || 'Menù',
         cliente: String(m.client || '').trim(),
-        ospiti: Number(m.guests) || 0, bambini: Number(m.guestsKids) || 0, portate: righe,
+        ospiti: Number(m.guests) || 0, bambini: Number(m.guestsKids) || 0,
+        // prezzi a persona (IVA compresa): quelli scritti nel menù, altrimenti quelli predefiniti del template
+        prezzoAdulti: prezzo(m.priceAdult, modello && modello.priceAdult),
+        prezzoBambini: prezzo(m.priceKid, modello && modello.priceKid),
+        portate: righe,
       };
     }).sort((a, b) => (a.data + a.ora < b.data + b.ora ? -1 : a.data + a.ora > b.data + b.ora ? 1 : 0));
   } catch (e) {

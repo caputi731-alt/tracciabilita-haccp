@@ -3,8 +3,12 @@ INSERT INTO registro_temperature (punto_controllo_id, data_ora, temperatura, esi
 INSERT INTO aree_pulizia (nome, frequenza) VALUES ('Piano di lavoro','giornaliera'),('Affettatrice','giornaliera'),('Pavimento cucina','giornaliera'),('Cappa','settimanale');
 INSERT INTO registro_sanificazione (area_id, data_ora) VALUES (1,strftime('%Y-%m-%dT%H:%M:%fZ','now')),(3,strftime('%Y-%m-%dT%H:%M:%fZ','now')),(4,strftime('%Y-%m-%dT%H:%M:%fZ','now'));
 INSERT INTO preferenze (chiave, valore) VALUES ('backup_cartella','content://x'),('backup_ultimo',strftime('%Y-%m-%dT%H:%M:%fZ','now')),('backup_esterno_ultimo',strftime('%Y-%m-%dT%H:%M:%fZ','now'));
-INSERT INTO menu_dati (chiave, valore) VALUES ('state','{"v":3,"templates":[{"id":"t1","heading":"Menù di domenica"}],"menus":[{"id":"m1","templateId":"t1","date":"2026-10-17","client":"Rossi","heading":"Battesimo","guests":60,"status":"confermata"}]}');
+INSERT INTO menu_dati (chiave, valore) VALUES ('state','{"v": 3, "templates": [{"id": "t1", "heading": "Menù di domenica", "priceAdult": 45}], "dishes": [{"id": "d1", "name": "Orecchiette con burrata", "rid": 1}, {"id": "d2", "name": "Agnello al forno", "rid": 2}, {"id": "d3", "name": "Torta alle mandorle"}], "menus": [{"id": "m1", "templateId": "t1", "date": "2026-10-17", "time": "13:00", "client": "Rossi", "heading": "Battesimo", "guests": 60, "guestsKids": 8, "status": "confermata", "priceAdult": 48, "priceKid": 20, "sections": [{"name": "Primi", "items": [{"dishId": "d1", "name": "Orecchiette con burrata"}]}, {"name": "Secondi", "items": [{"dishId": "d2", "name": "Agnello al forno"}]}, {"name": "Dolci", "items": [{"dishId": "d3", "name": "Torta alle mandorle"}]}]}]}');
 INSERT INTO fornitori (ragione_sociale) VALUES ('Altasfera');
 INSERT INTO prodotti (denominazione, categoria) VALUES ('Burrata','Latticini'),('Semola rimacinata','Secco/Dispensa'),('Agnello','Carne');
 INSERT INTO lotti (prodotto_id, fornitore_id, numero_lotto, data_ricevimento, quantita_iniziale, quantita_residua, unita_misura, data_scadenza) VALUES
  (1,1,'L2410',strftime('%Y-%m-%dT%H:%M:%fZ','now'),4,2.5,'kg',date('now','+1 day')),(2,1,'S881',strftime('%Y-%m-%dT%H:%M:%fZ','now'),10,6,'kg',date('now','+90 day')),(3,1,'A77',strftime('%Y-%m-%dT%H:%M:%fZ','now'),18,18,'kg',date('now','+4 day'));
+UPDATE lotti SET prezzo_unitario = CASE prodotto_id WHEN 1 THEN 9.5 WHEN 2 THEN 1.2 ELSE 14 END;
+UPDATE prodotti SET fornitore_abituale_id = 1, allergeni_verificati = 1;
+INSERT INTO ricette (nome, porzioni) VALUES ('Orecchiette con burrata', 10), ('Agnello al forno', 4);
+INSERT INTO ricetta_ingredienti (ricetta_id, prodotto_id, quantita, unita_misura) VALUES (1,2,1,'kg'),(1,1,800,'g'),(2,3,1.4,'kg');

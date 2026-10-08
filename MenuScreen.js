@@ -78,6 +78,8 @@ export default function MenuScreen({ attiva = true, aggiorna = 0, comandi, suEsc
         attese.current.slice().forEach((f) => f());
       } else if (m.tipo === 'apriRicetta') {
         if (suApri) suApri('Anagrafiche', { scheda: 'Ricette', ricetta: Number(m.ricetta) || null });
+      } else if (m.tipo === 'apriEvento') {
+        if (suApri) suApri('Eventi', { evento: String(m.evento || '') });
       } else if (m.tipo === 'vista') {
         if (suVista) suVista(!!m.profonda);
       } else if (m.tipo === 'saveFile') {

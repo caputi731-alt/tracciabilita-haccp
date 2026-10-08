@@ -115,18 +115,21 @@ test('eventi del Menù per il resto della suite: portate con la ricetta collegat
   const { eventiMenu } = await import('../menuPonte.js');
   const stato = JSON.stringify({
     dishes: [{ id: 'a', name: 'Orecchiette\nalle cime di rapa', rid: 5 }, { id: 'b', name: 'Agnello' }],
-    templates: [{ id: 't', heading: 'Menù di domenica' }],
+    templates: [{ id: 't', heading: 'Menù di domenica', priceAdult: 35, priceKid: '' }],
     menus: [
       { id: 'm2', date: '2026-11-01', templateId: 't', client: ' Bianchi ', guests: '40', guestsKids: 5, status: 'confermata',
         sections: [{ name: 'Primi', items: [{ dishId: 'a', name: 'Orecchiette alle cime di rapa' }, { dishId: 'a', name: 'Orecchiette al pomodoro' }, { name: 'Fuori archivio' }] }],
         kidsSections: [{ name: 'Bimbi', items: [{ dishId: 'b', name: 'Agnello' }] }] },
       { id: 'm1', date: '2026-10-17', time: '13:00', heading: 'Battesimo', sections: [] },
+      { id: 'm3', date: '2026-12-25', templateId: 't', priceAdult: '48,50', priceKid: 20, sections: [] },
       { id: 'senza-data', date: '' },
     ],
   });
   const e = eventiMenu(stato);
-  assert.deepEqual(e.map((x) => x.id), ['m1', 'm2']);
-  assert.deepEqual(e[0], { id: 'm1', data: '2026-10-17', ora: '13:00', stato: 'bozza', titolo: 'Battesimo', cliente: '', ospiti: 0, bambini: 0, portate: [] });
+  assert.deepEqual(e.map((x) => x.id), ['m1', 'm2', 'm3']);
+  // prezzo scritto nel menù, altrimenti quello del template; vuoto = non indicato
+  assert.deepEqual([e[1].prezzoAdulti, e[1].prezzoBambini, e[2].prezzoAdulti, e[2].prezzoBambini], [35, null, 48.5, 20]);
+  assert.deepEqual(e[0], { id: 'm1', data: '2026-10-17', ora: '13:00', stato: 'bozza', titolo: 'Battesimo', cliente: '', ospiti: 0, bambini: 0, prezzoAdulti: null, prezzoBambini: null, portate: [] });
   assert.equal(e[1].titolo, 'Menù di domenica');
   assert.deepEqual([e[1].cliente, e[1].ospiti, e[1].bambini], ['Bianchi', 40, 5]);
   assert.deepEqual(e[1].portate.map((p) => [p.nome, p.sezione, p.bambini, p.portataId, p.ricettaId]), [

@@ -18,6 +18,7 @@ const GRUPPI = [
     titolo: 'Cucina',
     voci: [
       { titolo: 'Carico merce', rotta: 'CaricoMerce', desc: 'Da fattura PDF o a mano', icona: 'truck-delivery-outline' },
+      { titolo: 'Eventi', rotta: 'Eventi', desc: 'Fabbisogno e costo dei menù in calendario', icona: 'calendar-star' },
       { titolo: 'Produzioni', rotta: 'Produzioni', desc: 'Prepara un piatto e collega i lotti', icona: 'pot-steam-outline' },
       { titolo: 'Etichette', rotta: 'Etichette', desc: 'Apertura, congelamento, produzione', icona: 'tag-outline' },
     ],

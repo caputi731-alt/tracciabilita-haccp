@@ -221,6 +221,10 @@ with sync_playwright() as p:
        '"Crea la ricetta da questa portata": ricetta creata nella suite, collegata e aperta per gli ingredienti')
     elim = pg.evaluate("""()=>{delDish('d-or');const it=getMenu('m1').sections[1].items[0];return[it.alg,algState(it)]}""")
     ok(elim == [[1, 4], 'ok'], "portata eliminata dall'archivio: i menù si tengono gli allergeni della ricetta")
+    pg.evaluate("window.__ricevuti.length=0;openEditor('m1')")
+    pg.click('[data-a=evento]')
+    pg.wait_for_function("window.__ricevuti.some(m=>m.tipo==='apriEvento')")
+    ok(pg.evaluate("window.__ricevuti.find(m=>m.tipo==='apriEvento').evento") == 'm1', '"Fabbisogno e costo" dal menù: la suite apre l\'evento giusto')
     anno = pg.evaluate("[ANNO_SC,DID_MSG.includes('anno scolastico '+ANNO_SC),normalize({v:3,settings:{didMsg:DID_MSG_ANNO('2025/2026')}}).settings.didMsg,normalize({v:3,settings:{didMsg:'mio testo 2025/2026'}}).settings.didMsg]")
     ok(anno[1] and anno[2] is None and anno[3] == 'mio testo 2025/2026', f"fattoria didattica: l'anno scolastico del messaggio si aggiorna da solo ({anno[0]}), un testo personalizzato resta")
 

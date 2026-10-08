@@ -1040,6 +1040,40 @@ export async function ricettePerMenu() {
   });
 }
 
+/**
+ * Dati per il fabbisogno e il costo degli eventi (vedi evento.js): ricette con ingredienti e prodotti con giacenza
+ * utilizzabile (lotti disponibili e non scaduti), ultimo prezzo d'acquisto e fornitore abituale.
+ * → { ricette: Map, prodotti: Map }
+ */
+export async function datiPerEventi() {
+  const ricette = new Map();
+  for (const r of await query('SELECT id, nome, porzioni FROM ricette WHERE attiva = 1')) ricette.set(r.id, { ...r, ingredienti: [] });
+  for (const i of await query('SELECT ricetta_id, prodotto_id, quantita, unita_misura FROM ricetta_ingredienti')) {
+    if (ricette.has(i.ricetta_id)) ricette.get(i.ricetta_id).ingredienti.push(i);
+  }
+  const prodotti = new Map();
+  for (const p of await query(
+    `SELECT p.id, p.denominazione, p.unita_misura, f.ragione_sociale AS fornitore
+     FROM prodotti p LEFT JOIN fornitori f ON f.id = p.fornitore_abituale_id`)) {
+    prodotti.set(p.id, { ...p, giacenza: 0, prezzo: null });
+  }
+  for (const g of await query(
+    `SELECT prodotto_id, SUM(quantita_residua) AS q FROM lotti
+     WHERE stato = 'disponibile' AND quantita_residua > 0
+       AND (data_scadenza IS NULL OR substr(data_scadenza, 1, 10) >= ?)
+     GROUP BY prodotto_id`, [oggiLocale()])) {
+    if (prodotti.has(g.prodotto_id)) prodotti.get(g.prodotto_id).giacenza = arrotonda(g.q);
+  }
+  // ultimo prezzo: il lotto più recente che ne ha uno (i carichi annullati non contano)
+  for (const l of await query(
+    `SELECT prodotto_id, prezzo_unitario FROM lotti
+     WHERE prezzo_unitario IS NOT NULL AND stato != 'annullato'
+     ORDER BY data_ricevimento ASC, id ASC`)) {
+    if (prodotti.has(l.prodotto_id)) prodotti.get(l.prodotto_id).prezzo = l.prezzo_unitario;
+  }
+  return { ricette, prodotti };
+}
+
 /** Ricetta con il nome di una portata del Menù: se esiste già (stesso nome, maiuscole a parte) si usa quella. */
 export async function creaRicettaDaPortata(nome) {
   const pulito = String(nome || '').replace(/\s+/g, ' ').trim();

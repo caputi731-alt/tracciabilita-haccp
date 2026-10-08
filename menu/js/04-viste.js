@@ -176,6 +176,7 @@ function vEdit(){
   ${enSection(m,t)}
   <div class="btns two" style="margin-bottom:10px"><button class="btn pri" data-a="preview" data-mode="tavolo">${I.pdf}${lb?'Libretto':'Menù tavolo'}</button><button class="btn pri" data-a="preview" data-mode="proposta">${I.pdf}Proposta</button></div>
   <p class="hint" style="margin:-2px 2px 14px">Il menù tavolo non riporta prezzi e note; la proposta sì.</p>
+  ${RIC()?`<button class="btn wide" style="margin-bottom:10px" data-a="evento">${I.list}Fabbisogno e costo${m.date?'':' (serve la data)'}</button>`:''}
   <div class="btns two"><button class="btn" data-a="dup">${I.copy}Duplica</button><button class="btn danger" data-a="del">${I.trash}Elimina</button></div>
   </main>`;
 }

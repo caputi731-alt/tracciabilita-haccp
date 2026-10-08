@@ -142,6 +142,12 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
   `ricettePerMenu()` (allergeni come numeri 1–14 = posizione in `ALLERGENI`, ora in utile.js) e le rimanda alla pagina a ogni ritorno
   al Menù (`scriptRicette`); "Crea la ricetta da questa portata" usa `creaRicettaDaPortata` e apre Anagrafiche → Ricette (`apriId`).
   Per leggere gli eventi dal resto della suite: `eventiMenu(testoStato)` in menuPonte.js (portate con `ricettaId`).
+- Fabbisogno e costo degli eventi: `EventiScreen.js` (rotta `Eventi`, elenco oppure `{ evento: id }`; da Altro → Eventi e dal pulsante
+  "Fabbisogno e costo" nel menù, messaggio `apriEvento`). Calcoli in `evento.js` (puro, `test/evento.test.mjs`), dati da
+  `datiPerEventi()`: giacenza = lotti disponibili non scaduti, prezzo = ultimo `prezzo_unitario` caricato (IVA esclusa).
+  Quello che non si può calcolare (portata senza ricetta, porzioni o quantità mancanti, unità non convertibili, prezzo assente)
+  viene elencato, mai stimato. Ricavo al netto dell'IVA al 10% (`IVA_RISTORAZIONE`). Costi e margini si vedono solo dopo il PIN
+  del titolare (`sbloccaCosti` / `costiSbloccati` in pin.js, 10 minuti): ogni nuova schermata con costi o incassi deve usare lo stesso blocco.
 - Ponte pagina ↔ suite: `menu/js/00-suite.js` (lato pagina, caricato per primo) e `menuPonte.js` (lato suite, senza dipendenze
   dal telefono, provato in `test/menuPonte.test.mjs`). La pagina manda messaggi JSON `{ tipo, ... }`; la suite risponde
   eseguendo `window.__suiteRisposta(id, ok, valore)`.

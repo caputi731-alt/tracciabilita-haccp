@@ -227,6 +227,16 @@ test('ricette per il Menù: allergeni come numeri, ingredienti da verificare, cr
   assert.deepEqual([di(piena).allergeni, di(piena).ingredienti, di(piena).daVerificare], [[1, 4], 2, []]);
   assert.deepEqual([di(conDubbio).allergeni, di(conDubbio).ingredienti, di(conDubbio).daVerificare], [[], 1, ['Semola da fattura']]);
   assert.deepEqual([di(nuova).nome, di(nuova).ingredienti, di(nuova).allergeni], ['Agnello al forno', 0, []]);
+  // dati per fabbisogno e costi: giacenza utilizzabile (niente lotti scaduti) e ultimo prezzo d'acquisto
+  const oggi = oggiLocale();
+  const lotto = (extra) => db.registraCarico({ prodotto_id: farina, fornitore_id: forn.lastInsertRowId, numero_lotto: 'L', data_ricevimento: oggi, quantita: 5, unita_misura: 'kg', ...extra });
+  await lotto({ prezzo_unitario: 0.9, data_ricevimento: piuGiorni(oggi, -10), data_scadenza: piuGiorni(oggi, 30) });
+  await lotto({ prezzo_unitario: 1.1, data_scadenza: piuGiorni(oggi, 60), quantita: 3 });
+  await lotto({ prezzo_unitario: null, data_scadenza: piuGiorni(oggi, -1), quantita: 7 });
+  const dati = await db.datiPerEventi();
+  assert.deepEqual([dati.prodotti.get(farina).giacenza, dati.prodotti.get(farina).prezzo, dati.prodotti.get(farina).unita_misura], [8, 1.1, 'kg']);
+  assert.deepEqual([dati.prodotti.get(acciughe).giacenza, dati.prodotti.get(acciughe).prezzo], [0, null]);
+  assert.deepEqual([dati.ricette.get(piena).porzioni, dati.ricette.get(piena).ingredienti.length], [4, 2]);
   await db.eliminaRicetta(piena);
   assert.equal((await db.ricettePerMenu()).some((r) => r.id === piena), false, 'le ricette eliminate non arrivano al Menù');
 });
