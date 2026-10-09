@@ -61,6 +61,7 @@ export default function PrincipaleScreen({ navigation, route }) {
   const [menuAperto, setMenuAperto] = useState(false); // il Menù è stato aperto almeno una volta
   const [menuProfondo, setMenuProfondo] = useState(false); // schermata interna del Menù (modifica, anteprima...)
   const [tastiera, setTastiera] = useState(false);
+  const [salaIntera, setSalaIntera] = useState(false);
   const [ritorni, setRitorni] = useState(0); // quante volte si è tornati a questa schermata da un'altra
   const comandiMenu = useRef(null);
   const mostrata = useRef('oggi');
@@ -112,7 +113,9 @@ export default function PrincipaleScreen({ navigation, route }) {
   const esciDalMenu = useCallback(() => vai('oggi'), [vai]);
   const Menu = menuAperto ? moduloMenu() : null;
   const nelMenu = sezione === 'gestione' && parte === GESTIONE[0];
-  const barra = !tastiera && !(nelMenu && menuProfondo);
+  // con il telefono in orizzontale la Sala usa tutto lo schermo
+  const interaOra = sezione === 'sale' && salaIntera;
+  const barra = !tastiera && !(nelMenu && menuProfondo) && !interaOra;
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.bg }}>
@@ -120,11 +123,13 @@ export default function PrincipaleScreen({ navigation, route }) {
         {sezione === 'oggi' && <HomeScreen navigation={naviga} route={route} />}
         {sezione === 'sale' && (
           <>
-            <Text accessibilityRole="header" style={{
-              fontSize: 28, fontWeight: '700', color: COLORS.text, letterSpacing: -0.6,
-              paddingHorizontal: 20, paddingTop: 20,
-            }}>Sala</Text>
-            <SaleScreen navigation={naviga} route={route} />
+            {!salaIntera && (
+              <Text accessibilityRole="header" style={{
+                fontSize: 28, fontWeight: '700', color: COLORS.text, letterSpacing: -0.6,
+                paddingHorizontal: 20, paddingTop: 20,
+              }}>Sala</Text>
+            )}
+            <SaleScreen navigation={naviga} route={route} suTuttoSchermo={setSalaIntera} />
           </>
         )}
         {/* Gestione: le due linguette spariscono nelle schermate interne del Menù, che usa tutto lo schermo */}

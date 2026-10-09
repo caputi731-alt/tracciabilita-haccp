@@ -2,8 +2,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  SALE, posti, lunghezzaPer, lunghezza, entra, restoFila, pianoVuoto, pianoPulito, senzaPrenotazioni, disponi, sigle, totali,
-  datiScenaSala, nuovaTavolata, TRA_TAVOLI, LARGO,
+  SALE, posti, lunghezzaPer, lunghezza, entra, restoFila, pianoVuoto, pianoPulito, sistemaPiano, senzaPrenotazioni, disponi, sigle, totali,
+  datiScenaSala, datiScenaSale, nuovaTavolata, metti, togli, trova, filaVicina, ingombro, TRA_TAVOLI, LARGO,
 } from '../sale.js';
 import {
   initDatabase, disposizioneGiorno, salvaDisposizioneGiorno, giorniConPrenotazioni, modelliSale, salvaModelloSale, eliminaModelloSale,
@@ -13,8 +13,6 @@ import {
 const T = (persone, altro = {}) => nuovaTavolata({ persone: persone ? String(persone) : '', ...altro });
 const { stalla, panoramica } = SALE;
 const dentro = (p, r) => p.x >= r.x - 1e-9 && p.x <= r.x + r.w + 1e-9 && p.y >= r.y - 1e-9 && p.y <= r.y + r.h + 1e-9;
-/** Il rettangolo occupato da una tavolata (senza sedie). */
-const ingombro = (t) => (t.asse === 'x' ? { x: t.x - t.len / 2, y: t.y - LARGO / 2, w: t.len, h: LARGO } : { x: t.x - LARGO / 2, y: t.y - t.len / 2, w: LARGO, h: t.len });
 const siToccano = (a, b, aria = 0) => a.x < b.x + b.w + aria - 1e-6 && b.x < a.x + a.w + aria - 1e-6 && a.y < b.y + b.h + aria - 1e-6 && b.y < a.y + a.h + aria - 1e-6;
 
 test('posti: 75 cm a persona sui lati più i capotavola; sotto 1,2 m al massimo in 3', () => {
@@ -66,69 +64,130 @@ test('le sale: file dentro i muri, lontane dai muri e fuori da pilastri e zone l
   assert.deepEqual(stalla.porte.filter((p) => p.nome === 'Ingresso').map((p) => [p.x1, p.x2]), [[6.8, 8.15]]);
 });
 
-test('disponi: tavolate nei tratti, distanziate, mai sopra pilastri o davanti alle porte', () => {
+/** Un piano con quelle tavolate aggiunte una alla volta: [[fila, tavolata], …]. */
+const piano = (sala, aggiunte) => aggiunte.reduce((p, [f, t]) => { const n = metti(sala, p, f, t); assert.ok(n, `non entra nella fila ${f}`); return n; }, pianoVuoto(sala));
+const controlla = (sala, d) => {
+  const rett = d.tavolate.map((t) => ingombro(sala.file[t.fila], t.p, t.len));
+  rett.forEach((r, i) => {
+    [...sala.ostacoli, ...sala.zone].forEach((o) => assert.ok(!siToccano(r, o), `${d.tavolate[i].sigla} in un posto vietato`));
+    rett.slice(i + 1).forEach((q, j) => assert.ok(!siToccano(r, q, TRA_TAVOLI - 0.01), `${d.tavolate[i].sigla} e ${d.tavolate[i + 1 + j].sigla} troppo vicine`));
+  });
+};
+
+test('ogni prenotazione ha un posto suo: il primo libero, distanziata, mai sopra pilastri o davanti alle porte', () => {
   for (const sala of [stalla, panoramica]) {
-    const piano = { file: sala.file.map((f, i) => (i === 0 ? [T(10, { nome: 'Rossi', ora: '13:00' }), T(4), T(6)] : [T(6), T(2)])) };
-    const d = disponi(sala, piano);
+    const p = piano(sala, [[0, T(10, { nome: 'Rossi', ora: '13:00' })], [0, T(4)], [0, T(6)], [1, T(6)]]);
+    const d = disponi(sala, p);
     assert.ok(d.ok, d.problemi.join('; '));
-    assert.equal(d.tavolate.length, 5);
-    const ingombri = d.tavolate.map(ingombro);
-    ingombri.forEach((r, i) => {
-      [...sala.ostacoli, ...sala.zone].forEach((o) => assert.ok(!siToccano(r, o), `${d.tavolate[i].sigla} in un posto vietato`));
-      ingombri.slice(i + 1).forEach((q, j) => assert.ok(!siToccano(r, q, TRA_TAVOLI - 0.01), `${d.tavolate[i].sigla} e ${d.tavolate[i + 1 + j].sigla} troppo vicine`));
-    });
-    assert.deepEqual(Object.values(sigle(sala, piano)), [1, 2, 3, 4, 5].map((n) => `${sala.sigla}${n}`));
+    assert.equal(d.tavolate.length, 4);
+    controlla(sala, d);
+    assert.deepEqual(Object.values(sigle(sala, p)), [1, 2, 3, 4].map((n) => `${sala.sigla}${n}`));
     assert.deepEqual([d.tavolate[0].sigla, d.tavolate[0].len, d.tavolate[0].posti, d.tavolate[0].prenotata], [`${sala.sigla}1`, 3, 10, true]);
+    // il posto resta quello: aggiungere un'altra prenotazione non sposta le prime
+    const dopo = disponi(sala, metti(sala, p, 1, T(2)));
+    d.tavolate.forEach((t) => assert.equal(dopo.tavolate.find((x) => x.id === t.id).p, t.p));
   }
-  // nella stalla la fila dell'ingresso è spezzata in due: una tavolata lunga salta al secondo tratto
-  let d = disponi(stalla, { file: [[], [T(12), T(16)]] });
-  assert.ok(d.ok);
-  assert.ok(d.tavolate[0].x + d.tavolate[0].len / 2 <= 6.4 + 1e-6 && d.tavolate[1].x - d.tavolate[1].len / 2 >= 8.55 - 1e-6);
-  // …e il tratto prima dell'ingresso non resta vuoto: una tavolata troppo lunga per la sinistra va a destra,
+  // nella stalla la fila dell'ingresso è spezzata in due: una tavolata troppo lunga per la sinistra va a destra,
   // ma la fila non è piena e la prossima torna a sinistra (errore visto da Luca nella build 84)
-  const lunga = { file: [[], [nuovaTavolata({ len: 6.4 })]] };
+  const lunga = piano(stalla, [[1, nuovaTavolata({ len: 6.4 })]]);
   assert.equal(restoFila(stalla, lunga, 1), 5.6);
-  d = disponi(stalla, { file: [[], [...lunga.file[1], T(10)]] });
+  const d = disponi(stalla, metti(stalla, lunga, 1, T(10)));
   assert.ok(d.ok);
-  const destra = ingombro(d.tavolate.find((t) => t.len === 6.4)), sinistra = ingombro(d.tavolate.find((t) => t.len === 3));
-  assert.ok(destra.x >= 8.55 - 1e-6 && sinistra.x + sinistra.w <= 6.4 + 1e-6);
+  const destra = d.tavolate.find((t) => t.len === 6.4), sinistra = d.tavolate.find((t) => t.len === 3);
+  assert.ok(destra.p >= 8.55 - 1e-6 && sinistra.p + 3 <= 6.4 + 1e-6);
   // l'antica stalla viene per prima; il tratto a destra dell'ingresso è un po' più lungo di quello a sinistra
   assert.deepEqual(Object.keys(SALE), ['stalla', 'panoramica']);
   const [sx, dx] = stalla.file[1].tratti.map(([da, a]) => a - da);
   assert.ok(dx > sx && dx - sx < 1.5);
 });
 
+test('panoramica: fila centrale e file orizzontali, che si incrociano senza sovrapporsi', () => {
+  assert.deepEqual(panoramica.file.map((f) => f.asse), ['y', 'y', 'y', 'x', 'x', 'x']);
+  assert.equal(Math.max(...panoramica.contorno.map((q) => q[0])), 7);
+  // le tre file verticali piene stanno insieme
+  const verticali = piano(panoramica, [[0, T(22)], [1, T(14)], [2, T(12)]]);
+  const d = disponi(panoramica, verticali);
+  assert.ok(d.ok);
+  controlla(panoramica, d);
+  assert.deepEqual(d.tavolate.map((t) => t.x), [1.25, 5.75, 3.5]);
+  // con le verticali piene, le orizzontali che le attraversano non hanno più posto
+  assert.deepEqual([3, 4, 5].map((f) => restoFila(panoramica, verticali, f)), [0, 0, 0]);
+  assert.equal(metti(panoramica, verticali, 4, T(4)), null);
+  // miste: una orizzontale in alto e, più sotto, le verticali accorciate
+  const miste = piano(panoramica, [[3, T(10)], [0, nuovaTavolata({ len: 3 })], [2, T(4)]]);
+  const m = disponi(panoramica, miste);
+  assert.ok(m.ok);
+  controlla(panoramica, m);
+  assert.deepEqual(m.tavolate.map((t) => t.asse).sort(), ['x', 'y', 'y']);
+  const oriz = m.tavolate.find((t) => t.asse === 'x'), vert = m.tavolate.find((t) => t.asse === 'y' && t.len === 3);
+  assert.ok(vert.p >= oriz.y + 0.45 + TRA_TAVOLI - 1e-6, 'la verticale comincia sotto la orizzontale');
+});
+
+test('spostare una prenotazione: sulla fila più vicina a dove la si lascia, nel posto libero più vicino', () => {
+  const a = T(10, { nome: 'Rossi' }), b = T(6);
+  let p = piano(stalla, [[0, a], [0, b]]);
+  // lasciata a metà della fila B, a destra dell'ingresso
+  let q = filaVicina(stalla, 12, 5.2);
+  assert.deepEqual([q.f, q.centro], [1, 12]);
+  p = metti(stalla, p, q.f, trova(stalla, p, a.id).t, q.centro);
+  let d = disponi(stalla, p);
+  assert.deepEqual([trova(stalla, p, a.id).f, d.tavolate.find((t) => t.id === a.id).x], [1, 12]);
+  assert.equal(d.tavolate.find((t) => t.id === a.id).nome, 'Rossi');           // la prenotazione viaggia con la tavolata
+  assert.equal(d.tavolate.length, 2);
+  // lasciata sopra un'altra: va nel posto libero più vicino, non sopra
+  q = filaVicina(stalla, 12.2, 4.6);
+  p = metti(stalla, p, q.f, trova(stalla, p, b.id).t, q.centro);
+  d = disponi(stalla, p);
+  assert.ok(d.ok);
+  controlla(stalla, d);
+  // lasciata fuori dalla fila (davanti all'ingresso): il centro si ferma alla fine del tratto
+  assert.deepEqual([filaVicina(stalla, 7.4, 5.5).f, filaVicina(stalla, 7.4, 5.5).centro], [1, 6.4]);
+  // da una sala all'altra: si toglie di là e si mette di qua
+  const altra = metti(panoramica, pianoVuoto(panoramica), 2, trova(stalla, p, a.id).t, 6);
+  p = togli(stalla, p, a.id);
+  assert.equal(trova(stalla, p, a.id), null);
+  assert.deepEqual([trova(panoramica, altra, a.id).f, disponi(panoramica, altra).tavolate[0].nome], [2, 'Rossi']);
+  // se non c'è posto il piano non cambia
+  assert.equal(metti(panoramica, altra, 2, T(12)), null);
+});
+
 test('disponi: segnala la tavolata che non entra e la prenotazione con più persone dei posti', () => {
-  const piano = { file: [[T(20), T(14)], []] };       // 6,8 m + 4,5 m + passaggio in 8,4 m di fila
-  let d = disponi(panoramica, piano);
+  const lunghe = { file: [[T(20), T(14)], []] };       // 6,8 m + 4,5 m + passaggio in 8,4 m di fila: la seconda resta senza posto
+  let d = disponi(panoramica, lunghe);
   assert.ok(!d.ok && d.tavolate.length === 1 && /P2 non entra nella fila a/.test(d.problemi[0]), d.problemi.join('; '));
   d = disponi(panoramica, { file: [[T(4, { nome: 'Bianchi', len: 0.9 })], []] });
   assert.ok(!d.ok && d.tavolate[0].troppi && /P1 Bianchi: 4 persone su 3 posti/.test(d.problemi[0]));
-  assert.ok(entra(panoramica, piano, 1, 4.6) && !entra(panoramica, piano, 1, 4.7));
-  assert.ok(!entra(panoramica, piano, 0, 0.9));
-  assert.equal(restoFila(panoramica, piano, 1), 4.6);
-  assert.equal(restoFila(panoramica, { file: [[T(20)], []] }, 0), 0);
-  // spostando o allungando una tavolata, lei stessa non conta
+  assert.ok(entra(panoramica, lunghe, 1, 5.4) && !entra(panoramica, lunghe, 1, 5.5));
+  assert.ok(!entra(panoramica, lunghe, 0, 0.9));
+  assert.equal(restoFila(panoramica, lunghe, 1), 5.4);
+  assert.equal(restoFila(panoramica, { file: [[T(20)]] }, 0), 0);
+  // allungando una tavolata, lei stessa non conta
   const una = T(20);
-  assert.equal(restoFila(panoramica, { file: [[una], []] }, 0, una.id), 8.4);
+  assert.equal(restoFila(panoramica, piano(panoramica, [[0, una]]), 0, una.id), 8.4);
 });
 
-test('piani: pulizia (anche dei piani della prima versione), modello senza prenotazioni, totali e dati per la scena', () => {
-  const sporco = { file: [[{ nome: 'Verdi', persone: '9', len: '4' }, null, { id: 'x', t180: 2, t90: 1, nome: 'Vecchia', persone: 10 }], 'x', [{ persone: 5 }]] };
+test('piani: pulizia (anche dei piani vecchi), modello senza prenotazioni, totali e dati per la scena', () => {
+  const sporco = { file: [[{ nome: 'Verdi', persone: '9', len: '4' }, null, { id: 'x', t180: 2, t90: 1, nome: 'Vecchia', persone: 10 }], 'x', [{ persone: 5, p: 'abc' }]] };
   const p = pianoPulito(panoramica, sporco);
-  assert.equal(p.file.length, 2);
-  assert.deepEqual(p.file[0].map((t) => [t.nome, t.persone, t.len]), [['Verdi', '9', 4], ['Vecchia', '10', 4.5]]);
-  assert.deepEqual(p.file[1].map((t) => [t.persone, t.len]), [['5', null]]);   // la fila in più finisce nell'ultima
+  assert.equal(p.file.length, panoramica.file.length);
+  assert.deepEqual(p.file[0].map((t) => [t.nome, t.persone, t.len, t.p]), [['Verdi', '9', 4, null], ['Vecchia', '10', 4.5, null]]);
+  assert.deepEqual(p.file[2].map((t) => [t.persone, t.len, t.p]), [['5', null, null]]);
   assert.deepEqual(pianoPulito(stalla, null), pianoVuoto(stalla));
+  // i piani salvati senza posto (build 84 e 85) lo ricevono, in ordine; una fila in più della sala finisce nell'ultima
+  const s2 = sistemaPiano(stalla, { file: [[T(6), T(6)], [], [T(4)]] });
+  assert.deepEqual(s2.file.map((f) => f.map((t) => t.p)), [[2.5, 5.2], [0.8]]);
   const m = senzaPrenotazioni(panoramica, p);
   assert.deepEqual(m.file[0].map((t) => [t.nome, t.persone, t.len]), [['', '', 4], ['', '', 4.5]]);
-  assert.equal(m.file[1][0].len, 1.5);
+  assert.equal(m.file[2][0].len, 1.5);
   assert.deepEqual(totali([[panoramica, p], [stalla, { file: [[T(3)]] }]]), { tavolate: 4, prenotate: 4, posti: 12 + 14 + 6 + 3, persone: 27, metri: 10.9 });
   const s = datiScenaSala(panoramica, { file: [[T(9, { nome: 'Verdi', ora: '13:00' })], [nuovaTavolata({ len: 1.8 })]] }, { scuro: true });
   assert.deepEqual([s.tavolate[0].titolo, s.tavolate[0].breve, s.tavolate[0].c, s.tavolate[0].asse], ['P1 · Verdi', '9 pers. · 3 m · 13:00', 'ok', 'y']);
   assert.deepEqual([s.tavolate[1].titolo, s.tavolate[1].breve, s.tavolate[1].c], ['P2', 'libera · 1,8 m', 'neutro']);
   assert.equal(s.sala.contorno.length, 6);
-  assert.doesNotThrow(() => JSON.stringify(s));
+  assert.equal(s.sala.file.length, 6);
+  const due = datiScenaSale([[stalla, { file: [[T(4)]] }], [panoramica, { file: [[T(2)]] }]], { scelto: 'z' });
+  assert.deepEqual([due.sale.map((q) => q.sala.id), due.sale.map((q) => q.tavolate.length), due.scelto], [['stalla', 'panoramica'], [1, 1], 'z']);
+  assert.doesNotThrow(() => JSON.stringify(due));
 });
 
 test('database: disposizione di un giorno e di un servizio, modelli con un nome', async () => {
@@ -141,7 +200,7 @@ test('database: disposizione di un giorno e di un servizio, modelli con un nome'
   await salvaDisposizioneGiorno('2026-10-11', 'Cena', { panoramica: { file: [] }, stalla: { file: [] } });
   const letto = await disposizioneGiorno('2026-10-11', 'Pranzo');
   assert.equal(letto.stalla.file[0][0].persone, '9');
-  assert.equal(letto.panoramica.file.length, 2);
+  assert.equal(letto.panoramica.file.length, 6);
   assert.deepEqual((await disposizioneGiorno('2026-10-11', 'Cena')).stalla, { file: [[], []] });
   assert.deepEqual(await giorniConPrenotazioni('2026-10-01'), [{ data: '2026-10-11', servizio: 'Pranzo', persone: 15, prenotate: 2 }]);
   await assert.rejects(() => salvaDisposizioneGiorno('11/10/2026', 'Pranzo', dati));

@@ -16,11 +16,14 @@ IMMAGINI = sys.argv[1] if len(sys.argv) > 1 else None
 
 # i dati veri, come li prepara la suite (sale.js)
 PREPARA = """
-import { SALE, datiScenaSala, disponi } from './sale.js';
-const t = (id, persone, nome = '', ora = '', len = null) => ({ id, nome, persone: String(persone || ''), ora, note: '', len });
-const piano = { file: [[t('a', 10, 'Battesimo Rossi', '13:00'), t('b', 8), t('c', 8, 'Bianchi', '', 1.8)], [t('d', 14), t('e', 2), t('f', 6)]] };
-const altra = { file: [[t('g', 6)], [t('h', 0, '', '', 0.9)]] };
+import { SALE, datiScenaSala, datiScenaSale, disponi, metti, pianoVuoto } from './sale.js';
+const t = (id, persone, nome = '', ora = '', len = null) => ({ id, nome, persone: String(persone || ''), ora, note: '', len, p: null });
+let piano = pianoVuoto(SALE.stalla);
+[[0, t('a', 10, 'Battesimo Rossi', '13:00')], [0, t('b', 8)], [0, t('c', 8, 'Bianchi', '', 1.8)], [1, t('d', 14)], [1, t('e', 2)], [1, t('f', 6)]].forEach(([f, x]) => { piano = metti(SALE.stalla, piano, f, x); });
+let altra = pianoVuoto(SALE.panoramica);
+[[0, t('g', 6)], [1, t('h', 0, '', '', 0.9)], [4, t('i', 4)]].forEach(([f, x]) => { altra = metti(SALE.panoramica, altra, f, x); });
 console.log(JSON.stringify({ stalla: datiScenaSala(SALE.stalla, piano), panoramica: datiScenaSala(SALE.panoramica, altra, { scuro: true, scelto: 'h' }),
+  insieme: datiScenaSale([[SALE.stalla, piano], [SALE.panoramica, altra]]),
   posti: disponi(SALE.stalla, piano).tavolate.reduce((s, x) => s + x.posti, 0) }));
 """
 DATI = json.loads(subprocess.run(['node', '--input-type=module', '-e', PREPARA], cwd=RADICE, capture_output=True, text=True, check=True).stdout)
@@ -89,11 +92,37 @@ with sync_playwright() as p:
         pg.evaluate("d=>window.__sala(d)", DATI['panoramica'])
         pg.wait_for_timeout(400); ferma()
         s = pg.evaluate("window.__scena()")
-        ok(s['tavolate'] == 2 and s['sedie'] == 9 and s['scelto'] == 'h' and s['sala'].startswith('panoramica'), f'{nome}: la sala panoramica sostituisce la prima {s}')
+        ok(s['tavolate'] == 3 and s['sedie'] == 13 and s['scelto'] == 'h' and s['sala'].startswith('panoramica'), f'{nome}: la sala panoramica sostituisce la prima {s}')
         ok(pg.evaluate("window.__colori()") > 12, f'{nome}: la sala panoramica (a L) è disegnata')
         ok(pg.evaluate("document.documentElement.classList.contains('scuro')"), f'{nome}: tema scuro applicato')
         if IMMAGINI:
             pg.screenshot(path=os.path.join(IMMAGINI, f'sale-{nome}-panoramica.png'))
+
+        # le due sale insieme, dall'alto: stanno tutte e due nel riquadro e ogni prenotazione si tocca
+        pg.evaluate("d=>window.__sala(d)", DATI['insieme'])
+        pg.wait_for_timeout(400); ferma()
+        s = pg.evaluate("window.__scena()")
+        ok(s['tavolate'] == 9 and '+' in s['sala'], f"{nome}: le due sale insieme con tutte le prenotazioni ({s['tavolate']})")
+        dentro = pg.evaluate("""()=>window.__ultimi.sale.every(q=>q.sala.contorno.every(([x,y])=>{const [a,b]=window.__schermoPunto(x,y,q.sala.id);return a>0&&a<innerWidth&&b>0&&b<innerHeight}))""")
+        ok(dentro, f'{nome}: le due sale stanno intere nel riquadro')
+        if IMMAGINI:
+            pg.screenshot(path=os.path.join(IMMAGINI, f'sale-{nome}-insieme.png'))
+
+        # tenere premuta una prenotazione e trascinarla nell'altra sala: la suite riceve dove è stata lasciata, sulla fila più vicina
+        n = len(ricevuti())
+        x, y = pg.evaluate("window.__schermoTavolata('g')")
+        ax, ay = pg.evaluate("window.__schermoPunto(11, 4.9, 'stalla')")
+        pg.mouse.move(x, y); pg.mouse.down(); pg.wait_for_timeout(450)
+        pg.mouse.move((x + ax) / 2, (y + ay) / 2, steps=4); pg.mouse.move(ax, ay, steps=4); pg.wait_for_timeout(150); pg.mouse.up()
+        pg.wait_for_timeout(250)
+        r = ricevuti()[n:]
+        ok(len(r) == 1 and r[0]['tipo'] == 'sposta' and r[0]['id'] == 'g' and r[0]['sala'] == 'stalla' and abs(r[0]['y'] - 4.75) < 0.01 and abs(r[0]['x'] - 11) < 0.6,
+           f'{nome}: trascinare una prenotazione nella fila B della stalla {r}')
+        # un tocco breve resta un tocco, e trascinare sul pavimento continua a ruotare senza spostare niente
+        n = len(ricevuti())
+        x, y = pg.evaluate("window.__schermoTag('d')")
+        pg.mouse.click(x, y); pg.wait_for_timeout(450)
+        ok(ricevuti()[n:] == [{'tipo': 'tavolata', 'id': 'd'}], f'{nome}: un tocco breve apre la prenotazione {ricevuti()[n:]}')
         ok(errori == [], f'{nome}: nessun errore nella pagina {errori[:2]}')
         c.close()
     b.close()

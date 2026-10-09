@@ -159,14 +159,23 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
   fisse dove stanno i tavoli, con i `tratti` utilizzabili già fuori da passaggi, pilastri e zone libere e ad almeno 80 cm dai muri.
   Antica stalla: l'ingresso è solo quello di sinistra vicino alle scale, verso la cucina conta solo la porta in fondo. Panoramica: la
   porta dello spogliatoio non conta. Se Luca dà misure vere si cambiano qui (e i test controllano che le file restino valide).
-- Disposizione guidata, non libera: `disponi` mette ogni tavolata nel primo tratto della fila in cui entra ancora (una fila spezzata
-  dall'ingresso non deve restare mezza vuota), con almeno 1,2 m fra una e l'altra (`TRA_TAVOLI`). L'antica stalla viene per prima. `entra` / `restoFila` dicono cosa c'è ancora posto di aggiungere.
+- Disposizione guidata, non libera: una prenotazione sta sempre su una fila disegnata. Ogni tavolata ha un posto suo lungo la fila
+  (`p`, dove comincia): lo riceve quando viene aggiunta (`metti`: il primo libero, o il più vicino a un punto) e lo cambia solo quando
+  Luca la sposta; aggiungerne un'altra non sposta le prime. Fra due tavolate qualsiasi, anche di file che si incrociano, restano almeno
+  1,2 m (`TRA_TAVOLI`). `sistemaPiano` dà un posto ai piani salvati prima (build 84–85); `entra` / `restoFila` dicono cosa entra ancora.
+- Panoramica (scelte del 9/10/2026): larga 7 m; tre file verticali (A finestre, B lato cucina, C centrale: la B resta la seconda perché i
+  piani già salvati la usano) e tre orizzontali (D, E, F), da usare miste in zone diverse: dove una orizzontale è occupata le verticali
+  che la attraversano perdono quel tratto, e viceversa. L'antica stalla viene per prima.
+- Spostare (si sposta l'intera prenotazione, non i singoli tavoli): tenendola premuta sulla piantina e trascinandola (la pagina manda
+  `{ tipo: 'sposta', id, sala, x, y }`, la suite usa `filaVicina` + `metti`), oppure dalla scheda con "Sposta in un'altra fila o sala".
+  Con il telefono in orizzontale (`expo-screen-orientation` ~8.0.4: si può girare solo nella sezione Sala, il resto dell'app resta in
+  verticale) le due sale si vedono insieme a tutto schermo (`datiScenaSale`) e si trascina anche dall'una all'altra.
 - Tabella `disposizioni` (nel backup, in `TABELLE_NUOVE`), due tipi di riga: `giorno` (data + servizio, con prenotazioni; ogni modifica
   si salva subito) e `modello` (disposizione con un nome, senza prenotazioni, lunghezze fissate, da applicare a un giorno).
   `pianoPulito` legge anche i piani della build 83 (`t180`/`t90`).
 - `sale/index.html`: la sala in 3D (usa `../cucine/three.min.js`) con la sua forma vera, porte con cartello, zone libere in rosso, una
   sedia per ogni posto stimato, tag con sigla (P1, S3…), nome, persone e metri; vista di sbieco o dall'alto (girata come nel PDF).
-  Riceve `window.__sala(datiScenaSala(...))`, manda `{ tipo: 'tavolata', id }`. Se il 3D non parte la schermata funziona lo stesso
+  Riceve `window.__sala(...)` con una sala o più sale affiancate, manda `{ tipo: 'tavolata', id }` e `{ tipo: 'sposta', … }`. Se il 3D non parte la schermata funziona lo stesso
   dall'elenco. Prova: `python3 test/sale-vista.py` (anche su GitHub prima della build).
 - Per i camerieri: `htmlDisposizioneSale` (report.js) → PDF con pianta dall'alto ed elenco delle tavolate con la lunghezza da preparare,
   condiviso con `condividiPdf` (WhatsApp); oppure lo stesso dispositivo tenuto in sala. I telefoni non si sincronizzano fra loro.

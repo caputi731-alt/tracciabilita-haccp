@@ -5,7 +5,7 @@ const path = require('path');
 const { getDefaultConfig } = require('expo/metro-config');
 const config = getDefaultConfig(__dirname);
 const FINTI = ['expo-notifications', 'expo-file-system', 'expo-camera', 'expo-image-picker', 'expo-document-picker', 'expo-print',
-  'expo-sharing', 'expo-intent-launcher', 'expo-clipboard', 'react-native-webview', 'react-native-share'];
+  'expo-sharing', 'expo-intent-launcher', 'expo-clipboard', 'react-native-webview', 'react-native-share', 'expo-screen-orientation'];
 const prima = config.resolver.resolveRequest;
 config.resolver.resolveRequest = (ctx, nome, piattaforma) => {
   if (piattaforma === 'web') {

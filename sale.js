@@ -5,8 +5,9 @@
  * Si parte dalla prenotazione (scelta di Luca: "riempiamo la sala in base alle prenotazioni"): nome, persone e ora.
  * Dalle persone si ricava quanto deve essere LUNGA la tavolata (75 cm a persona); con quali tavoli e allunghe comporla
  * lo decide chi apparecchia, perché i tavoli hanno lunghezze diverse. La lunghezza si può correggere a mano.
- * Ogni sala ha delle FILE fisse dove stanno i tavoli, già fuori dai passaggi e dalle zone libere davanti alle porte:
- * le posizioni lungo la fila le calcola `disponi`.
+ * Ogni sala ha delle FILE fisse dove stanno i tavoli, già fuori dai passaggi e dalle zone libere davanti alle porte.
+ * Una prenotazione sta sempre su una fila: riceve il primo posto libero e si sposta (trascinandola) lungo la fila, su
+ * un'altra fila o nell'altra sala; non si può lasciare in un punto qualsiasi.
  *
  * Misure in metri, ricavate dalle piante e confermate da Luca sul disegno dell'8/10/2026 (restano stime: ±20%).
  * Coordinate di ogni sala: x verso destra, y verso il basso, come nel disegno visto dall'alto.
@@ -46,19 +47,26 @@ export const SALE = {
       { id: 'B', nome: 'Fila B · lato ingresso', asse: 'x', c: 4.75, tratti: [[0.8, 6.4], [8.55, 15.0]] },
     ],
   },
+  // larga 7 m (scelta di Luca del 9/10/2026: la fila centrale ci sta); oltre alle tre file verticali ci sono tre file
+  // orizzontali, parallele all'ingresso, da usare insieme alle altre in zone diverse della sala ("miste")
   panoramica: {
     id: 'panoramica', nome: 'Sala panoramica', sigla: 'P',
-    contorno: [[0, 0], [2.9, 0], [2.9, 1.3], [6.5, 1.3], [6.5, 10], [0, 10]],
-    ostacoli: [{ ...rett(3.95, 1.3, 1.55, 1.7), nome: 'Paravento' }],
+    contorno: [[0, 0], [3.1, 0], [3.1, 1.3], [7, 1.3], [7, 10], [0, 10]],
+    ostacoli: [{ ...rett(4.25, 1.3, 1.65, 1.7), nome: 'Paravento' }],
     porte: [
-      { x1: 2.45, y1: 10, x2: 3.95, y2: 10, nome: 'Ingresso' },
-      { x1: 3.95, y1: 1.4, x2: 3.95, y2: 2.6, nome: 'Cucina' },
-      { x1: 6.5, y1: 2.4, x2: 6.5, y2: 3.2, nome: 'Bagni' },
+      { x1: 2.65, y1: 10, x2: 4.25, y2: 10, nome: 'Ingresso' },
+      { x1: 4.25, y1: 1.4, x2: 4.25, y2: 2.6, nome: 'Cucina' },
+      { x1: 7, y1: 2.4, x2: 7, y2: 3.2, nome: 'Bagni' },
     ],
-    zone: [rett(2.25, 8.5, 1.9, 1.5), rett(2.45, 1.3, 1.5, 1.7), rett(5.0, 2.2, 1.5, 1.2), rett(5.5, 1.3, 1.0, 0.9)],
+    zone: [rett(2.45, 8.5, 2.0, 1.5), rett(2.75, 1.3, 1.5, 1.7), rett(5.5, 2.2, 1.5, 1.2), rett(5.9, 1.3, 1.1, 0.9)],
     file: [
       { id: 'A', nome: 'Fila A · finestre', asse: 'y', c: 1.25, tratti: [[0.8, 9.2]] },
-      { id: 'B', nome: 'Fila B · lato cucina', asse: 'y', c: 4.85, tratti: [[3.8, 8.4]] },
+      // la B resta la seconda: i piani salvati prima della fila centrale tengono le prenotazioni dove erano
+      { id: 'B', nome: 'Fila B · lato cucina', asse: 'y', c: 5.75, tratti: [[3.8, 9.2]] },
+      { id: 'C', nome: 'Fila C · centrale', asse: 'y', c: 3.5, tratti: [[3.4, 8.2]] },
+      { id: 'D', nome: 'Fila D · orizzontale in alto', asse: 'x', c: 3.9, tratti: [[0.8, 5.3]] },
+      { id: 'E', nome: 'Fila E · orizzontale al centro', asse: 'x', c: 6.0, tratti: [[0.8, 6.2]] },
+      { id: 'F', nome: 'Fila F · orizzontale verso l\'ingresso', asse: 'x', c: 7.75, tratti: [[0.8, 6.2]] },
     ],
   },
 };
@@ -98,9 +106,10 @@ export function lunghezza(t) {
 }
 
 let contatore = 0;
-/** Nuova tavolata; l'id serve solo a riconoscerla sullo schermo. `len` null = calcolata dalle persone. */
+/** Nuova tavolata; l'id serve solo a riconoscerla sullo schermo. `len` null = calcolata dalle persone;
+ *  `p` = dove comincia lungo la sua fila (metri, null finché non ha un posto). */
 export const nuovaTavolata = (dati = {}) => ({
-  id: `t${Date.now().toString(36)}${(contatore++).toString(36)}`, nome: '', persone: '', ora: '', note: '', len: null, ...dati,
+  id: `t${Date.now().toString(36)}${(contatore++).toString(36)}`, nome: '', persone: '', ora: '', note: '', len: null, p: null, ...dati,
 });
 
 export const pianoVuoto = (sala) => ({ file: sala.file.map(() => []) });
@@ -116,7 +125,7 @@ export function pianoPulito(sala, p) {
     const len = Number(t.len) > 0 ? decimo(Number(t.len)) : vecchia > 0 ? decimo(vecchia) : null;
     return {
       id: String(t.id || nuovaTavolata().id), nome: String(t.nome || ''), persone: intero(t.persone) ? String(intero(t.persone)) : '',
-      ora: String(t.ora || ''), note: String(t.note || ''), len,
+      ora: String(t.ora || ''), note: String(t.note || ''), len, p: Number.isFinite(Number(t.p)) && t.p !== null && t.p !== '' ? decimo(Number(t.p)) : null,
     };
   }));
   // tavolate di file che la sala non ha più: finiscono in coda all'ultima fila, così non si perdono
@@ -126,74 +135,146 @@ export function pianoPulito(sala, p) {
 
 /** Lo stesso piano senza prenotazioni, con le lunghezze fissate: è quello che si salva come modello. */
 export const senzaPrenotazioni = (sala, p) => ({
-  file: pianoPulito(sala, p).file.map((f) => f.map((t) => nuovaTavolata({ len: lunghezza(t) }))),
+  file: sistemaPiano(sala, p).file.map((f) => f.map((t) => nuovaTavolata({ len: lunghezza(t), p: t.p }))),
 });
 
-/**
- * Mette in fila le tavolate nei tratti utilizzabili: ognuna, nell'ordine in cui sono, nel primo tratto dove entra ancora
- * (anche uno prima di quello dell'ultima messa: una fila spezzata dall'ingresso non resta mezza vuota),
- * con almeno 1,2 m dalla vicina; lo spazio che avanza in un tratto si divide in parti uguali.
- * → [{ t, da, a }] più quelle che non entrano (`fuori`).
- */
-function sistema(fila, tavolate) {
-  const messe = [], fuori = [];
-  const gruppi = fila.tratti.map(() => []), usato = fila.tratti.map(() => 0);
-  tavolate.forEach((t) => {
-    const len = lunghezza(t);
-    const k = fila.tratti.findIndex(([da, a], i) => usato[i] + (gruppi[i].length ? TRA_TAVOLI : 0) + len <= a - da + 1e-9);
-    if (k < 0) { fuori.push(t); return; }
-    usato[k] += (gruppi[k].length ? TRA_TAVOLI : 0) + len;
-    gruppi[k].push(t);
-  });
-  gruppi.forEach((g, i) => {
-    if (!g.length) return;
-    const [da, a] = fila.tratti[i];
-    const somma = g.reduce((s, t) => s + lunghezza(t), 0);
-    const avanza = (a - da) - somma - (g.length - 1) * TRA_TAVOLI;
-    const parte = avanza / (g.length + 1);
-    let p = da + parte;
-    g.forEach((t) => { const len = lunghezza(t); messe.push({ t, da: p, a: p + len }); p += len + TRA_TAVOLI + parte; });
-  });
-  return { messe, fuori };
+/* ---------- il posto di ogni tavolata ----------
+   Ogni tavolata ha un posto suo lungo la fila (`p`, dove comincia): lo riceve quando viene aggiunta (il primo libero) e lo
+   cambia solo quando Luca la sposta. Due tavolate, della stessa fila o di file che si incrociano (nella panoramica quelle
+   orizzontali attraversano quelle verticali), devono restare ad almeno 1,2 m una dall'altra. */
+
+/** Il rettangolo occupato da una tavolata (senza sedie) messa in `p` lungo la fila. */
+export const ingombro = (fila, p, len) => (fila.asse === 'x' ? { x: p, y: fila.c - LARGO / 2, w: len, h: LARGO } : { x: fila.c - LARGO / 2, y: p, w: LARGO, h: len });
+
+const distanti = (a, b) => Math.max(Math.max(b.x - (a.x + a.w), a.x - (b.x + b.w)), Math.max(b.y - (a.y + a.h), a.y - (b.y + b.h))) >= TRA_TAVOLI - 1e-6;
+
+/** Quel posto è dentro un tratto della fila e abbastanza lontano da tutto quello che c'è già (`presi` = ingombri)? */
+function libero(fila, presi, p, len) {
+  if (!fila.tratti.some(([da, a]) => p >= da - 1e-6 && p + len <= a + 1e-6)) return false;
+  const r = ingombro(fila, p, len);
+  return presi.every((q) => distanti(r, q));
 }
 
-/** Una tavolata lunga `len` entra ancora in quella fila, dopo quelle che ci sono? (`senza` = id di una da non contare) */
+/** Il posto libero più vicino a `vicino` (dove dovrebbe cominciare), o il primo della fila se `vicino` manca; null se non c'è. */
+function cercaPosto(fila, presi, len, vicino = null) {
+  let meglio = null;
+  for (const [da, a] of fila.tratti) {
+    for (let p = da; p + len <= a + 1e-6; p = decimo(p + 0.1)) {
+      if (!libero(fila, presi, p, len)) continue;
+      if (vicino === null) return decimo(p);
+      if (meglio === null || Math.abs(p - vicino) < Math.abs(meglio - vicino)) meglio = decimo(p);
+    }
+    // anche a filo della fine del tratto, che non sempre cade su un decimo
+    const fine = decimo(a - len);
+    if (fine >= da - 1e-6 && libero(fila, presi, fine, len) && (meglio === null || (vicino !== null && Math.abs(fine - vicino) < Math.abs(meglio - vicino)))) meglio = fine;
+  }
+  return meglio;
+}
+
+/**
+ * Il piano con ogni tavolata al suo posto: chi ha già un posto valido lo tiene, alle altre (piani vecchi, tavolata
+ * allungata che non ci sta più) si dà il primo libero; chi non entra da nessuna parte resta con `p` null.
+ * Dentro ogni fila le tavolate sono in ordine di posto.
+ */
+export function sistemaPiano(sala, piano) {
+  const file = pianoPulito(sala, piano).file.map((f) => f.map((t) => ({ ...t })));
+  const presi = [];
+  const daMettere = [];
+  // prima quelle che hanno un posto valido, poi le altre: una tavolata senza posto non ne sposta una che ce l'ha
+  file.forEach((lista, i) => lista.forEach((t) => {
+    const len = lunghezza(t);
+    if (t.p !== null && libero(sala.file[i], presi, t.p, len)) presi.push(ingombro(sala.file[i], t.p, len));
+    else { t.p = null; daMettere.push([t, i]); }
+  }));
+  daMettere.forEach(([t, i]) => {
+    const len = lunghezza(t);
+    const p = cercaPosto(sala.file[i], presi, len);
+    if (p !== null) { t.p = p; presi.push(ingombro(sala.file[i], p, len)); }
+  });
+  file.forEach((lista) => lista.sort((a, b) => (a.p === null) - (b.p === null) || a.p - b.p));
+  return { file };
+}
+
+const ingombri = (sala, file, senza = null) => file.flatMap((lista, i) => lista.filter((t) => t.id !== senza && t.p !== null)
+  .map((t) => ingombro(sala.file[i], t.p, lunghezza(t))));
+
+/**
+ * Mette una tavolata in una fila: nel posto libero più vicino a `centro` (il punto, lungo la fila, dove dovrebbe stare il suo
+ * centro), o nel primo libero se `centro` manca. Se la tavolata c'era già (stesso id) viene tolta da dov'era: serve per
+ * aggiungere, spostare, allungare. → il piano nuovo, oppure null se in quella fila non c'è posto.
+ */
+export function metti(sala, piano, f, tavolata, centro = null) {
+  const fila = sala.file[f];
+  if (!fila) return null;
+  const file = sistemaPiano(sala, piano).file.map((lista) => lista.filter((t) => t.id !== tavolata.id));
+  const len = lunghezza(tavolata);
+  const p = cercaPosto(fila, ingombri(sala, file), len, centro === null ? null : centro - len / 2);
+  if (p === null) return null;
+  file[f] = [...file[f], { ...tavolata, p }].sort((a, b) => (a.p === null) - (b.p === null) || a.p - b.p);
+  return { file };
+}
+
+/** Il piano senza quella tavolata. */
+export const togli = (sala, piano, id) => ({ file: sistemaPiano(sala, piano).file.map((lista) => lista.filter((t) => t.id !== id)) });
+
+/** Dove si trova una tavolata: { f (fila), t } oppure null. */
+export function trova(sala, piano, id) {
+  const file = sistemaPiano(sala, piano).file;
+  for (let f = 0; f < file.length; f++) { const t = file[f].find((x) => x.id === id); if (t) return { f, t }; }
+  return null;
+}
+
+/** Una tavolata lunga `len` entra ancora in quella fila? (`senza` = id di una da non contare, per esempio lei stessa) */
 export function entra(sala, piano, f, len, senza = null) {
   const fila = sala.file[f];
   if (!fila) return false;
-  const altre = pianoPulito(sala, piano).file[f].filter((t) => t.id !== senza);
-  return sistema(fila, [...altre, { len }]).fuori.length === 0;
+  return cercaPosto(fila, ingombri(sala, sistemaPiano(sala, piano).file, senza), len) !== null;
 }
 
-/** La tavolata più lunga che si può ancora aggiungere a una fila (0 se non entra più niente). */
+/** La tavolata più lunga che si può ancora mettere in una fila (0 se non entra più niente). */
 export function restoFila(sala, piano, f, senza = null) {
-  let a = 0, b = LUNGA_MAX;
-  if (!entra(sala, piano, f, LUNGA_MIN, senza)) return 0;
-  for (let i = 0; i < 12; i++) { const m = (a + b) / 2; if (entra(sala, piano, f, m, senza)) a = m; else b = m; }
+  const fila = sala.file[f];
+  if (!fila) return 0;
+  const presi = ingombri(sala, sistemaPiano(sala, piano).file, senza);
+  if (cercaPosto(fila, presi, LUNGA_MIN) === null) return 0;
+  let a = LUNGA_MIN, b = LUNGA_MAX;
+  for (let i = 0; i < 12; i++) { const m = (a + b) / 2; if (cercaPosto(fila, presi, Math.floor(m * 10) / 10 || LUNGA_MIN) !== null) a = m; else b = m; }
   return Math.floor(a * 10 + 1e-6) / 10;
+}
+
+/** La fila della sala più vicina a un punto (dove si lascia una tavolata trascinata): { f, centro } lungo quella fila. */
+export function filaVicina(sala, x, y) {
+  let meglio = null;
+  sala.file.forEach((fila, f) => {
+    const lungo = fila.asse === 'x' ? x : y, traverso = fila.asse === 'x' ? y : x;
+    fila.tratti.forEach(([da, a]) => {
+      const d = Math.hypot(traverso - fila.c, lungo < da ? da - lungo : lungo > a ? lungo - a : 0);
+      if (!meglio || d < meglio.d) meglio = { f, centro: Math.min(a, Math.max(da, lungo)), d };
+    });
+  });
+  return meglio;
 }
 
 /**
  * Dove va ogni tavolata.
  * → { tavolate: [{ ...prenotazione, fila, sigla, asse, x, y (centro), len, posti, lati, capotavola, numeroPersone,
  *      prenotata, troppi }], problemi: [testi], ok }
- * Le sigle (P1, P2… S1…) sono in ordine di fila e di arrivo: servono ai camerieri per trovare il tavolo.
+ * Le sigle (S1, S2… P1…) sono in ordine di fila e di posto: servono ai camerieri per trovare il tavolo.
  */
 export function disponi(sala, piano) {
-  const file = pianoPulito(sala, piano).file;
+  const file = sistemaPiano(sala, piano).file;
   const problemi = [], tavolate = [];
   let numero = 0;
-  const nomi = {};
-  file.forEach((f) => f.forEach((t) => { numero += 1; nomi[t.id] = `${sala.sigla}${numero}`; }));
   file.forEach((lista, i) => {
     const fila = sala.file[i];
-    const { messe, fuori } = sistema(fila, lista);
-    fuori.forEach((t) => problemi.push(`${nomi[t.id]}${t.nome ? ` ${t.nome}` : ''} non entra nella ${fila.nome.split(' · ')[0].toLowerCase()}: spostala o accorciala`));
-    messe.forEach(({ t, da, a }) => {
-      const len = lunghezza(t), p = posti(len), persone = intero(t.persone), centro = (da + a) / 2;
+    lista.forEach((t) => {
+      numero += 1;
+      const sigla = `${sala.sigla}${numero}`;
+      if (t.p === null) { problemi.push(`${sigla}${t.nome ? ` ${t.nome}` : ''} non entra nella ${fila.nome.split(' · ')[0].toLowerCase()}: spostala o accorciala`); return; }
+      const len = lunghezza(t), po = posti(len), persone = intero(t.persone), centro = t.p + len / 2;
       tavolate.push({
-        ...t, fila: i, sigla: nomi[t.id], asse: fila.asse, x: arrotonda(fila.asse === 'x' ? centro : fila.c), y: arrotonda(fila.asse === 'x' ? fila.c : centro),
-        len, ...p, numeroPersone: persone, prenotata: !!(t.nome.trim() || persone), troppi: persone > p.posti,
+        ...t, fila: i, sigla, asse: fila.asse, x: arrotonda(fila.asse === 'x' ? centro : fila.c), y: arrotonda(fila.asse === 'x' ? fila.c : centro),
+        len, ...po, numeroPersone: persone, prenotata: !!(t.nome.trim() || persone), troppi: persone > po.posti,
       });
     });
   });
@@ -205,7 +286,7 @@ export function disponi(sala, piano) {
 export function sigle(sala, piano) {
   const out = {};
   let n = 0;
-  pianoPulito(sala, piano).file.forEach((f) => f.forEach((t) => { n += 1; out[t.id] = `${sala.sigla}${n}`; }));
+  sistemaPiano(sala, piano).file.forEach((f) => f.forEach((t) => { n += 1; out[t.id] = `${sala.sigla}${n}`; }));
   return out;
 }
 
@@ -222,11 +303,11 @@ export function totali(coppie) {
 
 export const metri = (n) => `${String(decimo(n)).replace('.', ',')} m`;
 
-/** Quello che serve alla pagina 3D: la sala com'è fatta e le tavolate già messe al loro posto. */
+/** Quello che serve alla pagina 3D per una sala: com'è fatta (con le file, per trascinare) e le tavolate al loro posto. */
 export function datiScenaSala(sala, piano, { scuro = false, scelto = null } = {}) {
   const d = disponi(sala, piano);
   return {
-    sala: { id: sala.id, nome: sala.nome, contorno: sala.contorno, ostacoli: sala.ostacoli, porte: sala.porte, zone: sala.zone },
+    sala: { id: sala.id, nome: sala.nome, contorno: sala.contorno, ostacoli: sala.ostacoli, porte: sala.porte, zone: sala.zone, file: sala.file },
     tavolate: d.tavolate.map((t) => ({
       id: t.id, x: t.x, y: t.y, len: t.len, asse: t.asse, lati: t.lati, capotavola: t.capotavola,
       titolo: t.nome.trim() ? `${t.sigla} · ${t.nome.trim()}` : t.sigla,
@@ -236,3 +317,9 @@ export function datiScenaSala(sala, piano, { scuro = false, scelto = null } = {}
     scuro: !!scuro, scelto,
   };
 }
+
+/** Più sale insieme, una accanto all'altra (telefono in orizzontale): `coppie` = [[sala, piano]]. */
+export const datiScenaSale = (coppie, opzioni = {}) => {
+  const parti = coppie.map(([sala, piano]) => datiScenaSala(sala, piano, opzioni));
+  return { sale: parti.map((d) => ({ sala: d.sala, tavolate: d.tavolate })), scuro: !!opzioni.scuro, scelto: opzioni.scelto || null };
+};

@@ -2,19 +2,21 @@
  * Sezione "Sale": le prenotazioni di un giorno e di un servizio, sistemate nelle due sale mensa.
  * In alto la sala in 3D (SaleVista.js), sotto le file della sala: in ogni fila si aggiunge una prenotazione (nome, persone, ora)
  * e l'app dimensiona la tavolata e la mette al suo posto (sale.js). Ogni modifica si salva subito per quel giorno e quel
- * servizio. I modelli sono disposizioni con un nome, senza prenotazioni, da riusare.
+ * servizio. Una prenotazione si sposta tenendola premuta sulla piantina e trascinandola su un'altra fila; con il telefono in
+ * orizzontale le due sale si vedono insieme, a tutto schermo, e si sposta anche dall'una all'altra.
+ * I modelli sono disposizioni con un nome, senza prenotazioni, da riusare.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Modal, useWindowDimensions } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, TEMA_SCURO, aNumero, oggiLocale, fmtData } from './theme';
-import { Icona, Bottone, Campo, CampoData, Segmenti, VistaModale, conferma, useAvviso, useErrori } from './UI';
+import { Icona, Bottone, Campo, CampoData, Segmenti, Sezione, VistaModale, conferma, useAvviso, useErrori } from './UI';
 import {
   disposizioneGiorno, salvaDisposizioneGiorno, modelliSale, salvaModelloSale, eliminaModelloSale, getImpostazioni,
 } from './database';
 import {
-  SALE, ID_SALE, SERVIZI, LUNGA_MIN, LUNGA_MAX, posti, lunghezza, lunghezzaPer, restoFila, pianoVuoto, pianoPulito, senzaPrenotazioni,
-  nuovaTavolata, disponi, sigle, totali, datiScenaSala, metri,
+  SALE, ID_SALE, SERVIZI, LUNGA_MIN, LUNGA_MAX, posti, lunghezza, lunghezzaPer, restoFila, entra, pianoVuoto, sistemaPiano, senzaPrenotazioni,
+  nuovaTavolata, disponi, sigle, totali, datiScenaSala, datiScenaSale, metri, metti, togli, trova, filaVicina,
 } from './sale';
 import { htmlDisposizioneSale } from './report';
 import { condividiPdf } from './condividi';
@@ -53,7 +55,7 @@ function moduloSala() {
 }
 
 /** Una prenotazione e la sua tavolata: dalle persone la lunghezza, che si può correggere a mano. */
-function SchedaTavolata({ sala, piano, fila, tavolata, sigla, nuova, onSalva, onElimina, onChiudi }) {
+function SchedaTavolata({ sala, piano, fila, tavolata, sigla, nuova, destinazioni = [], onSalva, onSposta, onElimina, onChiudi }) {
   const [t, setT] = useState(tavolata);
   const { errori, segnala, azzera, riepilogo } = useErrori();
   useEffect(() => { setT(tavolata); azzera(); }, [tavolata, azzera]);
@@ -131,6 +133,15 @@ function SchedaTavolata({ sala, piano, fila, tavolata, sigla, nuova, onSalva, on
         </View>
 
         <Bottone testo={nuova ? 'Aggiungi' : 'Fatto'} onPress={salva} />
+        {!nuova && destinazioni.length > 0 && (
+          <Sezione titolo="Sposta in un'altra fila o sala" icona="swap-horizontal" riassunto="Oppure tienila premuta sulla piantina e trascinala">
+            <Text style={S.muted}>La prenotazione si sposta com'è adesso salvata; le file dove non entra sono spente.</Text>
+            {destinazioni.map((d) => (
+              <Bottone key={`${d.sala}-${d.f}`} ghost disabilitato={!d.entra} onPress={() => onSposta(d.sala, d.f)}
+                testo={`${d.nomeSala} · ${d.nome}${d.entra ? '' : ' (non entra)'}`} />
+            ))}
+          </Sezione>
+        )}
         {!nuova && <Bottone testo="Togli la tavolata" ghost colore={COLORS.danger} onPress={onElimina} />}
         <Bottone testo={nuova ? 'Annulla' : 'Chiudi senza salvare'} ghost onPress={onChiudi} />
       </VistaModale>
@@ -138,7 +149,17 @@ function SchedaTavolata({ sala, piano, fila, tavolata, sigla, nuova, onSalva, on
   );
 }
 
-export default function SaleScreen() {
+/** Il telefono si può girare solo in questa sezione: in orizzontale le due sale si vedono insieme, a tutto schermo. */
+function orientamento(libero) {
+  try {
+    const O = require('expo-screen-orientation');
+    return libero ? O.unlockAsync() : O.lockAsync(O.OrientationLock.PORTRAIT_UP);
+  } catch (e) {
+    return null;
+  }
+}
+
+export default function SaleScreen({ suTuttoSchermo }) {
   const [data, setData] = useState(oggiLocale());
   const [servizio, setServizio] = useState(new Date().getHours() < 16 ? SERVIZI[0] : SERVIZI[1]);
   const [quale, setQuale] = useState(0); // sala mostrata: posizione in ID_SALE
@@ -156,7 +177,17 @@ export default function SaleScreen() {
 
   const idSala = ID_SALE[quale];
   const sala = SALE[idSala];
-  const piano = useMemo(() => pianoPulito(sala, dati[idSala]), [sala, dati, idSala]);
+  // ogni sala con le prenotazioni al loro posto
+  const piani = useMemo(() => Object.fromEntries(ID_SALE.map((id) => [id, sistemaPiano(SALE[id], dati[id])])), [dati]);
+  const piano = piani[idSala];
+  const largo = schermo.width > schermo.height;   // telefono in orizzontale
+
+  useEffect(() => {
+    Promise.resolve(orientamento(true)).catch(() => {});
+    return () => { Promise.resolve(orientamento(false)).catch(() => {}); };
+  }, []);
+  useEffect(() => { if (suTuttoSchermo) suTuttoSchermo(largo); }, [largo, suTuttoSchermo]);
+  useEffect(() => () => { if (suTuttoSchermo) suTuttoSchermo(false); }, [suTuttoSchermo]);
 
   const carica = useCallback(async () => {
     const k = `${data}|${servizio}`;
@@ -172,24 +203,49 @@ export default function SaleScreen() {
     setDati(nuovi);
     salvaDisposizioneGiorno(data, servizio, nuovi).catch((e) => mostra(`Non salvato: ${String(e && e.message || e)}`));
   }, [data, servizio, mostra]);
-  const cambiaFile = (file) => cambia({ ...dati, [idSala]: { file } });
+  const cambiaPiano = (id, nuovo) => cambia({ ...piani, [id]: nuovo });
 
   const disposta = useMemo(() => disponi(sala, piano), [sala, piano]);
   const nomi = useMemo(() => sigle(sala, piano), [sala, piano]);
   const tot = useMemo(() => totali([[sala, piano]]), [sala, piano]);
-  const totTutte = useMemo(() => totali(COPPIE(dati)), [dati]);
-  const scenaDati = useMemo(() => datiScenaSala(sala, piano, { scuro: TEMA_SCURO, scelto: scelta }), [sala, piano, scelta]);
+  const totTutte = useMemo(() => totali(COPPIE(piani)), [piani]);
+  // in verticale la sala scelta, in orizzontale tutte e due una accanto all'altra
+  const scenaDati = useMemo(() => (largo
+    ? datiScenaSale(COPPIE(piani), { scuro: TEMA_SCURO, scelto: scelta })
+    : datiScenaSala(sala, piano, { scuro: TEMA_SCURO, scelto: scelta })), [largo, piani, sala, piano, scelta]);
   const Sala3D = scena === 'no' ? null : moduloSala();
   const senza3d = useCallback(() => setScena('no'), []);
   const suTavolata = useCallback((id) => setScelta(id), []);
 
-  const posizione = useMemo(() => {
-    for (let i = 0; i < piano.file.length; i++) {
-      const j = piano.file[i].findIndex((t) => t.id === scelta);
-      if (j >= 0) return { i, j };
-    }
+  // la prenotazione aperta: può essere in una qualsiasi delle due sale (in orizzontale si vedono insieme)
+  const aperta = useMemo(() => {
+    if (!scelta) return null;
+    for (const id of ID_SALE) { const q = trova(SALE[id], piani[id], scelta); if (q) return { sala: id, ...q }; }
     return null;
-  }, [piano, scelta]);
+  }, [piani, scelta]);
+
+  /** Sposta una prenotazione in una fila (di questa o dell'altra sala), vicino a `centro` se indicato. */
+  const sposta = useCallback((id, aSala, f, centro = null) => {
+    const da = ID_SALE.find((x) => trova(SALE[x], piani[x], id));
+    if (!da) return false;
+    const { t } = trova(SALE[da], piani[da], id);
+    const nuovo = metti(SALE[aSala], da === aSala ? piani[da] : piani[aSala], f, t, centro);
+    if (!nuovo) { mostra(`Lì non c'è posto per una tavolata di ${metri(lunghezza(t))}`); return false; }
+    cambia(da === aSala ? { ...piani, [da]: nuovo } : { ...piani, [da]: togli(SALE[da], piani[da], id), [aSala]: nuovo });
+    return true;
+  }, [piani, cambia, mostra]);
+
+  /** Una prenotazione trascinata sulla piantina: va sulla fila più vicina al punto in cui è stata lasciata. */
+  const suSposta = useCallback(({ id, sala: aSala, x, y }) => {
+    if (!SALE[aSala]) return;
+    const q = filaVicina(SALE[aSala], x, y);
+    if (q && sposta(id, aSala, q.f, q.centro)) mostra('Spostata ✓');
+  }, [sposta, mostra]);
+
+  const destinazioni = useMemo(() => (aperta ? ID_SALE.flatMap((id) => SALE[id].file.map((fila, f) => ({
+    sala: id, f, nomeSala: SALE[id].nome.replace('Sala ', '').replace(/^./, (c) => c.toUpperCase()), nome: fila.nome,
+    entra: entra(SALE[id], piani[id], f, lunghezza(aperta.t), aperta.t.id),
+  })).filter((d) => !(d.sala === aperta.sala && d.f === aperta.f))) : []), [aperta, piani]);
 
   const usaModello = (m) => {
     const applica = () => {
@@ -206,13 +262,13 @@ export default function SaleScreen() {
     azzera();
     if (!nomeModello.trim()) return segnala('modello', 'Scrivi il nome del modello, per esempio "Domenica"');
     if (totTutte.tavolate === 0) return segnala('modello', 'Non c\'è ancora nessuna tavolata da salvare');
-    await salvaModelloSale(nomeModello, dati);
+    await salvaModelloSale(nomeModello, piani);
     setModelli(await modelliSale()); setNomeModello('');
     return mostra('Modello salvato ✓');
   };
 
   const invia = async () => {
-    const html = htmlDisposizioneSale({ data, servizio, sale: ID_SALE.map((id) => ({ sala: SALE[id], piano: dati[id] })) }, await getImpostazioni());
+    const html = htmlDisposizioneSale({ data, servizio, sale: ID_SALE.map((id) => ({ sala: SALE[id], piano: piani[id] })) }, await getImpostazioni());
     await condividiPdf(html, `Tavoli ${data} ${servizio}`);
   };
 
@@ -226,6 +282,49 @@ export default function SaleScreen() {
       <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '700', color: COLORS.text, marginTop: 2 }}>{testo}</Text>
     </TouchableOpacity>
   );
+
+  const giornoBreve = new Date(`${data}T12:00:00`).toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' });
+
+  // telefono in orizzontale: le due sale insieme a tutto schermo, per spostare le prenotazioni anche da una sala all'altra
+  if (largo && Sala3D) {
+    return (
+      <View style={{ flex: 1, backgroundColor: COLORS.contenitore }}>
+        <RiparoSala suRotto={senza3d}>
+          <Sala3D dati={scenaDati} suTavolata={suTavolata} suSposta={suSposta} suStato={setScena} />
+        </RiparoSala>
+        <View pointerEvents="none" style={{ position: 'absolute', left: 12, top: 10, backgroundColor: COLORS.card, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 8 }}>
+          <Text style={{ fontSize: 14, fontWeight: '700', color: COLORS.text }}>
+            {giornoBreve} · {servizio} · {plurale(totTutte.persone, 'persona', 'persone')}
+          </Text>
+          <Text style={{ fontSize: 12, color: COLORS.muted }}>Tieni premuta una prenotazione e trascinala · gira il telefono per tornare all'elenco</Text>
+        </View>
+      {!!aperta && (
+        <SchedaTavolata sala={SALE[aperta.sala]} piano={piani[aperta.sala]} fila={aperta.f} tavolata={aperta.t} sigla={sigle(SALE[aperta.sala], piani[aperta.sala])[scelta]}
+          destinazioni={destinazioni}
+          onChiudi={() => setScelta(null)}
+          onSalva={(t) => {
+            // resta dov'è, o nel posto libero più vicino se allungandola non ci sta più
+            const nuovo = metti(SALE[aperta.sala], piani[aperta.sala], aperta.f, t, aperta.t.p === null ? null : aperta.t.p + lunghezza(aperta.t) / 2);
+            if (!nuovo) { mostra('In questa fila non c\'è posto per una tavolata così lunga'); return; }
+            cambiaPiano(aperta.sala, nuovo); setScelta(null); mostra('Salvato ✓');
+          }}
+          onSposta={(aSala, f) => { if (sposta(scelta, aSala, f)) { setScelta(null); mostra('Spostata ✓'); } }}
+          onElimina={() => { cambiaPiano(aperta.sala, togli(SALE[aperta.sala], piani[aperta.sala], scelta)); setScelta(null); }} />
+      )}
+      {!!nuova && (
+        <SchedaTavolata nuova sala={sala} piano={piano} fila={nuova.fila} tavolata={nuova.tavolata}
+          onChiudi={() => setNuova(null)}
+          onSalva={(t) => {
+            const nuovo = metti(sala, piano, nuova.fila, t);
+            if (!nuovo) { mostra('In questa fila non c\'è posto'); return; }
+            cambiaPiano(idSala, nuovo); setNuova(null); mostra('Prenotazione aggiunta ✓');
+          }} />
+      )}
+
+        {avviso}
+      </View>
+    );
+  }
 
   return (
     <View style={S.screen}>
@@ -245,7 +344,7 @@ export default function SaleScreen() {
       {!!Sala3D && (
         <View style={{ height: altoScena, marginTop: 10, backgroundColor: COLORS.contenitore }}>
           <RiparoSala suRotto={senza3d}>
-            <Sala3D dati={scenaDati} suTavolata={suTavolata} suStato={setScena} />
+            <Sala3D dati={scenaDati} suTavolata={suTavolata} suSposta={suSposta} suStato={setScena} />
           </RiparoSala>
         </View>
       )}
@@ -316,23 +415,36 @@ export default function SaleScreen() {
         </View>
         {tot.tavolate > 0 && (
           <Bottone testo="Svuota questa sala" ghost colore={COLORS.danger}
-            onPress={() => conferma('Svuotare la sala?', `Verranno tolte tutte le tavolate della ${sala.nome.toLowerCase()} per ${fmtData(data)} a ${servizio.toLowerCase()}${tot.prenotate ? `, con ${plurale(tot.prenotate, 'prenotazione', 'prenotazioni')}` : ''}.`, () => cambiaFile(pianoVuoto(sala).file))} />
+            onPress={() => conferma('Svuotare la sala?', `Verranno tolte tutte le tavolate della ${sala.nome.toLowerCase()} per ${fmtData(data)} a ${servizio.toLowerCase()}${tot.prenotate ? `, con ${plurale(tot.prenotate, 'prenotazione', 'prenotazioni')}` : ''}.`, () => cambiaPiano(idSala, pianoVuoto(sala)))} />
         )}
         <Text style={[S.muted, { marginTop: 12, marginLeft: 4 }]}>
-          Le sale sono disegnate dalle piante con misure stimate. Davanti a ingresso, cucina e bagni resta sempre libero un metro e mezzo.
+          Per spostare una prenotazione tienila premuta sulla piantina e trascinala su un'altra fila. Girando il telefono in orizzontale
+          vedi le due sale insieme e la sposti anche dall'una all'altra. Le sale sono disegnate dalle piante con misure stimate;
+          davanti a ingresso, cucina e bagni resta sempre libero un metro e mezzo.
         </Text>
       </ScrollView>
 
-      {!!posizione && (
-        <SchedaTavolata sala={sala} piano={piano} fila={posizione.i} tavolata={piano.file[posizione.i][posizione.j]} sigla={nomi[scelta]}
+      {!!aperta && (
+        <SchedaTavolata sala={SALE[aperta.sala]} piano={piani[aperta.sala]} fila={aperta.f} tavolata={aperta.t} sigla={sigle(SALE[aperta.sala], piani[aperta.sala])[scelta]}
+          destinazioni={destinazioni}
           onChiudi={() => setScelta(null)}
-          onSalva={(t) => { cambiaFile(piano.file.map((f) => f.map((x) => (x.id === t.id ? t : x)))); setScelta(null); mostra('Salvato ✓'); }}
-          onElimina={() => { cambiaFile(piano.file.map((f) => f.filter((x) => x.id !== scelta))); setScelta(null); }} />
+          onSalva={(t) => {
+            // resta dov'è, o nel posto libero più vicino se allungandola non ci sta più
+            const nuovo = metti(SALE[aperta.sala], piani[aperta.sala], aperta.f, t, aperta.t.p === null ? null : aperta.t.p + lunghezza(aperta.t) / 2);
+            if (!nuovo) { mostra('In questa fila non c\'è posto per una tavolata così lunga'); return; }
+            cambiaPiano(aperta.sala, nuovo); setScelta(null); mostra('Salvato ✓');
+          }}
+          onSposta={(aSala, f) => { if (sposta(scelta, aSala, f)) { setScelta(null); mostra('Spostata ✓'); } }}
+          onElimina={() => { cambiaPiano(aperta.sala, togli(SALE[aperta.sala], piani[aperta.sala], scelta)); setScelta(null); }} />
       )}
       {!!nuova && (
         <SchedaTavolata nuova sala={sala} piano={piano} fila={nuova.fila} tavolata={nuova.tavolata}
           onChiudi={() => setNuova(null)}
-          onSalva={(t) => { cambiaFile(piano.file.map((f, i) => (i === nuova.fila ? [...f, t] : f))); setNuova(null); mostra('Prenotazione aggiunta ✓'); }} />
+          onSalva={(t) => {
+            const nuovo = metti(sala, piano, nuova.fila, t);
+            if (!nuovo) { mostra('In questa fila non c\'è posto'); return; }
+            cambiaPiano(idSala, nuovo); setNuova(null); mostra('Prenotazione aggiunta ✓');
+          }} />
       )}
 
       <Modal visible={finestra === 'modelli'} animationType="slide" onRequestClose={() => setFinestra(null)}>
