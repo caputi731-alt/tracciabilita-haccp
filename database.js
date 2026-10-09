@@ -1390,6 +1390,23 @@ export const listaProduzioni = () =>
      LEFT JOIN ricette r ON r.id = pr.ricetta_id
      ORDER BY pr.data_ora DESC`);
 
+/** Produzioni fra cui scegliere per un'etichetta: non annullate e non scadute (senza scadenza comprese), dalla più recente. */
+export const produzioniPerEtichette = (oggi = oggiLocale()) =>
+  query(
+    `SELECT pr.id, COALESCE(NULLIF(pr.nome, ''), pr.nome_ricetta, r.nome, 'Produzione') AS nome, pr.ricetta_id, pr.data_ora,
+            pr.lotto_produzione, pr.data_scadenza, pr.operatore, pr.allergeni
+     FROM produzioni pr LEFT JOIN ricette r ON r.id = pr.ricetta_id
+     WHERE COALESCE(pr.annullata, 0) = 0 AND (pr.data_scadenza IS NULL OR pr.data_scadenza = '' OR pr.data_scadenza >= ?)
+     ORDER BY pr.data_ora DESC, pr.id DESC LIMIT 300`, [oggi]);
+
+/* Foglio di etichette preparato e non ancora stampato: resta sul telefono (preferenze locali, non va nel backup)
+   finché non viene stampato o svuotato. */
+export async function foglioEtichette() {
+  try { const l = JSON.parse((await leggiPreferenza('etichette_foglio')) || '[]'); return Array.isArray(l) ? l : []; }
+  catch (e) { return []; }
+}
+export const salvaFoglioEtichette = (lista) => salvaPreferenza('etichette_foglio', JSON.stringify(Array.isArray(lista) ? lista : []));
+
 export async function getProduzione(id) {
   const pr = await queryOne(
     `SELECT pr.*, r.nome AS ricetta FROM produzioni pr

@@ -376,3 +376,21 @@ test('i dati del Menù entrano nel backup e un backup vecchio non li cancella', 
   await db.importaTutto(vecchio);
   assert.equal(await db.menuLeggi('state'), '{"v":3,"menus":["nuovo"]}');
 });
+
+test('etichette: produzioni non scadute fra cui scegliere e foglio preparato che resta fino alla stampa', async () => {
+  const oggi = oggiLocale();
+  await db.exec("INSERT INTO produzioni (nome, data_ora, lotto_produzione, data_scadenza, allergeni) VALUES ('Ragù etichetta', ?, 'PE1', ?, '[\"Sedano\"]')", [new Date().toISOString(), piuGiorni(oggi, 2)]);
+  await db.exec("INSERT INTO produzioni (nome, data_ora, lotto_produzione, data_scadenza) VALUES ('Brodo scaduto', ?, 'PE2', ?)", [new Date().toISOString(), piuGiorni(oggi, -1)]);
+  await db.exec("INSERT INTO produzioni (nome, data_ora, lotto_produzione) VALUES ('Senza scadenza', ?, 'PE3')", [new Date().toISOString()]);
+  await db.exec("INSERT INTO produzioni (nome, data_ora, lotto_produzione, annullata) VALUES ('Annullata', ?, 'PE4', 1)", [new Date().toISOString()]);
+  const lotti = (await db.produzioniPerEtichette()).map((p) => p.lotto_produzione);
+  assert.ok(lotti.includes('PE1') && lotti.includes('PE3'));
+  assert.ok(!lotti.includes('PE2') && !lotti.includes('PE4'));
+  // il foglio
+  assert.deepEqual(await db.foglioEtichette(), []);
+  await db.salvaFoglioEtichette([{ tipo: 'Produzione', nome: 'Ragù etichetta', lotto: 'PE1' }, { tipo: 'Apertura', nome: 'Panna' }]);
+  assert.deepEqual((await db.foglioEtichette()).map((e) => e.nome), ['Ragù etichetta', 'Panna']);
+  assert.ok(!('preferenze' in (await db.esportaTutto()).tabelle));
+  await db.salvaFoglioEtichette([]);
+  assert.deepEqual(await db.foglioEtichette(), []);
+});

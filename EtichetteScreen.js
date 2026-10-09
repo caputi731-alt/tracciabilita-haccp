@@ -1,10 +1,12 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, ScrollView, Alert } from 'react-native';
+import { View, Text, ScrollView, Alert, TouchableOpacity } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Print from 'expo-print';
-import { S, COLORS, ALLERGENI, fmtData, oggiLocale, piuGiorni, escHtml as h } from './theme';
-import { Campo, Chips, Selettore, Bottone, CampoData } from './UI';
-import { listaProdotti, leggiAllergeni } from './database';
+import { S, COLORS, ALLERGENI, fmtData, oggiLocale, piuGiorni, giornoDi, escHtml as h } from './theme';
+import { Campo, Chips, Segmenti, Selettore, Bottone, CampoData, Icona, useAvviso } from './UI';
+import {
+  listaProdotti, leggiAllergeni, produzioniPerEtichette, allergeniRicetta, foglioEtichette, salvaFoglioEtichette,
+} from './database';
 
 const oggiISO = oggiLocale;
 const oraNow = () => {
@@ -22,6 +24,13 @@ const lottoAuto = () => {
   return `P${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
 };
 
+const ORIGINI = ['Prodotto', 'Produzione'];
+const oraDi = (istante) => {
+  const d = new Date(istante);
+  if (Number.isNaN(d.getTime())) return oraNow();
+  const p = (n) => String(n).padStart(2, '0');
+  return `${p(d.getHours())}:${p(d.getMinutes())}`;
+};
 const TIPI = ['Produzione', 'Apertura', 'Congelamento', 'Allergeni'];
 const FORMATI = ['Foglio A4', 'Termica'];
 const STATI = ['Cotto', 'Scongelato', 'Abbattuto +3°C', 'Abbattuto -18°C'];
@@ -143,9 +152,34 @@ export default function EtichetteScreen({ route }) {
   const [stato, setStato] = useState([]);
   const [allergeni, setAllergeni] = useState([]);
 
-  const [elenco, setElenco] = useState([]);
+  // il foglio preparato resta sul telefono finché non viene stampato o svuotato: le etichette si aggiungono durante la giornata
+  const [elenco, setElencoStato] = useState([]);
+  const setElenco = useCallback((lista) => { setElencoStato(lista); salvaFoglioEtichette(lista).catch(() => {}); }, []);
+  const { mostra, avviso } = useAvviso();
+  // l'etichetta parte da un prodotto del catalogo oppure da una produzione registrata (non scaduta)
+  const [origine, setOrigine] = useState('Prodotto');
+  const [produzioni, setProduzioni] = useState([]);
+  const [produzioneId, setProduzioneId] = useState(null);
 
-  useFocusEffect(useCallback(() => { listaProdotti().then(setProdotti); }, []));
+  useFocusEffect(useCallback(() => {
+    listaProdotti().then(setProdotti);
+    produzioniPerEtichette().then(setProduzioni).catch(() => {});
+    foglioEtichette().then(setElencoStato).catch(() => {});
+  }, []));
+
+  const scegliProduzione = async (id) => {
+    setProduzioneId(id);
+    const pr = produzioni.find((x) => x.id === id);
+    if (!pr) return;
+    setTipo('Produzione'); setProdottoId(null);
+    setNome(pr.nome || ''); setLotto(pr.lotto_produzione || '');
+    setDataRif(giornoDi(pr.data_ora) || oggiISO()); setOra(oraDi(pr.data_ora));
+    setScadenza(pr.data_scadenza || ''); setOperatore(pr.operatore || '');
+    // allergeni fotografati al momento della produzione (per i dati vecchi: dalla ricetta)
+    const salvati = leggiAllergeni(pr.allergeni);
+    setAllergeni(salvati.length || !pr.ricetta_id ? salvati : await allergeniRicetta(pr.ricetta_id).catch(() => []));
+  };
+  const cambiaOrigine = (o) => { setOrigine(o); setProdottoId(null); setProduzioneId(null); };
 
   const scegliProdotto = (id) => {
     setProdottoId(id);
@@ -187,7 +221,7 @@ export default function EtichetteScreen({ route }) {
   });
 
   const svuotaCampi = () => {
-    setProdottoId(null); setNome(''); setDataRif(oggiISO()); setOra(oraNow());
+    setProdottoId(null); setProduzioneId(null); setNome(''); setDataRif(oggiISO()); setOra(oraNow());
     setScadenza(''); setLotto(''); setOperatore(''); setNote('');
     setStato([]); setAllergeni([]);
   };
@@ -196,8 +230,10 @@ export default function EtichetteScreen({ route }) {
     if (!nome && tipo !== 'Allergeni') {
       return Alert.alert('Manca il nome', 'Indica il prodotto o scrivi un nome.');
     }
-    setElenco((e) => [...e, snapshot()]);
+    const lista = [...elenco, snapshot()];
+    setElenco(lista);
     svuotaCampi();
+    mostra(`Aggiunta al foglio ✓ (${lista.length} in attesa)`);
   };
 
   const stampaFoglio = async () => {
@@ -209,7 +245,13 @@ export default function EtichetteScreen({ route }) {
       lista = [snapshot()];
     }
     try { await Print.printAsync({ html: docA4(lista) }); }
-    catch (e) { Alert.alert('Stampa non riuscita', String(e?.message || e)); }
+    catch (e) { return Alert.alert('Stampa non riuscita', String(e?.message || e)); }
+    // dopo la stampa il foglio si svuota da solo (scelta di Luca); "Annulla" lo riporta se la stampa non è andata
+    if (elenco.length > 0) {
+      const prima = elenco;
+      setElenco([]);
+      mostra('Foglio stampato e svuotato', { testo: 'Annulla', onPress: () => setElenco(prima) });
+    }
   };
 
   const stampaTermica = async () => {
@@ -221,8 +263,14 @@ export default function EtichetteScreen({ route }) {
   };
 
   return (
+    <View style={{ flex: 1 }}>
     <ScrollView style={S.screen} contentContainerStyle={S.content}>
       <Text style={S.h1}>Etichette</Text>
+      {elenco.length > 0 && (
+        <Text style={[S.muted, { marginBottom: 4 }]}>
+          Foglio in preparazione: {elenco.length} etichett{elenco.length === 1 ? 'a' : 'e'} da stampare.
+        </Text>
+      )}
       <Chips label="Tipo di etichetta" opzioni={TIPI} valore={tipo} onChange={setTipo} />
       <Chips label="Formato di stampa" opzioni={FORMATI} valore={formato} onChange={setFormato} />
       {formato === 'Termica' && (
@@ -231,9 +279,21 @@ export default function EtichetteScreen({ route }) {
       )}
 
       <View style={[S.card, { marginTop: 12 }]}>
-        <Selettore label="Prodotto (dal catalogo)" elementi={prodotti} valore={prodottoId}
-          etichetta={(x) => x.denominazione} onChange={scegliProdotto}
-          placeholder="Scegli, oppure scrivi il nome sotto" />
+        <Text style={S.label}>Etichetta per</Text>
+        <Segmenti opzioni={ORIGINI} valore={origine} onChange={cambiaOrigine} />
+        {origine === 'Prodotto' ? (
+          <Selettore label="Prodotto (dal catalogo)" elementi={prodotti} valore={prodottoId}
+            etichetta={(x) => x.denominazione} onChange={scegliProdotto}
+            placeholder="Scegli, oppure scrivi il nome sotto" />
+        ) : (
+          <>
+            <Selettore label="Produzione (non scaduta)" elementi={produzioni} valore={produzioneId}
+              etichetta={(x) => `${x.nome} · ${fmtData(giornoDi(x.data_ora))}${x.lotto_produzione ? ` · ${x.lotto_produzione}` : ''}`}
+              onChange={scegliProduzione}
+              placeholder={produzioni.length ? 'Scegli la produzione' : 'Nessuna produzione non scaduta'} />
+            <Text style={S.muted}>Nome, lotto, date e allergeni vengono dalla produzione; puoi correggerli qui sotto.</Text>
+          </>
+        )}
         <Campo label={tipo === 'Allergeni' ? 'Nome del piatto' : 'Nome prodotto'}
           value={nome} onChange={setNome} />
 
@@ -275,8 +335,18 @@ export default function EtichetteScreen({ route }) {
           <View style={[S.card, { marginTop: 4 }]}>
             <Text style={{ fontWeight: '700' }}>Nel foglio: {elenco.length} etichett{elenco.length === 1 ? 'a' : 'e'}</Text>
             {elenco.map((e, i) => (
-              <Text key={i} style={S.muted}>{i + 1}. {e.nome || '(senza nome)'} — {e.tipo}</Text>
+              <View key={i} style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={[S.muted, { flex: 1 }]}>{i + 1}. {e.nome || '(senza nome)'} — {e.tipo}</Text>
+                <TouchableOpacity onPress={() => setElenco(elenco.filter((_, j) => j !== i))}
+                  accessibilityRole="button" accessibilityLabel={`Togli dal foglio ${e.nome || 'etichetta'}`}
+                  style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
+                  <Icona nome="close" size={22} colore={COLORS.muted} />
+                </TouchableOpacity>
+              </View>
             ))}
+            <Text style={[S.muted, { marginTop: 4 }]}>
+              Il foglio resta salvato anche se esci: aggiungi le etichette durante la giornata e stampa quando vuoi.
+            </Text>
             {elenco.length > 0 && (
               <Bottone testo="Svuota il foglio" ghost onPress={() => setElenco([])} />
             )}
@@ -285,6 +355,7 @@ export default function EtichetteScreen({ route }) {
           <Text style={[S.muted, { marginTop: 8 }]}>
             Ogni etichetta ha la dimensione di 1/8 di foglio A4. Oltre le 8, continua su
             pagine successive. Se il foglio è vuoto, stampa l'etichetta compilata qui sopra.
+            Dopo la stampa il foglio si svuota da solo.
           </Text>
         </>
       ) : (
@@ -299,5 +370,7 @@ export default function EtichetteScreen({ route }) {
 
       <Bottone testo="Svuota campi" ghost onPress={svuotaCampi} />
     </ScrollView>
+    {avviso}
+    </View>
   );
 }

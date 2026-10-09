@@ -93,6 +93,10 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
   del codice Android della libreria. Lo stesso PIN apre incassi e costi; "Ho dimenticato il PIN" chiede il PUK (vedi "Incassi e costi").
 - Foto: sempre tramite `useFoto()` (UI.js), che copia in `documentDirectory/foto/` (`foto.js`); mai salvare URI della cache.
   Visualizzazione con `AnteprimaFoto`. Il backup automatico copia le foto nella sottocartella `foto` e `recuperaFotoMancanti` le riporta dopo una reinstallazione.
+- Etichette (`EtichetteScreen.js`, scelte di Luca del 9/10/2026): l'etichetta parte da un Prodotto del catalogo oppure da una Produzione
+  (`produzioniPerEtichette`: non annullate e non scadute; nome, lotto, date e allergeni vengono dalla produzione). Il foglio A4 si prepara
+  durante la giornata senza stampare: resta nelle preferenze locali (`foglioEtichette` / `salvaFoglioEtichette`, non va nel backup) finché
+  non viene stampato o svuotato; dopo la stampa si svuota da solo, con "Annulla" nell'avviso per riaverlo.
 - Stati del lotto: disponibile, esaurito, bloccato (richiamo), annullato. Usare `statoDopo()` quando cambia la giacenza: bloccato/annullato non si perdono.
 - Allergeni: `prodotti.allergeni_verificati` (1 quando il prodotto è salvato dall'anagrafica, 0 se creato dalle fatture). `tabellaAllergeni()` + `htmlTabellaAllergeni()` per il documento clienti.
 - Schema: una sola definizione per tabella in `initDatabase`; le colonne nuove si aggiungono con `aggiungiSeManca`.
