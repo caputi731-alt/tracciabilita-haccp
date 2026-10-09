@@ -25,26 +25,29 @@ const rett = (x, y, w, h) => ({ x, y, w, h });
  * - contorno: i muri, visti dall'alto; ostacoli: pilastri e paravento (niente tavoli);
  * - porte: { x1, y1, x2, y2, nome } sul muro; zone: rettangoli lasciati liberi davanti alle porte;
  * - file: dove stanno i tavoli. asse 'x' = fila orizzontale nel disegno ('y' = verticale), `c` = centro della fila
- *   sull'altro asse, `tratti` = pezzi di fila utilizzabili [da, a] lungo l'asse.
+ *   sull'altro asse, `tratti` = pezzi di fila utilizzabili [da, a] lungo l'asse; `seconda` = fila usata solo ogni tanto:
+ *   una prenotazione nuova ci finisce da sola soltanto se nelle altre non c'è posto.
  */
 export const SALE = {
+  // lunga 17 m (9/10/2026): Luca dice che è più lunga di come l'avevo stimata e che a destra dell'ingresso, in un'unica
+  // tavolata, stanno 21 persone (7,5 m); l'allungamento è tutto verso il fondo, dove c'è la porta della cucina
   stalla: {
     id: 'stalla', nome: 'Sala antica stalla', sigla: 'S',
-    contorno: [[0, 0], [15.8, 0], [15.8, 6.5], [0, 6.5]],
+    contorno: [[0, 0], [17, 0], [17, 6.5], [0, 6.5]],
     ostacoli: [
-      rett(2.8, 0, 0.5, 0.5), rett(5.7, 0, 0.6, 0.5), rett(8.6, 0, 0.5, 0.5), rett(11.4, 0, 0.5, 0.5), rett(14.1, 0, 0.4, 0.5),
-      rett(2.8, 6.0, 0.6, 0.5), rett(5.7, 6.0, 1.1, 0.5), rett(8.15, 6.0, 1.65, 0.5), rett(11.5, 6.0, 0.5, 0.5), rett(14.1, 6.1, 0.4, 0.4),
+      rett(2.8, 0, 0.5, 0.5), rett(5.7, 0, 0.6, 0.5), rett(8.6, 0, 0.5, 0.5), rett(11.4, 0, 0.5, 0.5), rett(14.3, 0, 0.5, 0.5),
+      rett(2.8, 6.0, 0.6, 0.5), rett(5.7, 6.0, 1.1, 0.5), rett(8.15, 6.0, 1.65, 0.5), rett(11.5, 6.0, 0.5, 0.5), rett(14.3, 6.0, 0.5, 0.5),
     ],
     // l'ingresso è solo quello di sinistra, vicino alle scale; verso la cucina conta solo la porta in fondo (scelte di Luca)
     porte: [
       { x1: 6.8, y1: 6.5, x2: 8.15, y2: 6.5, nome: 'Ingresso' },
-      { x1: 14.7, y1: 0, x2: 15.8, y2: 0, nome: 'Cucina' },
+      { x1: 15.9, y1: 0, x2: 17, y2: 0, nome: 'Cucina' },
       { x1: 1.0, y1: 0, x2: 2.1, y2: 0, nome: 'Bagni' },
     ],
-    zone: [rett(6.6, 5.0, 1.75, 1.5), rett(14.5, 0, 1.3, 1.5), rett(0.8, 0, 1.5, 1.5)],
+    zone: [rett(6.6, 5.0, 1.75, 1.5), rett(15.7, 0, 1.3, 1.5), rett(0.8, 0, 1.5, 1.5)],
     file: [
-      { id: 'A', nome: 'Fila A · lato cucina', asse: 'x', c: 1.75, tratti: [[2.5, 14.3]] },
-      { id: 'B', nome: 'Fila B · lato ingresso', asse: 'x', c: 4.75, tratti: [[0.8, 6.4], [8.55, 15.0]] },
+      { id: 'A', nome: 'Fila A · lato cucina', asse: 'x', c: 1.75, tratti: [[2.5, 15.5]] },
+      { id: 'B', nome: 'Fila B · lato ingresso', asse: 'x', c: 4.75, tratti: [[0.8, 6.4], [8.55, 16.2]] },
     ],
   },
   // larga 7 m (scelta di Luca del 9/10/2026: la fila centrale ci sta); oltre alle tre file verticali ci sono tre file
@@ -64,9 +67,9 @@ export const SALE = {
       // la B resta la seconda: i piani salvati prima della fila centrale tengono le prenotazioni dove erano
       { id: 'B', nome: 'Fila B · lato cucina', asse: 'y', c: 5.75, tratti: [[3.8, 9.2]] },
       { id: 'C', nome: 'Fila C · centrale', asse: 'y', c: 3.5, tratti: [[3.4, 8.2]] },
-      { id: 'D', nome: 'Fila D · orizzontale in alto', asse: 'x', c: 3.9, tratti: [[0.8, 5.3]] },
-      { id: 'E', nome: 'Fila E · orizzontale al centro', asse: 'x', c: 6.0, tratti: [[0.8, 6.2]] },
-      { id: 'F', nome: 'Fila F · orizzontale verso l\'ingresso', asse: 'x', c: 7.75, tratti: [[0.8, 6.2]] },
+      { id: 'D', nome: 'Fila D · orizzontale in alto', asse: 'x', c: 3.9, tratti: [[0.8, 5.3]], seconda: true },
+      { id: 'E', nome: 'Fila E · orizzontale al centro', asse: 'x', c: 6.0, tratti: [[0.8, 6.2]], seconda: true },
+      { id: 'F', nome: 'Fila F · orizzontale verso l\'ingresso', asse: 'x', c: 7.75, tratti: [[0.8, 6.2]], seconda: true },
     ],
   },
 };
@@ -212,6 +215,31 @@ export function metti(sala, piano, f, tavolata, centro = null) {
   if (p === null) return null;
   file[f] = [...file[f], { ...tavolata, p }].sort((a, b) => (a.p === null) - (b.p === null) || a.p - b.p);
   return { file };
+}
+
+/**
+ * Il posto migliore per una tavolata nuova lunga `len`: lo spazio libero più piccolo in cui entra, così i tratti lunghi
+ * restano per i gruppi grandi; a parità, la prima fila. Dentro lo spazio va all'inizio, accanto a quello che c'è già.
+ * → { f, p, avanza (metri che restano liberi in quello spazio) } oppure null se non entra da nessuna parte.
+ */
+export function postoMigliore(sala, piano, len) {
+  const presi = ingombri(sala, sistemaPiano(sala, piano).file);
+  let meglio = null;
+  // prima le file di tutti i giorni; quelle segnate `seconda` (le orizzontali della panoramica, usate ogni tanto) solo se serve
+  [false, true].forEach((seconda) => { if (meglio) return; sala.file.forEach((fila, f) => { if (!!fila.seconda === seconda) fila.tratti.forEach(([da, a]) => {
+    let inizio = null, ultimo = null;
+    const chiudi = () => {
+      if (inizio === null) return;
+      const avanza = decimo(ultimo - inizio);            // di quanto si può ancora spostare dentro questo spazio
+      if (!meglio || avanza < meglio.avanza - 1e-9) meglio = { f, p: inizio, avanza };
+      inizio = null;
+    };
+    for (let p = da; p + len <= a + 1e-6; p = decimo(p + 0.1)) {
+      if (libero(fila, presi, p, len)) { if (inizio === null) inizio = decimo(p); ultimo = decimo(p); } else chiudi();
+    }
+    chiudi();
+  }); }); });
+  return meglio;
 }
 
 /** Il piano senza quella tavolata. */

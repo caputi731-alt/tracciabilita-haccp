@@ -11,13 +11,13 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { View, Text, ScrollView, TouchableOpacity, Modal, BackHandler, useWindowDimensions } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, TEMA_SCURO, aNumero, oggiLocale, fmtData } from './theme';
-import { Icona, Bottone, Campo, CampoData, Segmenti, Selettore, Sezione, VistaModale, conferma, useAvviso, useErrori } from './UI';
+import { Icona, Bottone, Campo, CampoData, Segmenti, Sezione, VistaModale, conferma, useAvviso, useErrori } from './UI';
 import {
   disposizioneGiorno, salvaDisposizioneGiorno, modelliSale, salvaModelloSale, eliminaModelloSale, getImpostazioni,
 } from './database';
 import {
   SALE, ID_SALE, SERVIZI, LUNGA_MIN, LUNGA_MAX, posti, lunghezza, lunghezzaPer, restoFila, entra, pianoVuoto, sistemaPiano, senzaPrenotazioni,
-  nuovaTavolata, disponi, sigle, totali, datiScenaSala, datiScenaSale, metri, metti, togli, trova, filaVicina,
+  nuovaTavolata, disponi, sigle, totali, datiScenaSala, datiScenaSale, metri, metti, togli, trova, filaVicina, postoMigliore,
 } from './sale';
 import { htmlDisposizioneSale } from './report';
 import { condividiPdf } from './condividi';
@@ -56,7 +56,7 @@ function moduloSala() {
 }
 
 /** Una prenotazione e la sua tavolata: dalle persone la lunghezza, che si può correggere a mano. */
-function SchedaTavolata({ sala, piano, fila, tavolata, sigla, nuova, destinazioni = [], luoghi = [], onLuogo, onSalva, onSposta, onElimina, onChiudi }) {
+function SchedaTavolata({ sala, piano, fila, tavolata, sigla, nuova, massimaNuova = 0, destinazioni = [], onSalva, onSposta, onElimina, onChiudi }) {
   const [t, setT] = useState(tavolata);
   const { errori, segnala, azzera, riepilogo } = useErrori();
   useEffect(() => { setT(tavolata); azzera(); }, [tavolata.id, azzera])
@@ -64,7 +64,8 @@ function SchedaTavolata({ sala, piano, fila, tavolata, sigla, nuova, destinazion
   const len = lunghezza(t);
   const p = posti(len);
   const troppi = persone !== null && persone > p.posti;
-  const massima = restoFila(sala, piano, fila, tavolata.id);   // la più lunga che entra in questa fila, senza contare lei
+  // la più lunga che entra: in questa fila senza contare lei, oppure (prenotazione nuova) in una fila qualsiasi
+  const massima = nuova ? massimaNuova : restoFila(sala, piano, fila, tavolata.id);
   const nonEntra = len > massima + 1e-9;
   const tasto = (icona, d, attivo, voce) => (
     <TouchableOpacity onPress={() => setT((v) => ({ ...v, len: Math.round((lunghezza(v) + d) * 10) / 10 }))} disabled={!attivo}
@@ -77,7 +78,7 @@ function SchedaTavolata({ sala, piano, fila, tavolata, sigla, nuova, destinazion
   const salva = () => {
     azzera();
     if (String(t.persone).trim() && (persone === null || persone < 0 || !Number.isInteger(persone))) return segnala('persone', 'Scrivi il numero di persone, per esempio 8');
-    if (nonEntra) return segnala('len', massima > 0 ? `In questa fila entra al massimo una tavolata di ${metri(massima)}` : 'In questa fila non c\'è più posto');
+    if (nonEntra) return segnala('len', massima > 0 ? `${nuova ? 'Adesso' : 'In questa fila'} entra al massimo una tavolata di ${metri(massima)}` : 'Non c\'è più posto');
     return onSalva({ ...t, nome: t.nome.trim(), persone: persone ? String(persone) : '', ora: t.ora.trim(), note: t.note.trim() });
   };
 
@@ -85,7 +86,7 @@ function SchedaTavolata({ sala, piano, fila, tavolata, sigla, nuova, destinazion
     <Modal visible animationType="slide" onRequestClose={onChiudi}>
       <VistaModale>
         <Text style={{ fontSize: 13, fontWeight: '700', letterSpacing: 1, color: COLORS.muted }}>
-          {sala.nome.toUpperCase()} · {sala.file[fila].nome.toUpperCase()}
+          {nuova ? 'LA METTO NEL POSTO MIGLIORE: POI LA SPOSTI TRASCINANDOLA' : `${sala.nome.toUpperCase()} · ${sala.file[fila].nome.toUpperCase()}`}
         </Text>
         <Text style={S.h1}>{nuova ? 'Nuova prenotazione' : `Tavolo ${sigla}`}</Text>
 
@@ -105,10 +106,6 @@ function SchedaTavolata({ sala, piano, fila, tavolata, sigla, nuova, destinazion
 
         <View style={[S.card, (nonEntra || troppi) && { borderWidth: 1.5, borderColor: COLORS.danger }]}>
           <Text style={S.h2}>Tavolata da preparare</Text>
-          {nuova && luoghi.length > 0 && (
-            <Selettore label="Dove la metti" elementi={luoghi} valore={`${sala.id}|${fila}`} etichetta={(q) => q.nome}
-              onChange={(id) => { const q = luoghi.find((x) => x.id === id); if (q) onLuogo(q); }} placeholder="Scegli la fila" />
-          )}
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             {tasto('minus', -0.1, len > LUNGA_MIN + 1e-9, 'Accorcia di 10 centimetri')}
             <View style={{ flex: 1, alignItems: 'center' }}>
@@ -132,7 +129,8 @@ function SchedaTavolata({ sala, piano, fila, tavolata, sigla, nuova, destinazion
             <Bottone testo={`Torna al calcolo (${metri(lunghezzaPer(persone))})`} ghost onPress={() => setT((v) => ({ ...v, len: null }))} />
           )}
           <Text style={[S.muted, { marginTop: 8 }, nonEntra && { color: COLORS.danger, fontWeight: '700' }]}>
-            {massima > 0 ? `In questa fila entra ancora una tavolata fino a ${metri(massima)}.` : 'In questa fila non c\'è più posto: usa l\'altra fila o l\'altra sala.'}
+            {nuova ? (massima > 0 ? `Adesso entra una tavolata fino a ${metri(massima)}.` : 'Non c\'è più posto in nessuna fila.')
+              : massima > 0 ? `In questa fila entra ancora una tavolata fino a ${metri(massima)}.` : 'In questa fila non c\'è più posto: usa l\'altra fila o l\'altra sala.'}
           </Text>
           {riepilogo}
         </View>
@@ -175,7 +173,7 @@ export default function SaleScreen({ suTuttoSchermo }) {
   const [modelli, setModelli] = useState([]);
   const [scena, setScena] = useState('attesa');
   const [scelta, setScelta] = useState(null); // id della tavolata aperta
-  const [nuova, setNuova] = useState(null);   // { sala, fila, tavolata } mentre si scrive una prenotazione nuova
+  const [nuova, setNuova] = useState(null);   // { tavolata } mentre si scrive una prenotazione nuova
   const [insieme, setInsieme] = useState(false); // le due sale insieme, a tutto schermo e in orizzontale
   const [finestra, setFinestra] = useState(null); // 'modelli'
   const [nomeModello, setNomeModello] = useState('');
@@ -296,11 +294,20 @@ export default function SaleScreen({ suTuttoSchermo }) {
     </TouchableOpacity>
   );
 
-  // dove si può mettere una prenotazione nuova: tutte le file delle due sale che hanno ancora posto
-  const luoghi = useMemo(() => ID_SALE.flatMap((id) => SALE[id].file.map((fila, f) => {
-    const resto = restoFila(SALE[id], piani[id], f);
-    return { id: `${id}|${f}`, sala: id, f, resto, nome: `${SALE[id].nome.replace('Sala ', '').replace(/^./, (c) => c.toUpperCase())} · ${fila.nome} · ${resto > 0 ? `liberi ${metri(resto)}` : 'piena'}` };
-  })), [piani]);
+  // una prenotazione nuova va da sola nel posto migliore: nella sala che si sta guardando (o, se lì non entra, nell'altra);
+  // con le due sale insieme, in quella dove avanza meno spazio
+  const saleNuova = useMemo(() => (insieme ? ID_SALE : [idSala, ...ID_SALE.filter((id) => id !== idSala)]), [insieme, idSala]);
+  const massimaNuova = useMemo(() => Math.max(0, ...saleNuova.flatMap((id) => SALE[id].file.map((_, f) => restoFila(SALE[id], piani[id], f)))), [saleNuova, piani]);
+  const aggiungi = (t) => {
+    const len = lunghezza(t);
+    const scelte = saleNuova.map((id) => ({ id, q: postoMigliore(SALE[id], piani[id], len) })).filter((x) => x.q);
+    const dove = insieme ? scelte.sort((a, b) => a.q.avanza - b.q.avanza)[0] : scelte[0];
+    const nuovo = dove && metti(SALE[dove.id], piani[dove.id], dove.q.f, t, dove.q.p + len / 2);
+    if (!nuovo) { mostra(`Non c'è posto per una tavolata di ${metri(len)}`); return; }
+    cambiaPiano(dove.id, nuovo); setNuova(null);
+    if (!insieme && dove.id !== idSala) setQuale(ID_SALE.indexOf(dove.id));
+    mostra(`Messa in ${SALE[dove.id].nome.toLowerCase()}, ${SALE[dove.id].file[dove.q.f].nome.replace(' · ', ' ').toLowerCase()}: per spostarla tienila premuta ✓`);
+  };
 
   const schede = (
     <>
@@ -318,16 +325,9 @@ export default function SaleScreen({ suTuttoSchermo }) {
           onElimina={() => { cambiaPiano(aperta.sala, togli(SALE[aperta.sala], piani[aperta.sala], scelta)); setScelta(null); }} />
       )}
       {!!nuova && (
-        <SchedaTavolata nuova sala={SALE[nuova.sala]} piano={piani[nuova.sala]} fila={nuova.fila} tavolata={nuova.tavolata}
-          luoghi={luoghi} onLuogo={(q) => setNuova((v) => ({ ...v, sala: q.sala, fila: q.f }))}
-          onChiudi={() => setNuova(null)}
-          onSalva={(t) => {
-            const nuovo = metti(SALE[nuova.sala], piani[nuova.sala], nuova.fila, t);
-            if (!nuovo) { mostra('In questa fila non c\'è posto'); return; }
-            cambiaPiano(nuova.sala, nuovo); setNuova(null); mostra('Prenotazione aggiunta ✓');
-          }} />
+        <SchedaTavolata nuova sala={sala} piano={piano} fila={0} tavolata={nuova.tavolata} massimaNuova={massimaNuova}
+          onChiudi={() => setNuova(null)} onSalva={aggiungi} />
       )}
-
     </>
   );
 
@@ -346,7 +346,7 @@ export default function SaleScreen({ suTuttoSchermo }) {
             <Icona nome="arrow-left" size={22} colore={COLORS.text} />
             <Text style={{ fontSize: 14, fontWeight: '700', color: COLORS.text, marginLeft: 6 }}>Elenco</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => { const q = luoghi.find((x) => x.resto >= LUNGA_MIN); if (q) setNuova({ sala: q.sala, fila: q.f, tavolata: nuovaTavolata() }); else mostra('Non c\'è più posto in nessuna fila'); }}
+          <TouchableOpacity onPress={() => setNuova({ tavolata: nuovaTavolata() })}
             activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Aggiungi una prenotazione"
             style={{ height: 48, borderRadius: 24, paddingLeft: 12, paddingRight: 16, backgroundColor: COLORS.terra, flexDirection: 'row', alignItems: 'center', elevation: 2 }}>
             <Icona nome="plus" size={22} colore={COLORS.suTerra} />
@@ -398,7 +398,7 @@ export default function SaleScreen({ suTuttoSchermo }) {
             : `${plurale(tot.tavolate, 'tavolata', 'tavolate')} · ${plurale(tot.persone, 'persona', 'persone')} · ${tot.posti} posti`}
         </Text>
         <Text style={[S.muted, { marginLeft: 4, marginBottom: 10 }]}>
-          {tot.tavolate === 0 ? 'Aggiungi una prenotazione nella fila dove vuoi metterla: la tavolata si dimensiona da sola.'
+          {tot.tavolate === 0 ? 'Aggiungi una prenotazione: la tavolata si dimensiona e si mette da sola nel posto migliore, poi la sposti trascinandola.'
             : `Da preparare: ${metri(tot.metri)} di tavoli${totTutte.tavolate > tot.tavolate ? ` · nelle due sale ${metri(totTutte.metri)} per ${plurale(totTutte.persone, 'persona', 'persone')}` : ''}`}
         </Text>
         {disposta.problemi.length > 0 && (
@@ -407,6 +407,9 @@ export default function SaleScreen({ suTuttoSchermo }) {
             {disposta.problemi.map((p) => <Text key={p} style={{ color: COLORS.danger, fontSize: 15, marginTop: 2 }}>{p}</Text>)}
           </View>
         )}
+
+        <Bottone testo="Aggiungi una prenotazione" icona="plus" onPress={() => setNuova({ tavolata: nuovaTavolata() })} />
+        <View style={{ height: 12 }} />
 
         {sala.file.map((fila, i) => {
           const resto = restoFila(sala, piano, i);
@@ -436,17 +439,6 @@ export default function SaleScreen({ suTuttoSchermo }) {
                     </TouchableOpacity>
                   );
                 })}
-                {resto >= LUNGA_MIN && (
-                  <TouchableOpacity onPress={() => setNuova({ sala: idSala, fila: i, tavolata: nuovaTavolata() })} activeOpacity={0.75} accessibilityRole="button"
-                    accessibilityLabel={`Aggiungi una prenotazione alla ${fila.nome}`}
-                    style={{
-                      minHeight: 64, borderRadius: 16, borderWidth: 1.5, borderStyle: 'dashed', borderColor: COLORS.bordoCampo,
-                      alignItems: 'center', justifyContent: 'center', flexDirection: 'row', paddingHorizontal: 14,
-                    }}>
-                    <Icona nome="plus" size={22} colore={COLORS.azione} />
-                    <Text style={{ fontSize: 14, fontWeight: '700', color: COLORS.azione, marginLeft: 4 }}>Prenotazione</Text>
-                  </TouchableOpacity>
-                )}
               </View>
             </View>
           );

@@ -171,7 +171,13 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
   Il pulsante "Due sale insieme" gira lo schermo in orizzontale (`expo-screen-orientation` ~8.0.4, `lockAsync`: lo decide il pulsante,
   NON la rotazione automatica del telefono, scelta di Luca; il resto dell'app resta in verticale) e mostra le due sale a tutto schermo
   (`datiScenaSale`): lì si aggiungono prenotazioni (scegliendo la fila) e si trascinano anche da una sala all'altra.
-- Sedie disegnate (`sedie` in sale.js): tante quante le persone prenotate; se la tavolata è libera, tante quanti i posti.
+- Sedie disegnate (`sedie` in sale.js): tante quante le persone prenotate (se la tavolata è libera, quanti i posti); prima si riempiono
+  i due lati lunghi, i capotavola per ultimi.
+- Prenotazione nuova (scelta di Luca del 9/10/2026): non si sceglie la fila. `postoMigliore` la mette nello spazio libero più piccolo in
+  cui entra (i tratti lunghi restano per i gruppi grandi), nella sala che si sta guardando o, se lì non entra, nell'altra; con le due
+  sale insieme, dove avanza meno spazio. Le file segnate `seconda` (le orizzontali della panoramica) si usano da sole solo se nelle
+  altre non c'è posto. Poi, se serve, si sposta trascinandola.
+- Antica stalla lunga 17 m (9/10/2026: Luca dice che a destra dell'ingresso, in un'unica tavolata, stanno 21 persone = 7,5 m).
 - Tabella `disposizioni` (nel backup, in `TABELLE_NUOVE`), due tipi di riga: `giorno` (data + servizio, con prenotazioni; ogni modifica
   si salva subito) e `modello` (disposizione con un nome, senza prenotazioni, lunghezze fissate, da applicare a un giorno).
   `pianoPulito` legge anche i piani della build 83 (`t180`/`t90`).

@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   SALE, posti, lunghezzaPer, lunghezza, entra, restoFila, pianoVuoto, pianoPulito, sistemaPiano, senzaPrenotazioni, disponi, sigle, totali,
-  datiScenaSala, datiScenaSale, nuovaTavolata, metti, togli, trova, filaVicina, ingombro, sedie, TRA_TAVOLI, LARGO,
+  datiScenaSala, datiScenaSale, nuovaTavolata, metti, togli, trova, filaVicina, postoMigliore, ingombro, sedie, TRA_TAVOLI, LARGO,
 } from '../sale.js';
 import {
   initDatabase, disposizioneGiorno, salvaDisposizioneGiorno, giorniConPrenotazioni, modelliSale, salvaModelloSale, eliminaModelloSale,
@@ -110,10 +110,14 @@ test('ogni prenotazione ha un posto suo: il primo libero, distanziata, mai sopra
   assert.ok(d.ok);
   const destra = d.tavolate.find((t) => t.len === 6.4), sinistra = d.tavolate.find((t) => t.len === 3);
   assert.ok(destra.p >= 8.55 - 1e-6 && sinistra.p + 3 <= 6.4 + 1e-6);
-  // l'antica stalla viene per prima; il tratto a destra dell'ingresso è un po' più lungo di quello a sinistra
+  // l'antica stalla viene per prima; a destra dell'ingresso, in un'unica tavolata, stanno 21 persone (detto da Luca)
   assert.deepEqual(Object.keys(SALE), ['stalla', 'panoramica']);
   const [sx, dx] = stalla.file[1].tratti.map(([da, a]) => a - da);
-  assert.ok(dx > sx && dx - sx < 1.5);
+  assert.ok(dx > sx);
+  const ventuno = metti(stalla, pianoVuoto(stalla), 1, T(21));
+  assert.ok(ventuno && disponi(stalla, ventuno).tavolate[0].p >= 8.55 - 1e-6);
+  assert.equal(disponi(stalla, ventuno).tavolate[0].posti, 22);
+  assert.equal(metti(stalla, pianoVuoto(stalla), 1, T(24, { p: 9 }), 12), null);   // 24 non ci stanno più
 });
 
 test('panoramica: fila centrale e file orizzontali, che si incrociano senza sovrapporsi', () => {
@@ -136,6 +140,29 @@ test('panoramica: fila centrale e file orizzontali, che si incrociano senza sovr
   assert.deepEqual(m.tavolate.map((t) => t.asse).sort(), ['x', 'y', 'y']);
   const oriz = m.tavolate.find((t) => t.asse === 'x'), vert = m.tavolate.find((t) => t.asse === 'y' && t.len === 3);
   assert.ok(vert.p >= oriz.y + 0.45 + TRA_TAVOLI - 1e-6, 'la verticale comincia sotto la orizzontale');
+});
+
+test('una prenotazione nuova va da sola nel posto migliore: lo spazio libero più piccolo in cui entra', () => {
+  // sala vuota: 21 persone entrano solo a destra dell'ingresso o nella fila lunga; va dove avanza meno
+  let q = postoMigliore(stalla, pianoVuoto(stalla), lunghezzaPer(21));
+  assert.deepEqual([q.f, q.p >= 8.55 - 0.06], [1, true]);
+  // un tavolo da 4 non va a spezzare la fila lunga: finisce nel tratto più corto
+  q = postoMigliore(stalla, pianoVuoto(stalla), lunghezzaPer(4));
+  assert.deepEqual([q.f, q.p], [1, 0.8]);
+  // fra due spazi liberi sceglie quello che riempie meglio, e ci si mette all'inizio, accanto a quello che c'è già
+  const p = piano(stalla, [[1, T(10)], [0, T(30)]]);          // B sinistra: restano 1,4 m; A: restano 1,3 m; B destra libera
+  q = postoMigliore(stalla, p, 0.9);
+  assert.deepEqual([q.f, q.p], [0, 14.2]);
+  assert.ok(disponi(stalla, metti(stalla, p, q.f, T(2), q.p + 0.45)).ok);
+  // panoramica: prima le file verticali; quelle orizzontali (usate ogni tanto) solo quando nelle altre non c'è più posto
+  q = postoMigliore(panoramica, pianoVuoto(panoramica), 2.3);
+  assert.equal(panoramica.file[q.f].asse, 'y');
+  const pieneInBasso = [[0, 3.5], [1, 3.5], [2, 2.5]].reduce((x, [f, len]) => metti(panoramica, x, f, nuovaTavolata({ len }), 5.7 + len / 2), pianoVuoto(panoramica));
+  q = postoMigliore(panoramica, pieneInBasso, 4);
+  assert.equal(panoramica.file[q.f].asse, 'x');
+  // non entra da nessuna parte
+  assert.equal(postoMigliore(stalla, pianoVuoto(stalla), 13.5), null);
+  assert.equal(postoMigliore(panoramica, piano(panoramica, [[0, T(22)], [1, T(14)], [2, T(12)]]), 0.9), null);
 });
 
 test('spostare una prenotazione: sulla fila più vicina a dove la si lascia, nel posto libero più vicino', () => {
