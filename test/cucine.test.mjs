@@ -1,7 +1,7 @@
 // Vista delle cucine: stato di ogni attrezzatura (cucine.js) e collegamenti salvati (database.js).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CUCINE, PULSANTI, TOCCHI, POSTI, FREDDI, limitiProposti, statiCucine, datiScena } from '../cucine.js';
+import { CUCINE, PULSANTI, POSTI, FREDDI, limitiProposti, statiCucine, datiScena } from '../cucine.js';
 import {
   initDatabase, collegaPosto, collegamentiCucina, salvaPuntoControllo, listaPuntiControllo, registraTemperatura,
   temperatureDiOggi, listaAree, salvaArea, esportaTutto, importaTutto,
@@ -29,10 +29,11 @@ test('la pianta: id unici, misure dentro la stanza, niente attrezzature sovrappo
   const tutti = Object.values(CUCINE).flatMap((K) => (K.pulsanti || []).map((pu) => ({ ...pu, K })));
   assert.deepEqual(tutti.map((pu) => pu.id).sort(), Object.keys(PULSANTI).sort());
   for (const pu of tutti) {
-    if (pu.su) assert.ok(pu.K.items.some((it) => it.id === pu.su && TOCCHI[it.type] === pu.id), `${pu.id} non sta sulla sua attrezzatura`);
+    if (pu.su) assert.ok(pu.K.items.some((it) => it.id === pu.su), `${pu.id} non sta sulla sua attrezzatura`);
     else assert.ok(!pu.K.items.some((it) => pu.x > it.x[0] && pu.x < it.x[1] && pu.d > it.d[0] && pu.d < it.d[1]));
     assert.ok(PULSANTI[pu.id].scelte.length >= 2 && PULSANTI[pu.id].scelte.every((s) => s.titolo && s.rotta && s.icona));
   }
+  assert.deepEqual(tutti.map((pu) => [pu.id, pu.su || 'pavimento', pu.K.nome]), [['magazzino', 'pavimento', 'Cucina grande'], ['produzione', 'g4', 'Cucina grande'], ['pulizie', 'g15', 'Cucina grande']]);
   assert.deepEqual(PULSANTI.magazzino.scelte.map((s) => s.rotta), ['CaricoMerce', 'Magazzino']);
   assert.deepEqual(PULSANTI.produzione.scelte.map((s) => s.rotta), ['Produzioni', 'Anagrafiche', 'Etichette']);
   assert.deepEqual(PULSANTI.pulizie.scelte.map((s) => s.rotta), ['Sanificazione', 'NonConformita']);

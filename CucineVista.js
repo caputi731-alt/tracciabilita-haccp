@@ -1,7 +1,7 @@
 /**
  * Vista 3D delle cucine: la pagina cucine/index.html dentro Vista3D.
  * Riceve `dati` (datiScena in cucine.js) e avvisa quando si tocca un frigorifero (suPosto) o un pulsante
- * (suPulsante: 'magazzino', 'produzione', 'pulizie'; vale anche per fuochi, lavandini, tavoli e pavimento).
+ * (suPulsante: 'magazzino', 'produzione', 'pulizie').
  */
 import React, { useCallback } from 'react';
 import Vista3D from './Vista3D';

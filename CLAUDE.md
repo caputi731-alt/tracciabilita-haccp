@@ -136,8 +136,8 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
   (usa i caratteri di `../menu/vendor/fonts`). Riceve `window.__cucine(datiScena(...))` e manda `{ tipo: 'pronta' | 'senza3d' | 'errore' |
   'posto', id | 'pulsante', id, cucina }`: `posto` solo per i frigoriferi. I pulsanti (scelta di Luca del 9/10/2026, `PULSANTI` e
   `pulsanti` di ogni cucina in cucine.js) sono tre: "Magazzino" al centro della cucina grande, "Produzione" sui quattro fuochi (`g4`),
-  "Pulizie" sul lavandino a una vasca (`p78`). Toccare un'attrezzatura senza tag vale il pulsante della sua famiglia (`TOCCHI`: fuochi e
-  piastra = produzione, lavandini = pulizie), tavoli e pavimento = magazzino. La Home mostra allora la scelta dal basso: Magazzino →
+  "Pulizie" sul lavandino a una vasca nell'angolo della cucina grande (`g15`, prima disegnato come mobile). La scelta si apre SOLO
+  dal pulsante: tavoli, fuochi, lavandini e pavimento toccati non fanno niente (scelta di Luca). La Home mostra allora la scelta dal basso: Magazzino →
   Carica nuova merce (`CaricoMerce`) / Guarda il magazzino; Produzione → Produzione / Ricette / Etichette; Pulizie → Sanificazione /
   Non conformità. Disegna solo quando qualcosa cambia; l'inquadratura
   si adatta alla forma del riquadro (`adatta`); i tag hanno altezza fissa sullo schermo e non si coprono (`sistemaTag`).
