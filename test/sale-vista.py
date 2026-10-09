@@ -2,7 +2,7 @@
 """Prova della vista 3D delle sale (sale/index.html) in un browser, come la vedrà la WebView dell'APK.
 
 Con una finta suite al posto di React Native controlla che la sala parta, che mostri tavolate e sedie giuste
-(una sedia per ogni posto stimato) e che il tocco su una tavolata arrivi alla suite.
+(una sedia per ogni persona prenotata, o per ogni posto se la tavolata è libera) e che il tocco su una tavolata arrivi alla suite.
 
     pip install playwright && playwright install chromium
     python3 test/sale-vista.py [cartella per le immagini]
@@ -24,7 +24,8 @@ let altra = pianoVuoto(SALE.panoramica);
 [[0, t('g', 6)], [1, t('h', 0, '', '', 0.9)], [4, t('i', 4)]].forEach(([f, x]) => { altra = metti(SALE.panoramica, altra, f, x); });
 console.log(JSON.stringify({ stalla: datiScenaSala(SALE.stalla, piano), panoramica: datiScenaSala(SALE.panoramica, altra, { scuro: true, scelto: 'h' }),
   insieme: datiScenaSale([[SALE.stalla, piano], [SALE.panoramica, altra]]),
-  posti: disponi(SALE.stalla, piano).tavolate.reduce((s, x) => s + x.posti, 0) }));
+  sedie: datiScenaSala(SALE.stalla, piano).tavolate.reduce((s, x) => s + x.sedie.a + x.sedie.b + x.sedie.teste, 0),
+  persone: disponi(SALE.stalla, piano).tavolate.reduce((s, x) => s + x.numeroPersone, 0) }));
 """
 DATI = json.loads(subprocess.run(['node', '--input-type=module', '-e', PREPARA], cwd=RADICE, capture_output=True, text=True, check=True).stdout)
 
@@ -59,7 +60,7 @@ with sync_playwright() as p:
         pg.wait_for_timeout(600); ferma()
         s = pg.evaluate("window.__scena()")
         ok(s['tavolate'] == 6, f"{nome}: sei tavolate nella sala antica stalla ({s['tavolate']})")
-        ok(s['sedie'] == DATI['posti'], f"{nome}: una sedia per ogni posto stimato ({s['sedie']} sedie, {DATI['posti']} posti)")
+        ok(s['sedie'] == DATI['sedie'] == DATI['persone'], f"{nome}: una sedia per ogni persona prenotata ({s['sedie']} sedie, {DATI['persone']} persone)")
         ok(pg.evaluate("window.__colori()") > 12, f'{nome}: la sala è disegnata')
         dentro = pg.evaluate("""()=>window.__ultimi.sala.contorno.every(([x,y])=>{const [a,b]=window.__schermoPunto(x,y);return a>0&&a<innerWidth&&b>0&&b<innerHeight})""")
         ok(dentro, f'{nome}: la sala sta intera nel riquadro')

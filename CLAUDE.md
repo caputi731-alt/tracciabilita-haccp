@@ -168,13 +168,15 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
   che la attraversano perdono quel tratto, e viceversa. L'antica stalla viene per prima.
 - Spostare (si sposta l'intera prenotazione, non i singoli tavoli): tenendola premuta sulla piantina e trascinandola (la pagina manda
   `{ tipo: 'sposta', id, sala, x, y }`, la suite usa `filaVicina` + `metti`), oppure dalla scheda con "Sposta in un'altra fila o sala".
-  Con il telefono in orizzontale (`expo-screen-orientation` ~8.0.4: si può girare solo nella sezione Sala, il resto dell'app resta in
-  verticale) le due sale si vedono insieme a tutto schermo (`datiScenaSale`) e si trascina anche dall'una all'altra.
+  Il pulsante "Due sale insieme" gira lo schermo in orizzontale (`expo-screen-orientation` ~8.0.4, `lockAsync`: lo decide il pulsante,
+  NON la rotazione automatica del telefono, scelta di Luca; il resto dell'app resta in verticale) e mostra le due sale a tutto schermo
+  (`datiScenaSale`): lì si aggiungono prenotazioni (scegliendo la fila) e si trascinano anche da una sala all'altra.
+- Sedie disegnate (`sedie` in sale.js): tante quante le persone prenotate; se la tavolata è libera, tante quanti i posti.
 - Tabella `disposizioni` (nel backup, in `TABELLE_NUOVE`), due tipi di riga: `giorno` (data + servizio, con prenotazioni; ogni modifica
   si salva subito) e `modello` (disposizione con un nome, senza prenotazioni, lunghezze fissate, da applicare a un giorno).
   `pianoPulito` legge anche i piani della build 83 (`t180`/`t90`).
-- `sale/index.html`: la sala in 3D (usa `../cucine/three.min.js`) con la sua forma vera, porte con cartello, zone libere in rosso, una
-  sedia per ogni posto stimato, tag con sigla (P1, S3…), nome, persone e metri; vista di sbieco o dall'alto (girata come nel PDF).
+- `sale/index.html`: la sala in 3D (usa `../cucine/three.min.js`) con la sua forma vera, porte con cartello, zone libere in rosso, le
+  sedie, tag con sigla (P1, S3…), nome, persone e metri; vista di sbieco o dall'alto (girata come nel PDF).
   Riceve `window.__sala(...)` con una sala o più sale affiancate, manda `{ tipo: 'tavolata', id }` e `{ tipo: 'sposta', … }`. Se il 3D non parte la schermata funziona lo stesso
   dall'elenco. Prova: `python3 test/sale-vista.py` (anche su GitHub prima della build).
 - Per i camerieri: `htmlDisposizioneSale` (report.js) → PDF con pianta dall'alto ed elenco delle tavolate con la lunghezza da preparare,

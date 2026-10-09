@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   SALE, posti, lunghezzaPer, lunghezza, entra, restoFila, pianoVuoto, pianoPulito, sistemaPiano, senzaPrenotazioni, disponi, sigle, totali,
-  datiScenaSala, datiScenaSale, nuovaTavolata, metti, togli, trova, filaVicina, ingombro, TRA_TAVOLI, LARGO,
+  datiScenaSala, datiScenaSale, nuovaTavolata, metti, togli, trova, filaVicina, ingombro, sedie, TRA_TAVOLI, LARGO,
 } from '../sale.js';
 import {
   initDatabase, disposizioneGiorno, salvaDisposizioneGiorno, giorniConPrenotazioni, modelliSale, salvaModelloSale, eliminaModelloSale,
@@ -37,6 +37,21 @@ test('dalla prenotazione alla lunghezza della tavolata, correggibile a mano', ()
   assert.equal(lunghezza(T(10, { len: 3.6 })), 3.6);
   assert.equal(lunghezza(T(0)), 0.9);
   assert.equal(lunghezza(T(4, { len: 99 })), 14);
+});
+
+test('sedie: tante quante le persone prenotate, prima sui lati e poi a capotavola', () => {
+  assert.deepEqual(sedie(10, 3), { a: 4, b: 4, teste: 2 });
+  assert.deepEqual(sedie(7, 2.3), { a: 3, b: 3, teste: 1 });      // 7 persone su una tavolata da 8 posti: 7 sedie, non 8
+  assert.deepEqual(sedie(4, 1.2), { a: 1, b: 1, teste: 2 });
+  assert.deepEqual(sedie(3, 0.9), { a: 1, b: 1, teste: 1 });
+  assert.deepEqual(sedie(2, 0.9), { a: 1, b: 1, teste: 0 });
+  assert.deepEqual(sedie(1, 3), { a: 1, b: 0, teste: 0 });
+  assert.deepEqual(sedie(0, 3), { a: 0, b: 0, teste: 0 });
+  assert.deepEqual(sedie(8, 1.8), { a: 3, b: 3, teste: 2 });      // più persone dei posti: le sedie in più vanno sui lati
+  for (let n = 0; n <= 40; n++) for (const len of [0.9, 1.2, 2.3, 5.5]) { const q = sedie(n, len); assert.equal(q.a + q.b + q.teste, n); }
+  // nella scena: la tavolata prenotata ha le sedie delle persone, quella libera le sedie dei posti
+  const s = datiScenaSala(stalla, { file: [[T(7), nuovaTavolata({ len: 2.3 })]] });
+  assert.deepEqual(s.tavolate.map((t) => t.sedie.a + t.sedie.b + t.sedie.teste), [7, 8]);
 });
 
 test('le sale: file dentro i muri, lontane dai muri e fuori da pilastri e zone libere davanti alle porte', () => {

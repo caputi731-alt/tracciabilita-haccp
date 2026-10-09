@@ -301,6 +301,19 @@ export function totali(coppie) {
   return out;
 }
 
+/**
+ * Le sedie da disegnare intorno a una tavolata: tante quante le persone prenotate (o i posti, se è libera).
+ * Prima si riempiono i due lati lunghi, fino ai posti che hanno, poi i capotavola; chi è di troppo va ancora sui lati.
+ * → { a, b (sedie sui due lati lunghi), teste (0, 1 o 2) }: a + b + teste è sempre il numero chiesto.
+ */
+export function sedie(quante, len) {
+  const n = intero(quante), po = posti(len);
+  const suiLati = Math.min(n, po.lati * 2);
+  const teste = Math.min(po.capotavola, n - suiLati);
+  const resto = n - teste;
+  return { a: Math.ceil(resto / 2), b: Math.floor(resto / 2), teste };
+}
+
 export const metri = (n) => `${String(decimo(n)).replace('.', ',')} m`;
 
 /** Quello che serve alla pagina 3D per una sala: com'è fatta (con le file, per trascinare) e le tavolate al loro posto. */
@@ -309,7 +322,7 @@ export function datiScenaSala(sala, piano, { scuro = false, scelto = null } = {}
   return {
     sala: { id: sala.id, nome: sala.nome, contorno: sala.contorno, ostacoli: sala.ostacoli, porte: sala.porte, zone: sala.zone, file: sala.file },
     tavolate: d.tavolate.map((t) => ({
-      id: t.id, x: t.x, y: t.y, len: t.len, asse: t.asse, lati: t.lati, capotavola: t.capotavola,
+      id: t.id, x: t.x, y: t.y, len: t.len, asse: t.asse, sedie: sedie(t.prenotata && t.numeroPersone ? t.numeroPersone : t.posti, t.len),
       titolo: t.nome.trim() ? `${t.sigla} · ${t.nome.trim()}` : t.sigla,
       breve: t.prenotata ? `${t.numeroPersone || '?'} pers. · ${metri(t.len)}${t.ora ? ` · ${t.ora}` : ''}` : `libera · ${metri(t.len)}`,
       c: t.troppi ? 'crit' : t.prenotata ? 'ok' : 'neutro',

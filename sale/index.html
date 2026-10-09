@@ -158,11 +158,14 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
       const G = new THREE.Group(); G.position.set(X, 0, Z); if (t.asse === 'y') G.rotation.y = Math.PI / 2; tavoli.add(G);
       const B = (W, H, T, mat, x, y, z) => { const me = new THREE.Mesh(new THREE.BoxGeometry(W, H, T), mat); me.position.set(x, y, z); me.castShadow = me.receiveShadow = true; me.userData.id = t.id; G.add(me); bersagli.push(me); return me; };
       B(t.len, 0.62, D, m.tovaglia, 0, 0.42, 0); B(t.len + 0.02, 0.03, D + 0.02, m.piano, 0, 0.745, 0);
-      // una sedia per posto: sui due lati lunghi, distribuite, e a capotavola
+      // le sedie: sui due lati lunghi, distribuite, e a capotavola
       const sedia = (x, z, giro) => { B(0.42, 0.06, 0.42, ms, x, 0.45, z).userData.sedia = true; B(giro ? 0.05 : 0.42, 0.42, giro ? 0.42 : 0.05, ms, x + (giro ? giro * 0.2 : 0), 0.66, z + (giro ? 0 : (z > 0 ? 0.2 : -0.2))); };
-      for (let i = 0; i < t.lati; i++) { const x = -t.len / 2 + (i + 0.5) * t.len / t.lati; sedia(x, D / 2 + 0.3, 0); sedia(x, -D / 2 - 0.3, 0); }
-      if (t.capotavola >= 1) sedia(-t.len / 2 - 0.3, 0, -1);
-      if (t.capotavola >= 2) sedia(t.len / 2 + 0.3, 0, 1);
+      // tante sedie quante le persone prenotate (o i posti, se la tavolata è libera): le conta la suite (`sedie` in sale.js)
+      const q = t.sedie || { a: 0, b: 0, teste: 0 };
+      for (let i = 0; i < q.a; i++) sedia(-t.len / 2 + (i + 0.5) * t.len / q.a, D / 2 + 0.3, 0);
+      for (let i = 0; i < q.b; i++) sedia(-t.len / 2 + (i + 0.5) * t.len / q.b, -D / 2 - 0.3, 0);
+      if (q.teste >= 1) sedia(-t.len / 2 - 0.3, 0, -1);
+      if (q.teste >= 2) sedia(t.len / 2 + 0.3, 0, 1);
       const lx = t.asse === 'y' ? D : t.len, lz = t.asse === 'y' ? t.len : D;
       const sp = etichetta(t.titolo, t.breve, t.c); sp.position.set(X, 1.55, Z); sp.userData.id = t.id; sp.userData.casa = sp.position.clone(); tavoli.add(sp); bersagli.push(sp);
       const box = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(lx + 0.9, 0.9, lz + 0.9)), new THREE.LineBasicMaterial({ color: 0x9C4524 }));
