@@ -107,7 +107,7 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
   Gestione ha due linguette: Menù (`MenuScreen.js`) e Incassi (`IncassiScreen.js`). Il tasto indietro dalle altre sezioni torna a Cucina.
   La barra (e le linguette di Gestione) si nascondono con la tastiera aperta e nelle schermate interne del Menù. Non esistono le
   rotte `Menu` e `SezioneMagazzino`: le sezioni ricevono una `navigation` in cui `navigate('Menu')` porta a Gestione → Menù e
-  `navigate('SezioneMagazzino')` (il pavimento della cucina) apre la schermata `Magazzino`.
+  `navigate('SezioneMagazzino')` apre la schermata `Magazzino`.
 - `HomeScreen.js`: riquadro dei controlli di oggi (anello disegnato con due mezzi cerchi, senza librerie grafiche),
   stato di temperature/pulizie/scadenze, cose da sistemare, prossimo menù (`prossimoMenu` in menuPonte.js) e pulsante "Registra".
 - Carattere Manrope: `caratteri.js` aggancia `Text` e `TextInput` e sceglie il file in base a `fontWeight` (500/700/800).
@@ -134,8 +134,12 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
   Il contenuto dei frigoriferi (lotti per posizione) è rimandato.
 - `cucine/index.html` + `cucine/three.min.js` (three r128, copiato da npm): la scena, pagina a sé copiata negli asset da `plugins/conMenu.js`
   (usa i caratteri di `../menu/vendor/fonts`). Riceve `window.__cucine(datiScena(...))` e manda `{ tipo: 'pronta' | 'senza3d' | 'errore' |
-  'posto', id | 'pavimento', cucina }`: `posto` solo per i frigoriferi, tutto il resto (tavoli, fuochi, pavimento, "Magazzino") è `pavimento`
-  e apre la linguetta Magazzino (`navigate('SezioneMagazzino')`, vedi PrincipaleScreen). Disegna solo quando qualcosa cambia; l'inquadratura
+  'posto', id | 'pulsante', id, cucina }`: `posto` solo per i frigoriferi. I pulsanti (scelta di Luca del 9/10/2026, `PULSANTI` e
+  `pulsanti` di ogni cucina in cucine.js) sono tre: "Magazzino" al centro della cucina grande, "Produzione" sui quattro fuochi (`g4`),
+  "Pulizie" sul lavandino a una vasca (`p78`). Toccare un'attrezzatura senza tag vale il pulsante della sua famiglia (`TOCCHI`: fuochi e
+  piastra = produzione, lavandini = pulizie), tavoli e pavimento = magazzino. La Home mostra allora la scelta dal basso: Magazzino →
+  Carica nuova merce (`CaricoMerce`) / Guarda il magazzino; Produzione → Produzione / Ricette / Etichette; Pulizie → Sanificazione /
+  Non conformità. Disegna solo quando qualcosa cambia; l'inquadratura
   si adatta alla forma del riquadro (`adatta`); i tag hanno altezza fissa sullo schermo e non si coprono (`sistemaTag`).
   I colori sono quelli di `theme.js` scritti a mano: se cambia la tavolozza vanno aggiornati anche lì.
 - `HomeScreen.js`: con la mappa (`CucineVista.js`, WebView) la schermata è data in alto, mappa che riempie lo spazio, in basso la riga dei
@@ -163,7 +167,8 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
   (`p`, dove comincia): lo riceve quando viene aggiunta (`metti`: il primo libero, o il più vicino a un punto) e lo cambia solo quando
   Luca la sposta; aggiungerne un'altra non sposta le prime. Fra due tavolate qualsiasi, anche di file che si incrociano, restano almeno
   1,2 m (`TRA_TAVOLI`). `sistemaPiano` dà un posto ai piani salvati prima (build 84–85); `entra` / `restoFila` dicono cosa entra ancora.
-- Panoramica (scelte del 9/10/2026): larga 7 m; tre file verticali (A finestre, B lato cucina, C centrale: la B resta la seconda perché i
+- Panoramica (scelte del 9/10/2026): larga 7 m e lunga 11,5 m (lungo le finestre, a sinistra dell'ingresso, Luca mette anche 27-28
+  persone in un'unica tavolata = 9,8 m); tre file verticali (A finestre, B lato cucina, C centrale: la B resta la seconda perché i
   piani già salvati la usano) e tre orizzontali (D, E, F), da usare miste in zone diverse: dove una orizzontale è occupata le verticali
   che la attraversano perdono quel tratto, e viceversa. L'antica stalla viene per prima.
 - Spostare (si sposta l'intera prenotazione, non i singoli tavoli): tenendola premuta sulla piantina e trascinandola (la pagina manda

@@ -1,7 +1,7 @@
 // Vista delle cucine: stato di ogni attrezzatura (cucine.js) e collegamenti salvati (database.js).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CUCINE, POSTI, FREDDI, limitiProposti, statiCucine, datiScena } from '../cucine.js';
+import { CUCINE, PULSANTI, TOCCHI, POSTI, FREDDI, limitiProposti, statiCucine, datiScena } from '../cucine.js';
 import {
   initDatabase, collegaPosto, collegamentiCucina, salvaPuntoControllo, listaPuntiControllo, registraTemperatura,
   temperatureDiOggi, listaAree, salvaArea, esportaTutto, importaTutto,
@@ -25,9 +25,17 @@ test('la pianta: id unici, misure dentro la stanza, niente attrezzature sovrappo
       assert.ok(!sopra, `${a.id} e ${b.id} si sovrappongono`);
     }));
   }
-  // il punto "Magazzino" sta su pavimento libero
-  const m = CUCINE.grande.magazzino;
-  assert.ok(!CUCINE.grande.items.some((it) => m.x > it.x[0] && m.x < it.x[1] && m.d > it.d[0] && m.d < it.d[1]));
+  // i pulsanti: "Magazzino" su pavimento libero, gli altri sopra un'attrezzatura che esiste; ogni scelta porta a una schermata
+  const tutti = Object.values(CUCINE).flatMap((K) => (K.pulsanti || []).map((pu) => ({ ...pu, K })));
+  assert.deepEqual(tutti.map((pu) => pu.id).sort(), Object.keys(PULSANTI).sort());
+  for (const pu of tutti) {
+    if (pu.su) assert.ok(pu.K.items.some((it) => it.id === pu.su && TOCCHI[it.type] === pu.id), `${pu.id} non sta sulla sua attrezzatura`);
+    else assert.ok(!pu.K.items.some((it) => pu.x > it.x[0] && pu.x < it.x[1] && pu.d > it.d[0] && pu.d < it.d[1]));
+    assert.ok(PULSANTI[pu.id].scelte.length >= 2 && PULSANTI[pu.id].scelte.every((s) => s.titolo && s.rotta && s.icona));
+  }
+  assert.deepEqual(PULSANTI.magazzino.scelte.map((s) => s.rotta), ['CaricoMerce', 'Magazzino']);
+  assert.deepEqual(PULSANTI.produzione.scelte.map((s) => s.rotta), ['Produzioni', 'Anagrafiche', 'Etichette']);
+  assert.deepEqual(PULSANTI.pulizie.scelte.map((s) => s.rotta), ['Sanificazione', 'NonConformita']);
 });
 
 test('hanno un tag solo frigoriferi e congelatori; senza nome chiedono di darglielo', () => {

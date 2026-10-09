@@ -54,22 +54,23 @@ export const SALE = {
   // orizzontali, parallele all'ingresso, da usare insieme alle altre in zone diverse della sala ("miste")
   panoramica: {
     id: 'panoramica', nome: 'Sala panoramica', sigla: 'P',
-    contorno: [[0, 0], [3.1, 0], [3.1, 1.3], [7, 1.3], [7, 10], [0, 10]],
+    // lunga 11,5 m: lungo le finestre, a sinistra dell'ingresso, Luca mette anche 27-28 persone in un'unica tavolata (9,8 m)
+    contorno: [[0, 0], [3.1, 0], [3.1, 1.3], [7, 1.3], [7, 11.5], [0, 11.5]],
     ostacoli: [{ ...rett(4.25, 1.3, 1.65, 1.7), nome: 'Paravento' }],
     porte: [
-      { x1: 2.65, y1: 10, x2: 4.25, y2: 10, nome: 'Ingresso' },
+      { x1: 2.65, y1: 11.5, x2: 4.25, y2: 11.5, nome: 'Ingresso' },
       { x1: 4.25, y1: 1.4, x2: 4.25, y2: 2.6, nome: 'Cucina' },
       { x1: 7, y1: 2.4, x2: 7, y2: 3.2, nome: 'Bagni' },
     ],
-    zone: [rett(2.45, 8.5, 2.0, 1.5), rett(2.75, 1.3, 1.5, 1.7), rett(5.5, 2.2, 1.5, 1.2), rett(5.9, 1.3, 1.1, 0.9)],
+    zone: [rett(2.45, 10.0, 2.0, 1.5), rett(2.75, 1.3, 1.5, 1.7), rett(5.5, 2.2, 1.5, 1.2), rett(5.9, 1.3, 1.1, 0.9)],
     file: [
-      { id: 'A', nome: 'Fila A · finestre', asse: 'y', c: 1.25, tratti: [[0.8, 9.2]] },
+      { id: 'A', nome: 'Fila A · finestre', asse: 'y', c: 1.25, tratti: [[0.8, 10.7]] },
       // la B resta la seconda: i piani salvati prima della fila centrale tengono le prenotazioni dove erano
-      { id: 'B', nome: 'Fila B · lato cucina', asse: 'y', c: 5.75, tratti: [[3.8, 9.2]] },
-      { id: 'C', nome: 'Fila C · centrale', asse: 'y', c: 3.5, tratti: [[3.4, 8.2]] },
+      { id: 'B', nome: 'Fila B · lato cucina', asse: 'y', c: 5.75, tratti: [[3.8, 10.7]] },
+      { id: 'C', nome: 'Fila C · centrale', asse: 'y', c: 3.5, tratti: [[3.4, 9.7]] },
       { id: 'D', nome: 'Fila D · orizzontale in alto', asse: 'x', c: 3.9, tratti: [[0.8, 5.3]], seconda: true },
-      { id: 'E', nome: 'Fila E · orizzontale al centro', asse: 'x', c: 6.0, tratti: [[0.8, 6.2]], seconda: true },
-      { id: 'F', nome: 'Fila F · orizzontale verso l\'ingresso', asse: 'x', c: 7.75, tratti: [[0.8, 6.2]], seconda: true },
+      { id: 'E', nome: 'Fila E · orizzontale al centro', asse: 'x', c: 6.45, tratti: [[0.8, 6.2]], seconda: true },
+      { id: 'F', nome: 'Fila F · orizzontale verso l\'ingresso', asse: 'x', c: 9.0, tratti: [[0.8, 6.2]], seconda: true },
     ],
   },
 };

@@ -26,7 +26,7 @@ export const CUCINE = {
       { id: 'g9', n: '9', type: 'fridge', x: [11.2, 12], d: [2.9, 4.2], face: 'left', nome: 'Frigo a due ante' },
     ],
     doors: [{ wall: 'front', a0: 0.6, a1: 1.4, hinge: 'a0' }, { wall: 'front', a0: 11.1, a1: 12.0, hinge: 'a1' }, { wall: 'back', a0: 5.45, a1: 6.45, hinge: 'a0' }],
-    magazzino: { x: 5.95, d: 3.75 },
+    pulsanti: [{ id: 'magazzino', testo: 'Magazzino', x: 5.95, d: 3.75 }, { id: 'produzione', testo: 'Produzione', su: 'g4' }],
   },
   piccola: { nome: 'Cucina piccola', L: 4, D: 4, ox: 4.7,
     items: [
@@ -37,6 +37,7 @@ export const CUCINE = {
       { id: 'p46', n: '4/6', type: 'range', x: [3.1, 4.0], d: [2.8, 4.0], face: 'left', oven: true, nome: 'Fuochi con forno' },
     ],
     doors: [{ wall: 'left', a0: 0.7, a1: 1.5, hinge: 'a0' }, { wall: 'right', a0: 0.9, a1: 1.6, hinge: 'a0' }],
+    pulsanti: [{ id: 'pulizie', testo: 'Pulizie', su: 'p78' }],
   },
 };
 
@@ -45,7 +46,29 @@ export const POSTI = Object.keys(CUCINE).flatMap((k) => CUCINE[k].items.map((it)
   id: it.id, n: it.n, nome: it.nome, type: it.type, cucina: k, nomeCucina: CUCINE[k].nome,
 })));
 
-/** Frigoriferi e congelatori: sono le sole attrezzature con un tag e una scheda; il resto, toccato, apre il Magazzino. */
+/**
+ * I tre pulsanti della mappa (scelta di Luca del 9/10/2026) e le schermate fra cui fanno scegliere: "Magazzino" al centro
+ * della cucina grande, "Produzione" sui quattro fuochi, "Pulizie" sul lavandino a una vasca della cucina piccola.
+ */
+export const PULSANTI = {
+  magazzino: { titolo: 'Magazzino', scelte: [
+    { titolo: 'Carica nuova merce', nota: 'Da fattura PDF o a mano', icona: 'truck-delivery-outline', rotta: 'CaricoMerce' },
+    { titolo: 'Guarda il magazzino', nota: 'Giacenze, lotti e scadenze', icona: 'warehouse', rotta: 'Magazzino' },
+  ] },
+  produzione: { titolo: 'Produzione', scelte: [
+    { titolo: 'Produzione', nota: 'Registra un preparato', icona: 'chef-hat', rotta: 'Produzioni' },
+    { titolo: 'Ricette', nota: 'Ingredienti e allergeni', icona: 'book-open-variant', rotta: 'Anagrafiche', parametri: { scheda: 'Ricette' } },
+    { titolo: 'Etichette', nota: 'Stampa per i contenitori', icona: 'label-outline', rotta: 'Etichette' },
+  ] },
+  pulizie: { titolo: 'Pulizie', scelte: [
+    { titolo: 'Sanificazione', nota: 'Registra le pulizie', icona: 'spray-bottle', rotta: 'Sanificazione' },
+    { titolo: 'Non conformità', nota: 'Segnala o chiudi un problema', icona: 'alert-circle-outline', rotta: 'NonConformita' },
+  ] },
+};
+/** Toccando un'attrezzatura senza tag vale il pulsante della sua famiglia; tavoli e pavimento valgono "magazzino". */
+export const TOCCHI = { range: 'produzione', griddle: 'produzione', sink: 'pulizie', sinkdw: 'pulizie' };
+
+/** Frigoriferi e congelatori: sono le sole attrezzature con un tag e una scheda. */
 export const TIPI_FREDDO = ['fridge', 'vetrina', 'chest'];
 export const FREDDI = POSTI.filter((p) => TIPI_FREDDO.includes(p.type));
 
@@ -89,5 +112,5 @@ export function statiCucine({ collegamenti = [], punti = [], temperatureOggi = [
 export function datiScena(stati, { scuro = false, scelto = null } = {}) {
   const leggeri = {};
   Object.keys(stati).forEach((id) => { leggeri[id] = { c: stati[id].c, nome: stati[id].nome, breve: stati[id].breve }; });
-  return { cucine: CUCINE, stati: leggeri, scuro: !!scuro, scelto };
+  return { cucine: CUCINE, stati: leggeri, tocchi: TOCCHI, scuro: !!scuro, scelto };
 }

@@ -2,7 +2,7 @@
 """Prova della vista 3D delle cucine (cucine/index.html) in un browser, come la vedrà la WebView dell'APK.
 
 Con una finta suite al posto di React Native controlla che la scena parta, che mostri tutte le attrezzature e le
-etichette giuste, e che i tocchi arrivino alla suite: un'attrezzatura apre la sua scheda, il pavimento il Magazzino.
+etichette giuste, e che i tocchi arrivino alla suite: un'attrezzatura apre la sua scheda, fuochi, lavandini, tavoli e pavimento il loro pulsante.
 
     pip install playwright && playwright install chromium
     python3 test/cucine-vista.py [cartella per le immagini]
@@ -87,13 +87,13 @@ with sync_playwright() as p:
         x, y = pg.evaluate("window.__schermo('g8')")
         pg.evaluate("([x,y])=>window.__tocca(x,y)", [x, y])
         ok(ricevuti()[-1] == {'tipo': 'posto', 'id': 'g8'}, f'{nome}: il congelatore senza nome apre la sua scheda')
-        magazzino = 0
-        for pid in ('g5', 'g10a', 'g4'):
+        giusti = 0
+        for pid, pul in (('g5', 'produzione'), ('g10b', 'magazzino'), ('g4', 'produzione')):
             x, y = pg.evaluate("id=>window.__schermo(id)", pid)
             pg.evaluate("([x,y])=>window.__tocca(x,y)", [x, y])
-            if ricevuti()[-1] == {'tipo': 'pavimento', 'cucina': 'grande'}: magazzino += 1
-            else: print('     non apre il Magazzino:', pid, ricevuti()[-1])
-        ok(magazzino == 3, f'{nome}: tavoli e fuochi aprono il Magazzino ({magazzino}/3)')
+            if ricevuti()[-1] == {'tipo': 'pulsante', 'id': pul, 'cucina': 'grande'}: giusti += 1
+            else: print('     pulsante sbagliato:', pid, ricevuti()[-1])
+        ok(giusti == 3, f'{nome}: fuochi e piastra valgono Produzione, i tavoli Magazzino ({giusti}/3)')
         ok(pg.evaluate("window.__scena().scelto") == 'g8', f'{nome}: un tavolo toccato non viene evidenziato')
         pg.click('#v-piccola'); ferma()
         x, y = pg.evaluate("window.__schermoTag('p1')")
@@ -102,19 +102,21 @@ with sync_playwright() as p:
         ok(ricevuti()[-1] == {'tipo': 'posto', 'id': 'p1'}, f'{nome}: toccare il tag del frigo della cucina piccola apre la sua scheda')
         x, y = pg.evaluate("window.__schermo('p78')")
         pg.evaluate("([x,y])=>window.__tocca(x,y)", [x, y])
-        ok(ricevuti()[-1] == {'tipo': 'pavimento', 'cucina': 'piccola'}, f'{nome}: il lavandino apre il Magazzino')
+        ok(ricevuti()[-1] == {'tipo': 'pulsante', 'id': 'pulizie', 'cucina': 'piccola'}, f'{nome}: il lavandino vale Pulizie')
         x, y = pg.evaluate("window.__schermoPavimento('piccola', 2, 2)")
         pg.evaluate("([x,y])=>window.__tocca(x,y)", [x, y])
-        ok(ricevuti()[-1] == {'tipo': 'pavimento', 'cucina': 'piccola'}, f'{nome}: il pavimento della cucina piccola risponde')
+        ok(ricevuti()[-1] == {'tipo': 'pulsante', 'id': 'magazzino', 'cucina': 'piccola'}, f'{nome}: il pavimento della cucina piccola risponde')
         pg.click('#v-tutte'); ferma()
         dentro = pg.evaluate("['g15','g9','p46','p78'].every(id=>{const [x,y]=window.__schermo(id);return x>0&&x<innerWidth&&y>0&&y<innerHeight})")
         ok(dentro, f'{nome}: con "Tutte" le due cucine stanno intere nel riquadro')
 
-        # il pulsante "Magazzino" al centro della cucina grande e il pavimento libero
-        x, y = pg.evaluate("window.__schermoMagazzino()")
-        pg.mouse.click(x, y)
-        pg.wait_for_timeout(200)
-        ok(ricevuti()[-1] == {'tipo': 'pavimento', 'cucina': 'grande'}, f'{nome}: toccare "Magazzino" al centro avvisa la suite {ricevuti()[-1:]}')
+        # i tre pulsanti: Magazzino al centro della cucina grande, Produzione sui fuochi, Pulizie sul lavandino a una vasca
+        for pul, cuc in (('magazzino', 'grande'), ('produzione', 'grande'), ('pulizie', 'piccola')):
+            x, y = pg.evaluate("id=>window.__schermoPulsante(id)", pul)
+            ok(0 < x < largo and 0 < y < alto, f'{nome}: il pulsante {pul} è dentro lo schermo')
+            pg.mouse.click(x, y)
+            pg.wait_for_timeout(200)
+            ok(ricevuti()[-1] == {'tipo': 'pulsante', 'id': pul, 'cucina': cuc}, f'{nome}: toccare il pulsante {pul} avvisa la suite {ricevuti()[-1:]}')
         # trascinare ruota la scena e non conta come tocco
         n = len(ricevuti())
         pg.mouse.move(largo / 2, alto / 2); pg.mouse.down(); pg.mouse.move(largo / 2 + 80, alto / 2 + 10, steps=6); pg.mouse.up()

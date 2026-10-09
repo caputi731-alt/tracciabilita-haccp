@@ -14,7 +14,7 @@ import {
   lottiInScadenza, temperatureDiOggi, listaPuntiControllo, nonConformitaAperte,
   areeConStato, prodottiDaCompletare, lottiBloccati, leggiPreferenza, menuLeggi, collegamentiCucina,
 } from './database';
-import { FREDDI, statiCucine, datiScena } from './cucine';
+import { FREDDI, PULSANTI, statiCucine, datiScena } from './cucine';
 import SchedaPosto from './SchedaPosto';
 import { statoBackup } from './backupAutomatico';
 import { prossimoMenu } from './menuPonte';
@@ -175,7 +175,9 @@ export default function HomeScreen({ navigation }) {
   }), [cucina]);
   const dati = useMemo(() => datiScena(stati, { scuro: TEMA_SCURO, scelto }), [stati, scelto]);
   const suPosto = useCallback((id) => { if (FREDDI.some((p) => p.id === id)) setScelto(id); }, []);
-  const suPavimento = useCallback(() => navigation.navigate('SezioneMagazzino'), [navigation]);
+  // i pulsanti della mappa (Magazzino, Produzione, Pulizie) fanno scegliere fra le loro schermate
+  const [gruppo, setGruppo] = useState(null);
+  const suPulsante = useCallback((id) => { if (PULSANTI[id]) setGruppo(id); }, []);
   const senzaCucine = useCallback(() => setScena('no'), []);
   const Cucine = scena === 'no' ? null : moduloCucine();
   const conCucine = !!Cucine;
@@ -355,7 +357,7 @@ export default function HomeScreen({ navigation }) {
           </View>
           <View style={{ flex: 1, backgroundColor: COLORS.contenitore }}>
             <RiparoCucine suRotto={senzaCucine}>
-              <Cucine dati={dati} suPosto={suPosto} suPavimento={suPavimento} suStato={setScena} />
+              <Cucine dati={dati} suPosto={suPosto} suPulsante={suPulsante} suStato={setScena} />
             </RiparoCucine>
             {scena === 'ok' && cucina.collegamenti.length === 0 && (
               <View pointerEvents="none" style={{ position: 'absolute', left: 12, right: 150, bottom: 44 }}>
@@ -469,6 +471,35 @@ export default function HomeScreen({ navigation }) {
           onChiudi={() => setScelto(null)} onCambiato={carica}
           apri={(rotta, parametri) => { setScelto(null); apri(rotta, parametri); }} />
       )}
+
+      {/* Scelta dopo un pulsante della mappa */}
+      <Modal visible={!!gruppo} transparent animationType="slide" onRequestClose={() => setGruppo(null)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(27,29,23,0.55)' }}>
+          <Pressable style={{ flex: 1 }} onPress={() => setGruppo(null)} accessibilityLabel="Chiudi" />
+          <View style={{
+            backgroundColor: COLORS.bg, borderTopLeftRadius: 28, borderTopRightRadius: 28,
+            paddingHorizontal: 20, paddingTop: 12, paddingBottom: 28,
+          }}>
+            <View style={{ alignSelf: 'center', width: 36, height: 4, borderRadius: 2, backgroundColor: COLORS.bordoCampo, marginBottom: 20 }} />
+            <Text accessibilityRole="header" style={[S.h1, { marginBottom: 16 }]}>{gruppo ? PULSANTI[gruppo].titolo : ''}</Text>
+            {(gruppo ? PULSANTI[gruppo].scelte : []).map((r) => (
+              <TouchableOpacity key={r.titolo} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel={r.titolo}
+                onPress={() => { setGruppo(null); apri(r.rotta, r.parametri); }}
+                style={{
+                  flexDirection: 'row', alignItems: 'center', gap: 16, minHeight: 72, borderRadius: 24,
+                  paddingHorizontal: 18, paddingVertical: 12, marginBottom: 10, backgroundColor: COLORS.contenitore,
+                }}>
+                <Icona nome={r.icona} size={28} colore={COLORS.primary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 17, fontWeight: '700' }}>{r.titolo}</Text>
+                  <Text style={S.muted}>{r.nota}</Text>
+                </View>
+                <Icona nome="chevron-right" size={24} colore={COLORS.muted} />
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </Modal>
 
       {/* Pannello dal basso con le registrazioni */}
       <Modal visible={registra} transparent animationType="slide" onRequestClose={() => setRegistra(false)}>

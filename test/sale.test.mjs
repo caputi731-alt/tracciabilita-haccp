@@ -121,10 +121,13 @@ test('ogni prenotazione ha un posto suo: il primo libero, distanziata, mai sopra
 });
 
 test('panoramica: fila centrale e file orizzontali, che si incrociano senza sovrapporsi', () => {
+  // lungo le finestre, a sinistra dell'ingresso, entrano 28 persone in un'unica tavolata (dato di Luca)
+  assert.ok(entra(panoramica, pianoVuoto(panoramica), 0, lunghezzaPer(28)));
+  assert.equal(posti(lunghezzaPer(28)).posti, 28);
   assert.deepEqual(panoramica.file.map((f) => f.asse), ['y', 'y', 'y', 'x', 'x', 'x']);
   assert.equal(Math.max(...panoramica.contorno.map((q) => q[0])), 7);
   // le tre file verticali piene stanno insieme
-  const verticali = piano(panoramica, [[0, T(22)], [1, T(14)], [2, T(12)]]);
+  const verticali = piano(panoramica, [[0, T(28)], [1, T(20)], [2, T(18)]]);
   const d = disponi(panoramica, verticali);
   assert.ok(d.ok);
   controlla(panoramica, d);
@@ -157,12 +160,12 @@ test('una prenotazione nuova va da sola nel posto migliore: lo spazio libero pi�
   // panoramica: prima le file verticali; quelle orizzontali (usate ogni tanto) solo quando nelle altre non c'è più posto
   q = postoMigliore(panoramica, pianoVuoto(panoramica), 2.3);
   assert.equal(panoramica.file[q.f].asse, 'y');
-  const pieneInBasso = [[0, 3.5], [1, 3.5], [2, 2.5]].reduce((x, [f, len]) => metti(panoramica, x, f, nuovaTavolata({ len }), 5.7 + len / 2), pianoVuoto(panoramica));
+  const pieneInBasso = [[0, 5], [1, 5], [2, 4]].reduce((x, [f, len]) => metti(panoramica, x, f, nuovaTavolata({ len }), 5.7 + len / 2), pianoVuoto(panoramica));
   q = postoMigliore(panoramica, pieneInBasso, 4);
   assert.equal(panoramica.file[q.f].asse, 'x');
   // non entra da nessuna parte
   assert.equal(postoMigliore(stalla, pianoVuoto(stalla), 13.5), null);
-  assert.equal(postoMigliore(panoramica, piano(panoramica, [[0, T(22)], [1, T(14)], [2, T(12)]]), 0.9), null);
+  assert.equal(postoMigliore(panoramica, piano(panoramica, [[0, T(28)], [1, T(20)], [2, T(18)]]), 0.9), null);
 });
 
 test('spostare una prenotazione: sulla fila più vicina a dove la si lascia, nel posto libero più vicino', () => {
@@ -194,18 +197,18 @@ test('spostare una prenotazione: sulla fila più vicina a dove la si lascia, nel
 });
 
 test('disponi: segnala la tavolata che non entra e la prenotazione con più persone dei posti', () => {
-  const lunghe = { file: [[T(20), T(14)], []] };       // 6,8 m + 4,5 m + passaggio in 8,4 m di fila: la seconda resta senza posto
+  const lunghe = { file: [[T(26), T(14)], []] };       // 9 m + 4,5 m + passaggio in 9,9 m di fila: la seconda resta senza posto
   let d = disponi(panoramica, lunghe);
   assert.ok(!d.ok && d.tavolate.length === 1 && /P2 non entra nella fila a/.test(d.problemi[0]), d.problemi.join('; '));
   d = disponi(panoramica, { file: [[T(4, { nome: 'Bianchi', len: 0.9 })], []] });
   assert.ok(!d.ok && d.tavolate[0].troppi && /P1 Bianchi: 4 persone su 3 posti/.test(d.problemi[0]));
-  assert.ok(entra(panoramica, lunghe, 1, 5.4) && !entra(panoramica, lunghe, 1, 5.5));
+  assert.ok(entra(panoramica, lunghe, 1, 6.9) && !entra(panoramica, lunghe, 1, 7));
   assert.ok(!entra(panoramica, lunghe, 0, 0.9));
-  assert.equal(restoFila(panoramica, lunghe, 1), 5.4);
-  assert.equal(restoFila(panoramica, { file: [[T(20)]] }, 0), 0);
+  assert.equal(restoFila(panoramica, lunghe, 1), 6.9);
+  assert.equal(restoFila(panoramica, { file: [[T(26)]] }, 0), 0);
   // allungando una tavolata, lei stessa non conta
   const una = T(20);
-  assert.equal(restoFila(panoramica, piano(panoramica, [[0, una]]), 0, una.id), 8.4);
+  assert.equal(restoFila(panoramica, piano(panoramica, [[0, una]]), 0, una.id), 9.9);
 });
 
 test('piani: pulizia (anche dei piani vecchi), modello senza prenotazioni, totali e dati per la scena', () => {

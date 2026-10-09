@@ -34,7 +34,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 <script>
 'use strict';
 /* La suite manda disposizione e stati con window.__cucine(dati) (vedi datiScena in cucine.js) e riceve:
-   { tipo:'pronta' } · { tipo:'senza3d' } · { tipo:'posto', id } (un frigorifero o congelatore) · { tipo:'pavimento', cucina } (tutto il resto: apre il Magazzino) */
+   { tipo:'pronta' } · { tipo:'senza3d' } · { tipo:'posto', id } (un frigorifero o congelatore) · { tipo:'pulsante', id, cucina } (i pulsanti Magazzino, Produzione, Pulizie e tutto il resto: fuochi e piastra valgono 'produzione', i lavandini 'pulizie', tavoli e pavimento 'magazzino') */
 (function(){
   window.__inviati = [];
   const invia = (m) => { window.__inviati.push(m); const RN = window.ReactNativeWebView; if (RN && RN.postMessage) RN.postMessage(JSON.stringify(m)); };
@@ -128,7 +128,8 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 
   let bersagli = [], perId = {}, centri = {}, gruppi = [], scelto = null, costruita = false, sporco = true;
   const rot = { up: Math.PI, down: 0, right: Math.PI / 2, left: -Math.PI / 2 };
-  function costruisci(cucine, scuro){
+  function costruisci(cucine, scuro, tocchi){
+    tocchi = tocchi || {};
     Object.keys(cucine).forEach(k => {
       const K = cucine[k], L = K.L, D = K.D, G = new THREE.Group(); G.position.set(K.ox + L / 2, 0, 0); scene.add(G); gruppi.push(G); centri[k] = new THREE.Vector3(K.ox + L / 2, 0.6, 0);
       const base = new THREE.Mesh(new THREE.BoxGeometry(L + 0.4, 0.12, D + 0.4), S(0x4a4f45, { metalness: 0 })); base.position.y = -0.065; base.castShadow = true; G.add(base);
@@ -145,20 +146,23 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
         });
       });
       const t = targa(K.nome, scuro); t.position.set(-L / 2 + 2.2, 0.005, D / 2 + 0.75); G.add(t);
-      if (K.magazzino) { // il magazzino si apre toccando il pavimento: l'etichetta al centro lo ricorda
-        const sp = etichetta('Magazzino', 'ok', true); sp.position.set(K.magazzino.x - L / 2, 0.75, D / 2 - K.magazzino.d); sp.userData.cucina = k; G.add(sp); bersagli.push(sp);
-        perId['magazzino-' + k] = { sp, fisso: true };
-      }
       K.items.forEach(it => {
         const along = it.face === 'up' || it.face === 'down', w = along ? it.x[1] - it.x[0] : it.d[1] - it.d[0], th = along ? it.d[1] - it.d[0] : it.x[1] - it.x[0];
         const u = buildUnit(it, w, th), cx = (it.x[0] + it.x[1]) / 2 - L / 2, cz = D / 2 - (it.d[0] + it.d[1]) / 2;
         u.g.position.set(cx, 0, cz); u.g.rotation.y = rot[it.face]; G.add(u.g);
-        u.g.traverse(o => { if (o.isMesh) { o.userData.id = it.id; o.userData.cucina = k; bersagli.push(o); } });
+        u.g.traverse(o => { if (o.isMesh) { o.userData.id = it.id; o.userData.cucina = k; o.userData.pulsante = tocchi[it.type]; bersagli.push(o); } });
         const box = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(it.x[1] - it.x[0] + 0.12, u.h + 0.12, it.d[1] - it.d[0] + 0.12)), new THREE.LineBasicMaterial({ color: 0x9C4524 }));
         box.position.set(cx, u.h / 2, cz); box.visible = false; G.add(box);
         const alone = new THREE.Mesh(new THREE.PlaneGeometry(it.x[1] - it.x[0] + 0.5, it.d[1] - it.d[0] + 0.5), new THREE.MeshBasicMaterial({ color: 0x9C4524, transparent: true, opacity: .28 }));
         alone.rotation.x = -Math.PI / 2; alone.position.set(cx, 0.012, cz); alone.visible = false; G.add(alone);
         perId[it.id] = { G, sp: null, box, alone, pos: [cx, u.h + 0.55, cz], breve: undefined, c: undefined, nome: undefined };
+      });
+      // i pulsanti della cucina: sul pavimento (x, d) oppure sopra un'attrezzatura (su)
+      (K.pulsanti || []).forEach(pu => {
+        const sp = etichetta(pu.testo, 'ok', true), sopra = pu.su && perId[pu.su];
+        if (sopra) sp.position.set(sopra.pos[0], sopra.pos[1], sopra.pos[2]); else sp.position.set(pu.x - L / 2, 0.75, D / 2 - pu.d);
+        sp.userData.cucina = k; sp.userData.pulsante = pu.id; G.add(sp); bersagli.push(sp);
+        perId['pulsante-' + pu.id] = { sp, fisso: true };
       });
     });
     const tutti = Object.keys(cucine).map(k => cucine[k]);
@@ -269,7 +273,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
     const b = canvas.getBoundingClientRect(); punto.set((x - b.left) / b.width * 2 - 1, -((y - b.top) / b.height * 2 - 1)); ray.setFromCamera(punto, cam);
     const hit = ray.intersectObjects(bersagli, false)[0]; if (!hit) return;
     const u = hit.object.userData;
-    if (u.id && perId[u.id] && perId[u.id].attivo) { evidenzia(u.id); invia({ tipo: 'posto', id: u.id }); } else if (u.cucina) invia({ tipo: 'pavimento', cucina: u.cucina });
+    if (u.id && perId[u.id] && perId[u.id].attivo) { evidenzia(u.id); invia({ tipo: 'posto', id: u.id }); } else if (u.cucina) invia({ tipo: 'pulsante', id: u.pulsante || 'magazzino', cucina: u.cucina });
   }
   canvas.addEventListener('pointerdown', ev => { dita.set(ev.pointerId, { x: ev.clientX, y: ev.clientY }); if (dita.size === 1) mosso = 0; pizzico = 0; toccata = true; try { canvas.setPointerCapture(ev.pointerId); } catch (e) {} });
   canvas.addEventListener('pointermove', ev => {
@@ -294,7 +298,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
   window.__cucine = (dati) => {
     try {
       document.documentElement.classList.toggle('scuro', !!dati.scuro);
-      if (!costruita) costruisci(dati.cucine, !!dati.scuro);
+      if (!costruita) costruisci(dati.cucine, !!dati.scuro, dati.tocchi);
       aggiornaStati(dati.stati);
       evidenzia(dati.scelto || null);
       sporco = true;
@@ -307,7 +311,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
   window.__schermoTag = (id) => { const v = new THREE.Vector3(); perId[id].sp.getWorldPosition(v); return sulloSchermo(v); };
   window.__schermo = (id) => { const o = perId[id], v = new THREE.Vector3(o.pos[0], o.pos[1] - 0.9, o.pos[2]); o.G.localToWorld(v); cam.updateMatrixWorld(); v.project(cam); return [(v.x + 1) / 2 * window.innerWidth, (1 - v.y) / 2 * window.innerHeight]; };
   const sulloSchermo = (v) => { cam.updateMatrixWorld(); v.project(cam); return [(v.x + 1) / 2 * window.innerWidth, (1 - v.y) / 2 * window.innerHeight]; };
-  window.__schermoMagazzino = () => { const sp = perId['magazzino-grande'].sp, v = new THREE.Vector3(); sp.getWorldPosition(v); return sulloSchermo(v); };
+  window.__schermoPulsante = (id) => { const sp = perId['pulsante-' + id].sp, v = new THREE.Vector3(); sp.getWorldPosition(v); return sulloSchermo(v); };
   window.__schermoPavimento = (k, x, d) => { const K = window.__ultimi.cucine[k]; return sulloSchermo(new THREE.Vector3(K.ox + x, 0, K.D / 2 - d)); };
   // quanti colori diversi ci sono nell'immagine appena disegnata (una scena vuota ne ha uno solo)
   window.__colori = () => { renderer.render(scene, cam); const gl = renderer.getContext(), w = gl.drawingBufferWidth, h = gl.drawingBufferHeight, px = new Uint8Array(4), s = new Set();
