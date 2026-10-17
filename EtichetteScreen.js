@@ -107,17 +107,61 @@ const CSS_LAB = `
   .note { font-size: 12px; margin-top: 6px; border-top: 1px dashed #999; padding-top: 5px; min-height: 26px; }
 `;
 
-/* Documento A4: griglia a 2 colonne, ogni cella = dimensione "8 per foglio" */
+/*
+ * Foglio A4 di etichette adesive: 10 per foglio (2 colonne x 5 righe), posizioni e misure fisse in mm,
+ * prese dal modello in PDF fornito da Luca. Non cambiarle senza un nuovo modello.
+ */
+const FOGLIO_A4 = {
+  perFoglio: 10,
+  colonne: [6.6, 106.8], // bordo sinistro di ogni colonna
+  primaRiga: 7.5,        // bordo superiore della prima riga
+  passoRighe: 56.65,     // distanza fra l'inizio di una riga e la successiva
+  righe: 5,
+  larghezza: 96.8,
+  altezza: 55.4,
+};
+
+/** Posizione (mm) dell'etichetta numero i (0 = prima) all'interno del suo foglio. */
+function posizioneA4(i) {
+  const n = i % FOGLIO_A4.perFoglio;
+  return {
+    left: FOGLIO_A4.colonne[n % 2],
+    top: Number((FOGLIO_A4.primaRiga + Math.floor(n / 2) * FOGLIO_A4.passoRighe).toFixed(2)),
+  };
+}
+
 function docA4(etichette) {
-  const celle = etichette.map((e) => costruisciEtichetta(e)).join('');
+  const F = FOGLIO_A4;
+  const fogli = [];
+  for (let i = 0; i < etichette.length; i += F.perFoglio) {
+    const celle = etichette.slice(i, i + F.perFoglio).map((e, j) => {
+      const p = posizioneA4(j);
+      return `<div class="cella" style="left:${p.left}mm;top:${p.top}mm">${costruisciEtichetta(e)}</div>`;
+    }).join('');
+    fogli.push(`<div class="foglio">${celle}</div>`);
+  }
   const css = `
-    @page { size: A4; margin: 8mm; }
-    body { font-family: Arial, Helvetica, sans-serif; margin: 0; }
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; }
+    @page { size: A4; margin: 0; }
+    html, body { margin: 0; padding: 0; }
+    body { font-family: Arial, Helvetica, sans-serif; }
+    .foglio { position: relative; width: 210mm; height: 297mm; overflow: hidden; page-break-after: always; }
+    .foglio:last-child { page-break-after: auto; }
+    .cella { position: absolute; width: ${F.larghezza}mm; height: ${F.altezza}mm; }
     ${CSS_LAB}
+    /* misure fisse: l'etichetta riempie la cella e il contenuto non la allunga */
+    .lab { width: 100%; height: 100%; }
+    .hd { font-size: 11px; padding: 4px; }
+    .hd .sub { font-size: 8px; }
+    .bd { padding: 4px 8px; }
+    .prod { font-size: 12px; margin-bottom: 3px; padding-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .chk { font-size: 11px; line-height: 1.5; margin-bottom: 3px; padding-bottom: 3px; }
+    .r { font-size: 11px; margin: 2px 0; }
+    .big { font-size: 15px; margin: 4px 0; }
+    .allg { font-size: 14px; line-height: 1.35; margin-top: 4px; }
+    .note { font-size: 11px; margin-top: 3px; padding-top: 3px; min-height: 0; }
   `;
   return `<html><head><meta charset="utf-8"><style>${css}</style></head>
-    <body><div class="grid">${celle}</div></body></html>`;
+    <body>${fogli.join('')}</body></html>`;
 }
 
 /* Documento termica: una etichetta a larghezza fissa in mm */
@@ -353,8 +397,8 @@ export default function EtichetteScreen({ route }) {
           </View>
           <Bottone testo="Stampa foglio A4" onPress={stampaFoglio} />
           <Text style={[S.muted, { marginTop: 8 }]}>
-            Ogni etichetta ha la dimensione di 1/8 di foglio A4. Oltre le 8, continua su
-            pagine successive. Se il foglio è vuoto, stampa l'etichetta compilata qui sopra.
+            Foglio A4 da 10 etichette (2 colonne × 5 righe), con posizioni e misure fisse.
+            Stampa al 100% (senza "adatta alla pagina"). Oltre le 10, continua su pagine successive. Se il foglio è vuoto, stampa l'etichetta compilata qui sopra.
             Dopo la stampa il foglio si svuota da solo.
           </Text>
         </>
