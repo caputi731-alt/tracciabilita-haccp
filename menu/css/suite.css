@@ -83,3 +83,19 @@ html.suite.scuro .stat button.on{background:color-mix(in srgb,var(--c) 26%,#1D20
 html.suite.scuro .hint[style*="color:#8A5A12"]{color:#F2C078 !important}
 html.suite.scuro .pv .pg{box-shadow:0 10px 30px rgba(0,0,0,.6)}
 html.suite.scuro select.inp{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23B0B3A4' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")}
+
+/* ---------- Prenotazioni della suite nel calendario (scelta di Luca del 18/10/2026) ---------- */
+html.suite .day{gap:2px}
+html.suite .day .cop{font:800 11px/13px Manrope,sans-serif;height:13px;color:var(--olive);letter-spacing:-.2px}
+html.suite .day .cop.da,html.suite .legend .cop.da{color:var(--terra)}
+html.suite .legend .cop{font:800 11px/1 Manrope,sans-serif;color:var(--olive)}
+html.suite .pren-tot{margin:4px 2px 6px;font-size:14px;color:var(--muted)}
+html.suite .pren-tot b{color:var(--terra)}
+html.suite .pren-list{margin-bottom:12px}
+html.suite .prow{width:100%;display:flex;align-items:center;gap:10px;min-height:60px;padding:10px 12px 10px 16px;border:0;border-bottom:1px solid var(--line);background:transparent;text-align:left;color:var(--ink);font:inherit}
+html.suite .prow:last-child{border-bottom:0}
+html.suite .prow .pr-b{flex:1;display:flex;flex-direction:column;min-width:0}
+html.suite .prow .pr-t{font-weight:700;font-size:16px}
+html.suite .prow .pr-s{font-size:13px;color:var(--muted)}
+html.suite .prow svg{flex:none;width:20px;height:20px;color:var(--muted)}
+html.suite .pren-h{margin-top:22px}

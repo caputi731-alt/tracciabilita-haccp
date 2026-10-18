@@ -23,6 +23,10 @@ FINTA = """(()=>{
   window.__ricette=[{id:1,nome:'Orecchiette alle cime di rapa',categoria:'',ingredienti:3,allergeni:[1,4],daVerificare:[]},
     {id:2,nome:'Ricetta vuota',categoria:'',ingredienti:0,allergeni:[],daVerificare:[]},
     {id:3,nome:'Con farina da fattura',categoria:'',ingredienti:2,allergeni:[1],daVerificare:['Farina 00']}];
+  // prenotazioni della suite per il calendario: oggi una confermata e una da confermare (nomi inventati)
+  window.__prenotazioni=(()=>{const d=new Date(),p=n=>String(n).padStart(2,'0'),t=`${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
+    return[{data:t,servizio:'Pranzo',nome:'Rossi',persone:8,min:8,max:8,sala:'Antica stalla',daConfermare:false},
+      {data:t,servizio:'Pranzo',nome:'Sardo',persone:16,min:13,max:16,sala:'Panoramica',daConfermare:true}]})();
   window.ReactNativeWebView={
     injectedObjectJson:()=>JSON.stringify({build:'prova-123',fontScale:1.3}),
     postMessage:(s)=>{const m=JSON.parse(s),a=leggi();let v=null;
@@ -30,6 +34,7 @@ FINTA = """(()=>{
       else if(m.tipo==='kvKeys')v=Object.keys(a).sort();
       else if(m.tipo==='kvSetMany'){m.pairs.forEach(([k,x])=>{if(x===null)delete a[k];else a[k]=x});scrivi(a)}
       else if(m.tipo==='ricette')v=window.__ricette;
+      else if(m.tipo==='prenotazioni')v=window.__prenotazioni;
       else if(m.tipo==='creaRicetta'){const id=100+window.__ricette.length;window.__ricette.push({id,nome:m.nome,categoria:'',ingredienti:0,allergeni:[],daVerificare:[]});window.__ricevuti.push(m);v=id}
       else{window.__ricevuti.push(m);return}
       setTimeout(()=>window.__suiteRisposta(m.id,true,v),0)}};
@@ -227,6 +232,25 @@ with sync_playwright() as p:
     ok(pg.evaluate("window.__ricevuti.find(m=>m.tipo==='apriEvento').evento") == 'm1', '"Fabbisogno e costo" dal menù: la suite apre l\'evento giusto')
     anno = pg.evaluate("[ANNO_SC,DID_MSG.includes('anno scolastico '+ANNO_SC),normalize({v:3,settings:{didMsg:DID_MSG_ANNO('2025/2026')}}).settings.didMsg,normalize({v:3,settings:{didMsg:'mio testo 2025/2026'}}).settings.didMsg]")
     ok(anno[1] and anno[2] is None and anno[3] == 'mio testo 2025/2026', f"fattoria didattica: l'anno scolastico del messaggio si aggiorna da solo ({anno[0]}), un testo personalizzato resta")
+
+    # ---------- prenotazioni della suite nel calendario ----------
+    pg.evaluate("ui.view='cal';ui.selDate=today();const n=new Date();ui.cal={y:n.getFullYear(),m:n.getMonth()};render()")
+    pg.wait_for_timeout(400)
+    cal = pg.evaluate("""()=>{const c=document.querySelector('.day.today .cop');return{cop:c&&c.textContent,da:c&&c.classList.contains('da'),
+      righe:document.querySelectorAll('.prow').length,tot:(document.querySelector('.pren-tot')||{}).textContent||'',
+      testo:[...document.querySelectorAll('.prow')].map(r=>r.textContent)}}""")
+    ok(cal['cop'] == '24' and cal['da'], f"calendario: coperti del giorno (16 contati per 13/16) in terracotta se qualcuna è da confermare ({cal['cop']})")
+    ok(cal['righe'] == 2 and 'Pranzo · 24 coperti' in cal['tot'] and '1 da confermare' in cal['tot']
+       and 'Rossi · 8 pers.' in cal['testo'][0] and 'Sardo · 13–16 pers.' in cal['testo'][1] and 'da confermare' in cal['testo'][1],
+       'giorno scelto: elenco delle prenotazioni con persone, sala e stato')
+    ricevuti.clear()
+    pg.click('.prow >> nth=1')
+    pg.wait_for_timeout(200)
+    ok(any(m == {'tipo': 'apriSala', 'data': pg.evaluate('today()'), 'servizio': 'Pranzo'} for m in ricevuti), 'tocco su una prenotazione: la suite apre la Sala su quel giorno')
+    pg.evaluate("window.__suitePrenotazioni([])")
+    pg.wait_for_timeout(300)
+    ok(pg.evaluate("document.querySelectorAll('.prow').length") == 0 and pg.evaluate("document.querySelector('.day.today .cop').textContent") == '',
+       'elenco aggiornato dalla suite: il calendario si ridisegna')
 
     ricevuti.clear()
     pg.evaluate("""async()=>{const m=getMenu('m1');const f=[await waFile(m,'proposta','pdf'),await waFile(m,'proposta','jpg')];

@@ -386,3 +386,41 @@ export async function scaricaCalendario(link, { fetchFn = globalThis.fetch, seco
     if (timer) clearTimeout(timer);
   }
 }
+
+/* ---------- prenotazioni per il calendario del Menù ---------- */
+
+const NOME_SALA = (id) => (SALE[id] ? SALE[id].nome.replace('Sala ', '').replace(/^./, (c) => c.toUpperCase()) : '');
+const ORDINE_SERVIZIO = { Pranzo: 0, Cena: 1 };
+
+/**
+ * Le prenotazioni da mostrare nel calendario del Menù (scelta di Luca del 18/10/2026: tutte, confermate e da confermare).
+ * - `giorni`: disposizioni salvate in Sala [{ data, servizio, piani }]: ogni tavolata con un nome o delle persone è confermata
+ *   (comprese quelle aggiunte a mano in Sala);
+ * - `esterne`: righe di `prenotazioni_esterne` ancora da confermare (stato 'nuova'): quelle senza numero di persone non compaiono.
+ * → [{ data, servizio, nome, persone, min, max, sala (nome per esteso o ''), daConfermare }], in ordine di giorno e servizio.
+ */
+export function prenotazioniCalendario(giorni = [], esterne = []) {
+  const out = [];
+  for (const g of giorni) {
+    for (const id of ID_SALE) {
+      const piano = g.piani && g.piani[id];
+      if (!piano || !Array.isArray(piano.file)) continue;
+      for (const fila of piano.file) {
+        for (const t of fila || []) {
+          const persone = Math.max(0, parseInt(t && t.persone, 10) || 0);
+          if (!t || (!String(t.nome || '').trim() && !persone)) continue;
+          out.push({ data: g.data, servizio: g.servizio, nome: String(t.nome || '').trim(), persone, min: persone, max: persone, sala: NOME_SALA(id), daConfermare: false });
+        }
+      }
+    }
+  }
+  for (const r of esterne) {
+    if (r.stato !== 'nuova') continue;
+    const [titolo, ...desc] = String(r.testo || '').split('\n');
+    const s = leggiTesto(titolo, desc.join('\n'), r.colore);
+    if (!s.prenotazione) continue;
+    out.push({ data: r.data, servizio: s.servizio, nome: s.nome, persone: s.persone, min: s.min, max: s.max, sala: NOME_SALA(s.sala), daConfermare: true });
+  }
+  return out.sort((a, b) => a.data.localeCompare(b.data) || (ORDINE_SERVIZIO[a.servizio] ?? 2) - (ORDINE_SERVIZIO[b.servizio] ?? 2)
+    || Number(a.daConfermare) - Number(b.daConfermare) || a.nome.localeCompare(b.nome, 'it'));
+}

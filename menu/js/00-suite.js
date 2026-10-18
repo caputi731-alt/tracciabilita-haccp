@@ -67,6 +67,16 @@
   // la suite manda l'elenco aggiornato ogni volta che si torna al Menù
   window.__suiteRicette = imposta;
 
+  // Prenotazioni della suite nel calendario (scelta di Luca del 18/10/2026): confermate in Sala e da confermare (Family Wall).
+  // ogni prenotazione: { data, servizio, nome, persone, min, max, sala, daConfermare }; toccandola si apre la Sala su quel giorno
+  const impostaPrenotazioni = (elenco) => { window.SuitePrenotazioni.elenco = Array.isArray(elenco) ? elenco : []; ridisegna(); };
+  window.SuitePrenotazioni = {
+    elenco: [],
+    carica: () => chiedi('prenotazioni').then(impostaPrenotazioni),
+    apri: (data, servizio) => invia('apriSala', { data, servizio }),
+  };
+  window.__suitePrenotazioni = impostaPrenotazioni;
+
   // niente autoBackup: i dati stanno nel database della suite e finiscono nel suo backup
   window.Android = {
     version: () => String(dati.build || ''),

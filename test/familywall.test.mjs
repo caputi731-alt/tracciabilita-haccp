@@ -284,3 +284,35 @@ test('database: le prenotazioni importate vanno nel backup, il link no', async (
   assert.equal(await db.leggiPreferenza('familywall_link'), null);
   assert.equal((await db.query('SELECT * FROM prenotazioni_esterne')).length, n);
 });
+
+test('calendario: confermate in Sala (anche a mano) e da confermare, senza scartate né eventi senza persone', async () => {
+  const { prenotazioniCalendario } = await import('../familywall.js');
+  const { pianoVuoto } = await import('../sale.js');
+  const piani = { stalla: pianoVuoto(SALE.stalla), panoramica: pianoVuoto(SALE.panoramica) };
+  piani.stalla.file[0].push(nuovaTavolata({ nome: 'Rossi', persone: '8' }));
+  piani.panoramica.file[0].push(nuovaTavolata({ nome: '', persone: '' })); // tavolata libera: non è una prenotazione
+  const elenco = prenotazioniCalendario(
+    [{ data: '2026-10-25', servizio: 'Pranzo', piani }],
+    [
+      { uid: 'a', data: '2026-10-25', testo: 'Sardo 13/16 S.P.', colore: '', stato: 'nuova' },
+      { uid: 'b', data: '2026-10-25', testo: 'Compleanno nonna', colore: '', stato: 'nuova' },
+      { uid: 'c', data: '2026-10-24', testo: 'Gallo 4 cena', colore: '', stato: 'nuova' },
+      { uid: 'd', data: '2026-10-25', testo: 'Neri 6', colore: '', stato: 'scartata' },
+    ],
+  );
+  assert.deepEqual(elenco.map((p) => [p.data, p.servizio, p.nome, p.persone, p.sala, p.daConfermare]), [
+    ['2026-10-24', 'Cena', 'Gallo', 4, '', true],
+    ['2026-10-25', 'Pranzo', 'Rossi', 8, 'Antica stalla', false],
+    ['2026-10-25', 'Pranzo', 'Sardo', 16, 'Panoramica', true],
+  ]);
+  assert.deepEqual([elenco[2].min, elenco[2].max], [13, 16]);
+
+  // dal database: le confermate dalla disposizione, le da confermare da Family Wall, nei giorni chiesti
+  await db.initDatabase();
+  await db.salvaDisposizioneGiorno(giorno(5), 'Pranzo', piani);
+  await db.exec("INSERT INTO prenotazioni_esterne (uid, data, testo, stato) VALUES ('cal1', ?, 'Ferri 9+2+1', 'nuova')", [giorno(6)]);
+  const dalDb = await db.prenotazioniPerCalendario(giorno(5), giorno(6));
+  assert.ok(dalDb.some((p) => p.nome === 'Rossi' && p.data === giorno(5) && !p.daConfermare));
+  assert.ok(dalDb.some((p) => p.nome === 'Ferri' && p.persone === 12 && p.daConfermare));
+  assert.equal((await db.prenotazioniPerCalendario(giorno(7), giorno(8))).length, 0);
+});

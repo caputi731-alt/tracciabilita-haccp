@@ -167,7 +167,7 @@ function giraSchermo(orizzontale) {
   }
 }
 
-export default function SaleScreen({ suTuttoSchermo }) {
+export default function SaleScreen({ suTuttoSchermo, apri, suAperta }) {
   const [data, setData] = useState(oggiLocale());
   const [servizio, setServizio] = useState(new Date().getHours() < 16 ? SERVIZI[0] : SERVIZI[1]);
   const [quale, setQuale] = useState(0); // sala mostrata: posizione in ID_SALE
@@ -184,6 +184,13 @@ export default function SaleScreen({ suTuttoSchermo }) {
   const schermo = useWindowDimensions();
   const chiave = useRef('');
   const [versione, setVersione] = useState(0); // cresce a ogni ritorno sulla Sala: il riquadro di Family Wall si aggiorna
+  // aperta dal calendario del Menù su un giorno e un servizio
+  useEffect(() => {
+    if (!apri || !apri.data) return;
+    setScelta(null); setInsieme(false); setData(apri.data);
+    if (SERVIZI.includes(apri.servizio)) setServizio(apri.servizio);
+    if (suAperta) suAperta(); // usata una volta: tornando in Sala dalla barra si riparte da oggi
+  }, [apri, suAperta]);
 
   const idSala = ID_SALE[quale];
   const sala = SALE[idSala];

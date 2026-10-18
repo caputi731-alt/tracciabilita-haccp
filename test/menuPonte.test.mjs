@@ -141,3 +141,21 @@ test('eventi del Menù per il resto della suite: portate con la ricetta collegat
   assert.deepEqual(eventiMenu('non è json'), []);
   assert.deepEqual(eventiMenu(null), []);
 });
+
+test('prenotazioni nel calendario: giorni, script, risposta e apertura della Sala', async () => {
+  const { finestraCalendario, scriptPrenotazioni, rispondiPrenotazioni, aperturaSala } = await import('../menuPonte.js');
+  assert.deepEqual(finestraCalendario('2026-10-18'), ['2026-07-18', '2027-11-22']);
+  // lo script consegna l'elenco alla pagina
+  const ricevuti = [];
+  vm.runInNewContext(scriptPrenotazioni([{ data: '2026-10-25', nome: 'Rossi </script>' }]), { window: { __suitePrenotazioni: (e) => ricevuti.push(e) } });
+  assert.equal(ricevuti[0][0].nome, 'Rossi </script>');
+  assert.match(scriptPrenotazioni([]), /__suitePrenotazioni/);
+  // la domanda "prenotazioni" riceve l'elenco; gli altri messaggi non la riguardano
+  assert.equal(await rispondiPrenotazioni({ tipo: 'ricette', id: 1 }, async () => []), null);
+  assert.match(await rispondiPrenotazioni({ tipo: 'prenotazioni', id: 7 }, async () => [{ nome: 'Rossi' }]), /__suiteRisposta\(7,true,\[\{"nome":"Rossi"\}\]\)/);
+  assert.match(await rispondiPrenotazioni({ tipo: 'prenotazioni', id: 8 }, async () => { throw new Error('rotto'); }), /\(8,false,"rotto"\)/);
+  assert.deepEqual(aperturaSala({ tipo: 'apriSala', data: '2026-10-25', servizio: 'Cena' }), { data: '2026-10-25', servizio: 'Cena' });
+  assert.deepEqual(aperturaSala({ tipo: 'apriSala', data: '2026-10-25' }), { data: '2026-10-25', servizio: 'Pranzo' });
+  assert.equal(aperturaSala({ tipo: 'apriSala', data: 'ieri' }), null);
+  assert.equal(aperturaSala({ tipo: 'altro', data: '2026-10-25' }), null);
+});

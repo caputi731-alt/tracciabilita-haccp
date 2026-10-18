@@ -33,22 +33,35 @@ const swatch=(t,h=106)=>{const L=LAYOUTS[t.layout]||LAYOUTS.verticale;
 
 /* ---------- Viste ---------- */
 const backupDue=()=>state.menus.length>=3&&(!state.settings.lastBackup||Date.now()-state.settings.lastBackup>30*864e5);
+// Prenotazioni della suite (solo dentro la suite): per giorno i coperti totali, in terracotta se qualcuna è da confermare
+const PREN=()=>window.SuitePrenotazioni?window.SuitePrenotazioni.elenco:null;
+const coperti=L=>L.reduce((t,p)=>t+(Number(p.max||p.persone)||0),0);
+function prenGiornoHTML(L,ds){
+  if(!L.length)return'';
+  const per={};L.forEach(p=>{(per[p.servizio]=per[p.servizio]||[]).push(p)});
+  return`<h2 class="dh pren-h">Prenotazioni</h2>`+Object.keys(per).sort((a,b)=>(a==='Cena')-(b==='Cena')).map(sv=>{const P=per[sv],da=P.filter(p=>p.daConfermare).length;
+    return`<p class="pren-tot">${esc(sv)} · ${coperti(P)} coperti${da?` · <b>${da} da confermare</b>`:''}</p><div class="list pren-list">${P.map(p=>{
+      const n=p.min&&p.max>p.min?`${p.min}–${p.max}`:(p.persone||'?');
+      return`<button class="prow" data-a="apriSala" data-d="${ds}" data-s="${esc(sv)}" aria-label="${esc(p.nome||'Senza nome')}, ${n} persone${p.daConfermare?', da confermare':''}: apri la Sala"><span class="pr-b"><span class="pr-t">${esc(p.nome||'Senza nome')} · ${n} pers.</span><span class="pr-s">${esc(p.sala||'sala da scegliere')}</span></span>${p.daConfermare?`<span class="pill" style="--c:#9C4524">da confermare</span>`:''}${I.right}</button>`}).join('')}</div>`}).join('')+`<p class="hint">Tocca una prenotazione per aprire la Sala su quel giorno: lì la confermi e la metti a tavola.</p>`;
+}
 function vCal(){
   const{y,m}=ui.cal,title=cap(new Date(y,m,1).toLocaleDateString('it-IT',{month:'long',year:'numeric'}));
-  const first=(new Date(y,m,1).getDay()+6)%7,nd=new Date(y,m+1,0).getDate(),td=today(),by={};
+  const first=(new Date(y,m,1).getDay()+6)%7,nd=new Date(y,m+1,0).getDate(),td=today(),by={},pr={},P=PREN();
   state.menus.forEach(x=>{if(x.date)(by[x.date]=by[x.date]||[]).push(x)});
+  if(P)P.forEach(p=>{if(p.data)(pr[p.data]=pr[p.data]||[]).push(p)});
   let cells='';for(let i=0;i<first;i++)cells+='<span></span>';
   for(let d=1;d<=nd;d++){
-    const ds=`${y}-${pad(m+1)}-${pad(d)}`,L=by[ds]||[];
-    cells+=`<button class="day${ds===td?' today':''}${ds===ui.selDate?' sel':''}" data-a="selDay" data-d="${ds}" aria-label="${d}${L.length?', '+L.length+' proposte':''}"><span class="dn">${d}</span><span class="dots">${L.slice(0,3).map(x=>`<i style="background:${(STATUS[x.status]||STATUS.bozza).c}"></i>`).join('')}${L.length>3?'<em>+</em>':''}</span></button>`;
+    const ds=`${y}-${pad(m+1)}-${pad(d)}`,L=by[ds]||[],R=pr[ds]||[],cop=coperti(R),da=R.some(p=>p.daConfermare);
+    cells+=`<button class="day${ds===td?' today':''}${ds===ui.selDate?' sel':''}" data-a="selDay" data-d="${ds}" aria-label="${d}${L.length?', '+L.length+' proposte':''}${R.length?', '+cop+' coperti prenotati'+(da?', qualcuna da confermare':''):''}"><span class="dn">${d}</span><span class="dots">${L.slice(0,3).map(x=>`<i style="background:${(STATUS[x.status]||STATUS.bozza).c}"></i>`).join('')}${L.length>3?'<em>+</em>':''}</span>${P?`<span class="cop${da?' da':''}">${R.length?cop:''}</span>`:''}</button>`;
   }
   const sel=(by[ui.selDate]||[]).sort((a,b)=>(a.time||'').localeCompare(b.time||''));
   return topbar(`<h1>Calendario</h1><button class="tb" data-a="calToday">Oggi</button>`)+
   `<main class="main">${backupDue()?`<div class="card" style="margin-bottom:14px;display:flex;gap:10px;align-items:center"><span style="flex:1;font-size:14px">${state.settings.lastBackup?'È passato più di un mese dall\'ultimo backup.':'Non hai ancora fatto un backup.'} I dati sono solo su questo telefono.</span><button class="btn" data-a="export">${I.dl}Backup</button></div>`:''}<div class="calh"><h2>${title}</h2><button class="ib" data-a="calMove" data-d="-1" aria-label="Mese precedente">${I.left}</button><button class="ib" data-a="calMove" data-d="1" aria-label="Mese successivo">${I.right}</button></div>
   <div class="wk">${['L','M','M','G','V','S','D'].map(x=>`<span>${x}</span>`).join('')}</div><div class="grid">${cells}</div>
-  <div class="legend">${Object.values(STATUS).map(s=>`<span><i style="background:${s.c}"></i>${s.l}</span>`).join('')}</div>
+  <div class="legend">${Object.values(STATUS).map(s=>`<span><i style="background:${s.c}"></i>${s.l}</span>`).join('')}${P?`<span><b class="cop">12</b>coperti prenotati</span><span><b class="cop da">12</b>con prenotazioni da confermare</span>`:''}</div>
   <h2 class="dh">${fmtLong(ui.selDate)}</h2>
   ${sel.length?sel.map(x=>menuCard(x,false)).join(''):`<div class="card empty">Nessun menù in questa data.<br><br><button class="btn pri" data-a="new">${I.plus}Crea menù</button></div>`}
+  ${P?prenGiornoHTML(pr[ui.selDate]||[],ui.selDate):''}
   </main>`+fab('new','Nuovo menù')+navbar();
 }
 function listHTML(){

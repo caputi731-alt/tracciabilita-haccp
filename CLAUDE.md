@@ -219,6 +219,15 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
   migliore della sala scelta o dell'altra; composizione, acconto e telefono finiscono nelle note della tavolata) e
   `ModaleFamilyWall` (collegamento e "Aggiorna adesso").
 - Da verificare sul telefono: se Family Wall mette il colore dell'evento nel link (altrimenti l'acconto si sceglie a mano).
+- Prenotazioni nel calendario del Menù (scelta di Luca del 18/10/2026: "tutte", confermate e da confermare): `prenotazioniCalendario`
+  (familywall.js) + `prenotazioniPerCalendario(da, a)` (database.js) prendono le tavolate con nome o persone dalle disposizioni della Sala
+  (anche quelle scritte a mano) e le righe `nuova` di Family Wall con un numero di persone. Giorni da tre mesi fa a 400 giorni avanti
+  (`finestraCalendario` in menuPonte.js). La pagina le chiede all'avvio (`SuitePrenotazioni.carica`, domanda `prenotazioni`) e le riceve
+  a ogni ritorno al Menù (`scriptPrenotazioni` → `window.__suitePrenotazioni`). In `vCal` (menu/js/04-viste.js): sotto i pallini dei
+  menù i coperti del giorno (`.cop`, terracotta se qualcuna è da confermare; 13/16 conta 16), e sotto i menù del giorno la sezione
+  "Prenotazioni" per servizio. Il tocco manda `apriSala { data, servizio }` (`aperturaSala`): PrincipaleScreen apre la Sala su quel
+  giorno (`apri` / `suAperta` di SaleScreen). Fuori dalla suite (SuitePrenotazioni assente) il calendario resta com'era.
+  Stili in `menu/css/suite.css`; provato in `test/menu-suite.py`.
 
 ## Incassi e costi (Gestione → Incassi, scelte di Luca del 9/10/2026)
 - `conti.js` (puro, `test/conti.test.mjs`) + `IncassiScreen.js`. Incassi: una riga per giorno (tabella `incassi`), divisa per metodo

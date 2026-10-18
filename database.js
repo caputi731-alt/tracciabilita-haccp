@@ -2,7 +2,7 @@ import * as SQLite from 'expo-sqlite';
 import { oggiLocale, piuGiorni, limitiGiorni, giornoDi, daIsoLocale, arrotonda, ALLERGENI } from './utile';
 import { SALE, ID_SALE, SERVIZI, pianoPulito, senzaPrenotazioni, totali as totaliSale } from './sale';
 import { CATEGORIE_SPESA } from './conti';
-import { confronta, mettiATavola, togliTavolata, linkValido } from './familywall';
+import { confronta, mettiATavola, togliTavolata, linkValido, prenotazioniCalendario } from './familywall';
 
 let apertura = null;
 
@@ -965,6 +965,17 @@ export async function confermaPrenotazioneEsterna(uid, { data, servizio, sala, t
     esito = { sala: messa.sala, f: messa.f };
   });
   return esito;
+}
+
+/**
+ * Prenotazioni fra due giorni (compresi) per il calendario del Menù: le confermate in Sala (anche quelle scritte a mano)
+ * e quelle di Family Wall ancora da confermare. Vedi `prenotazioniCalendario` in familywall.js.
+ */
+export async function prenotazioniPerCalendario(da, a) {
+  const righe = await query("SELECT data, servizio, dati FROM disposizioni WHERE tipo = 'giorno' AND data >= ? AND data <= ?", [da, a]);
+  const giorni = righe.map((r) => ({ data: r.data, servizio: r.servizio, piani: pianiPuliti(leggiJson(r.dati, {}), pianoPulito) }));
+  const esterne = await query("SELECT * FROM prenotazioni_esterne WHERE stato = 'nuova' AND data >= ? AND data <= ?", [da, a]);
+  return prenotazioniCalendario(giorni, esterne);
 }
 
 /** "Non è una prenotazione": non viene più proposta (torna solo se in Family Wall l'evento cambia). */

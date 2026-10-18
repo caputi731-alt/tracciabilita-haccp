@@ -6,25 +6,28 @@
  * Proprietà: attiva (la sezione è quella mostrata), comandi (ref che riceve { indietro, salva }),
  * suEsci (il tasto indietro non ha più niente da chiudere), suVista(profonda) (schermata interna: via la barra in basso),
  * suApri(rotta, parametri) (apre una schermata della suite, per esempio la ricetta di una portata),
- * aggiorna (numero che cambia quando si torna alla schermata principale: la pagina riceve le ricette aggiornate).
+ * aggiorna (numero che cambia quando si torna alla schermata principale: la pagina riceve le ricette aggiornate),
+ * suSala(data, servizio) (apre la Sala su quel giorno: una prenotazione toccata nel calendario).
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Linking, PixelRatio, ActivityIndicator } from 'react-native';
 import { WebView } from 'react-native-webview';
-import { COLORS, S, TEMA_SCURO } from './theme';
+import { COLORS, S, TEMA_SCURO, oggiLocale } from './theme';
 import { Vuoto } from './UI';
 import { BUILD } from './build';
-import { menuLeggi, menuChiavi, menuScrivi, ricettePerMenu, creaRicettaDaPortata } from './database';
+import { menuLeggi, menuChiavi, menuScrivi, ricettePerMenu, creaRicettaDaPortata, prenotazioniPerCalendario } from './database';
 import {
   PAGINA_MENU, leggiMessaggio, rispondiArchivio, rispondiRicette, scriptRicette, destinazione, scriptAvviso, scriptSalvato,
+  finestraCalendario, scriptPrenotazioni, rispondiPrenotazioni, aperturaSala,
 } from './menuPonte';
 
 const ARCHIVIO = { leggi: menuLeggi, chiavi: menuChiavi, scrivi: menuScrivi };
 const RICETTE = { elenco: ricettePerMenu, crea: creaRicettaDaPortata };
+const prenotazioni = () => prenotazioniPerCalendario(...finestraCalendario(oggiLocale()));
 // le librerie di condivisione si caricano solo quando servono: un loro problema non blocca il resto dell'app
 const invio = () => require('./menuInvio');
 
-export default function MenuScreen({ attiva = true, aggiorna = 0, comandi, suEsci, suVista, suApri }) {
+export default function MenuScreen({ attiva = true, aggiorna = 0, comandi, suEsci, suVista, suApri, suSala }) {
   const web = useRef(null);
   const caricata = useRef(false);
   const attese = useRef([]); // chi aspetta che la pagina abbia scritto le ultime modifiche
@@ -64,12 +67,14 @@ export default function MenuScreen({ attiva = true, aggiorna = 0, comandi, suEsc
   useEffect(() => {
     if (!attiva || !caricata.current) return;
     ricettePerMenu().then((elenco) => esegui(scriptRicette(elenco))).catch(() => {});
+    // anche le prenotazioni cambiano fuori dal Menù (conferme in Sala, Family Wall): il calendario le riceve aggiornate
+    prenotazioni().then((elenco) => esegui(scriptPrenotazioni(elenco))).catch(() => {});
   }, [attiva, aggiorna, esegui]);
 
   const messaggio = useCallback(async (evento) => {
     const m = leggiMessaggio(evento.nativeEvent.data);
     if (!m) return;
-    const risposta = (await rispondiArchivio(m, ARCHIVIO)) || (await rispondiRicette(m, RICETTE));
+    const risposta = (await rispondiArchivio(m, ARCHIVIO)) || (await rispondiRicette(m, RICETTE)) || (await rispondiPrenotazioni(m, prenotazioni));
     if (risposta) { esegui(risposta); return; }
     try {
       if (m.tipo === 'indietro') {
@@ -78,6 +83,9 @@ export default function MenuScreen({ attiva = true, aggiorna = 0, comandi, suEsc
         attese.current.slice().forEach((f) => f());
       } else if (m.tipo === 'apriRicetta') {
         if (suApri) suApri('Anagrafiche', { scheda: 'Ricette', ricetta: Number(m.ricetta) || null });
+      } else if (m.tipo === 'apriSala') {
+        const dove = aperturaSala(m);
+        if (dove && suSala) suSala(dove.data, dove.servizio);
       } else if (m.tipo === 'apriEvento') {
         if (suApri) suApri('Eventi', { evento: String(m.evento || '') });
       } else if (m.tipo === 'vista') {

@@ -15,6 +15,7 @@ document.addEventListener('click',e=>{
     case 'calMove':{let mm=ui.cal.m+Number(d.d),yy=ui.cal.y;if(mm<0){mm=11;yy--}if(mm>11){mm=0;yy++}ui.cal={y:yy,m:mm};render(true);break}
     case 'calToday':{const n=new Date();ui.cal={y:n.getFullYear(),m:n.getMonth()};ui.selDate=today();render();break}
     case 'selDay':ui.selDate=d.d;render(true);break;
+    case 'apriSala':if(window.SuitePrenotazioni)window.SuitePrenotazioni.apri(d.d,d.s);break;
     case 'new':{const nm=newMenu(ui.view==='cal'?ui.selDate:today());state.menus.push(nm);save();openEditor(nm.id);break}
     case 'open':openEditor(d.id);break;
     case 'back':

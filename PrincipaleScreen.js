@@ -62,6 +62,7 @@ export default function PrincipaleScreen({ navigation, route }) {
   const [menuProfondo, setMenuProfondo] = useState(false); // schermata interna del Menù (modifica, anteprima...)
   const [tastiera, setTastiera] = useState(false);
   const [salaIntera, setSalaIntera] = useState(false);
+  const [aperturaSala, setAperturaSala] = useState(null); // { data, servizio }: una prenotazione toccata nel calendario del Menù
   const [ritorni, setRitorni] = useState(0); // quante volte si è tornati a questa schermata da un'altra
   const comandiMenu = useRef(null);
   const mostrata = useRef('oggi');
@@ -111,6 +112,11 @@ export default function PrincipaleScreen({ navigation, route }) {
   }), [navigation, vai]);
 
   const esciDalMenu = useCallback(() => vai('oggi'), [vai]);
+  const apriSala = useCallback((data, servizio) => {
+    setAperturaSala({ data, servizio });
+    vai('sale');
+  }, [vai]);
+  const azzeraApertura = useCallback(() => setAperturaSala(null), []);
   const Menu = menuAperto ? moduloMenu() : null;
   const nelMenu = sezione === 'gestione' && parte === GESTIONE[0];
   // con il telefono in orizzontale la Sala usa tutto lo schermo
@@ -129,7 +135,7 @@ export default function PrincipaleScreen({ navigation, route }) {
                 paddingHorizontal: 20, paddingTop: 20,
               }}>Sala</Text>
             )}
-            <SaleScreen navigation={naviga} route={route} suTuttoSchermo={setSalaIntera} />
+            <SaleScreen navigation={naviga} route={route} suTuttoSchermo={setSalaIntera} apri={aperturaSala} suAperta={azzeraApertura} />
           </>
         )}
         {/* Gestione: le due linguette spariscono nelle schermate interne del Menù, che usa tutto lo schermo */}
@@ -142,7 +148,7 @@ export default function PrincipaleScreen({ navigation, route }) {
           <Riparo visibile={nelMenu}>
             {Menu
               ? <Menu attiva={nelMenu} aggiorna={ritorni} comandi={comandiMenu} suEsci={esciDalMenu}
-                suVista={setMenuProfondo} suApri={navigation.navigate} />
+                suVista={setMenuProfondo} suApri={navigation.navigate} suSala={apriSala} />
               : nelMenu && (
                 <View style={[S.screen, { justifyContent: 'center' }]}>
                   <Vuoto icona="alert-circle-outline" titolo="Il menù non si è aperto" testo="Le altre sezioni funzionano normalmente." />

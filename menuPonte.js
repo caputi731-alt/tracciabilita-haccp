@@ -75,6 +75,35 @@ export async function rispondiRicette(m, ricette) {
   }
 }
 
+/* Prenotazioni nel calendario del Menù (scelta di Luca del 18/10/2026): la suite manda alla pagina le prenotazioni confermate in
+   Sala e quelle di Family Wall da confermare; toccandone una la pagina chiede di aprire la Sala su quel giorno (messaggio apriSala). */
+
+/** Giorni da mandare al calendario: da tre mesi fa a 400 giorni avanti. → [da, a] (AAAA-MM-GG). */
+export function finestraCalendario(oggi) {
+  const [a, m, g] = String(oggi).split('-').map(Number);
+  const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return [iso(new Date(a, m - 1, g - 92, 12)), iso(new Date(a, m - 1, g + 400, 12))];
+}
+
+/** Script che consegna alla pagina l'elenco aggiornato delle prenotazioni. */
+export const scriptPrenotazioni = (elenco) => `window.__suitePrenotazioni&&window.__suitePrenotazioni(${comeLetterale(elenco || [])});true;`;
+
+/** Domanda "prenotazioni" della pagina: lo script di risposta, oppure null se il messaggio non la riguarda. `elenco()` le legge. */
+export async function rispondiPrenotazioni(m, elenco) {
+  if (!m || m.tipo !== 'prenotazioni') return null;
+  try {
+    return scriptRisposta(m.id, true, await elenco());
+  } catch (e) {
+    return scriptRisposta(m.id, false, String((e && e.message) || e));
+  }
+}
+
+/** Messaggio apriSala della pagina → { data, servizio } validi, oppure null. */
+export function aperturaSala(m) {
+  if (!m || m.tipo !== 'apriSala' || !/^\d{4}-\d{2}-\d{2}$/.test(String(m.data || ''))) return null;
+  return { data: m.data, servizio: m.servizio === 'Cena' ? 'Cena' : 'Pranzo' };
+}
+
 /** Dove va un indirizzo chiesto dalla pagina: 'pagina' (resta nella WebView), 'fuori' (altra app) o 'niente'. */
 export function destinazione(url) {
   const u = String(url || '');
