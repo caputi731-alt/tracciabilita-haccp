@@ -197,6 +197,29 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
 - Per i camerieri: `htmlDisposizioneSale` (report.js) → PDF con pianta dall'alto ed elenco delle tavolate con la lunghezza da preparare,
   condiviso con `condividiPdf` (WhatsApp); oppure lo stesso dispositivo tenuto in sala. I telefoni non si sincronizzano fra loro.
 
+## Prenotazioni da Family Wall (Fase 1, piano approvato da Luca il 18/10/2026)
+- Al ristorante prenotazioni ed eventi si scrivono nel calendario condiviso di Family Wall (piano gratuito). La suite lo LEGGE
+  tramite il link iCal del calendario (sola lettura, gratis); non scrive mai in Family Wall e non c'è condivisione fra telefoni.
+- `familywall.js` (puro, `test/familywall.test.mjs`): `leggiIcs` (eventi: uid, giorno, titolo, descrizione, colore; annullati esclusi),
+  `leggiTesto` (scheda proposta dal testo libero), `noteTavolata`, `confronta` (cosa cambiare nel database), `mettiATavola`,
+  `scaricaCalendario` (timeout 20 s, errori leggibili). Regole del testo dette da Luca: "9+2+1" = adulti+bambini+neonati, "5-1(8anni)"
+  = 5 adulti e 1 bambino di 8 anni ("-" vale "+"), "13/16" = da 13 a 16 (tavoli per 16), "A.S." = antica stalla, "S.P." =
+  panoramica, evento verde = acconto ricevuto, orari degli eventi da ignorare, solo pranzo salvo "cena"/"sera" nel testo.
+  Nel repository solo nomi e telefoni inventati. Le espressioni regolari non usano `\p{L}` (lettere scritte per esteso, costante `L`).
+- Tabella `prenotazioni_esterne` (nel backup, in `TABELLE_NUOVE`): una riga per evento, stato `nuova` (da confermare) / `confermata` /
+  `scartata`; per le confermate `tavolata_id`, `posto_data`, `posto_servizio`; `cambiata` / `sparita` = cambiata o sparita in Family Wall
+  dopo la conferma. Nulla di confermato si cancella da solo: decide chi guarda ("Rifai la scheda", "Lascia com'è", "Togli la tavolata").
+  Si guardano solo i giorni da oggi a 400 giorni avanti.
+- Il link sta nelle preferenze locali (`familywall_link`, mai nel backup, mai mostrato) insieme a `familywall_ultimo` e
+  `familywall_errore`; si collega, cambia o scollega solo dopo il PIN del titolare (`costiSbloccati` / `sbloccaCosti`).
+- `familywallAggiorna.js`: `aggiornaDaFamilyWall` (scarica e applica) e `aggiornaSeServe` (all'apertura della Sala, al massimo ogni
+  15 minuti, senza rete tace e restano i dati di prima).
+- `PrenotazioniFamilyWall.js`: riquadro in cima all'elenco della Sala (prenotazioni del giorno da confermare, eventi senza persone
+  da nascondere, segnalazioni, "vai al prossimo giorno"), `SchedaConferma` (campi incerti evidenziati; la tavolata va nel posto
+  migliore della sala scelta o dell'altra; composizione, acconto e telefono finiscono nelle note della tavolata) e
+  `ModaleFamilyWall` (collegamento e "Aggiorna adesso").
+- Da verificare sul telefono: se Family Wall mette il colore dell'evento nel link (altrimenti l'acconto si sceglie a mano).
+
 ## Incassi e costi (Gestione → Incassi, scelte di Luca del 9/10/2026)
 - `conti.js` (puro, `test/conti.test.mjs`) + `IncassiScreen.js`. Incassi: una riga per giorno (tabella `incassi`), divisa per metodo
   (contanti, POS, altro), senza distinguere pranzo e cena, IVA INCLUSA; il netto si ricava togliendo l'IVA al 10% (`IVA_RISTORAZIONE`).

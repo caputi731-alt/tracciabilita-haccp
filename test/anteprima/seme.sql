@@ -16,3 +16,11 @@ INSERT INTO cucina_posti (posto, punto_controllo_id, area_id) VALUES ('g9',1,NUL
 INSERT INTO preferenze (chiave, valore) VALUES ('pin_giri','300000'),('pin_sale','00000000000000000000000000000000'),('pin_chiave','fccbcd943850f0247036422d47226b25f86a3e387e666ebce3649c5959a2ba95');
 INSERT INTO incassi (giorno, contanti, pos, altro, note) VALUES (date('now','localtime'),420,1180.5,0,''),(date('now','localtime','-1 day'),310,640,0,''),(date('now','localtime','-2 day'),150,2200,900,'Battesimo Rossi'),(date('now','localtime','-4 day'),95,480,0,'');
 INSERT INTO spese (giorno, categoria, descrizione, importo) VALUES (date('now','localtime','-3 day'),'Personale','Stipendi',2400),(date('now','localtime','-5 day'),'Altre spese','Bolletta della luce',380.4);
+INSERT INTO preferenze (chiave, valore) VALUES ('familywall_link','https://esempio.invalid/ical/prova'),('familywall_ultimo',strftime('%Y-%m-%dT%H:%M:%fZ','now'));
+INSERT INTO prenotazioni_esterne (uid, data, testo, colore, stato, tavolata_id, posto_data, posto_servizio, cambiata) VALUES
+ ('fw1',date('now','localtime'),'Marini 5-1(8anni) A.S. cell 3470001112','','nuova',NULL,NULL,NULL,0),
+ ('fw2',date('now','localtime'),'Sardo 13/16 S.P. +41781112233','#2E9E4F','nuova',NULL,NULL,NULL,0),
+ ('fw3',date('now','localtime'),'Pino di Paolo 8 cop3471112223','','nuova',NULL,NULL,NULL,0),
+ ('fw4',date('now','localtime'),'Compleanno della nonna','','nuova',NULL,NULL,NULL,0),
+ ('fw5',date('now','localtime','+3 day'),'Ferri 9+2+1 1( menù vegetariano) 3331234567','','nuova',NULL,NULL,NULL,0),
+ ('fw6',date('now','localtime','+1 day'),'Gallo 6 S.P.','','confermata','tx',date('now','localtime','+1 day'),'Pranzo',1);

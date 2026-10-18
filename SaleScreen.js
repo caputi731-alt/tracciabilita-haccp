@@ -6,6 +6,7 @@
  * "Due sale insieme" lo schermo si gira in orizzontale e le due sale si vedono insieme, a tutto schermo: lì si aggiungono
  * prenotazioni e si spostano anche da una sala all'altra.
  * I modelli sono disposizioni con un nome, senza prenotazioni, da riusare.
+ * In cima all'elenco le prenotazioni lette da Family Wall, da confermare (PrenotazioniFamilyWall.js).
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Modal, BackHandler, useWindowDimensions } from 'react-native';
@@ -21,6 +22,7 @@ import {
 } from './sale';
 import { htmlDisposizioneSale } from './report';
 import { condividiPdf } from './condividi';
+import RiquadroFamilyWall from './PrenotazioniFamilyWall';
 
 const NOMI_SALE = ID_SALE.map((id) => SALE[id].nome.replace('Sala ', '').replace(/^./, (c) => c.toUpperCase()));
 const plurale = (n, uno, molti) => `${n} ${n === 1 ? uno : molti}`;
@@ -181,6 +183,7 @@ export default function SaleScreen({ suTuttoSchermo }) {
   const { avviso, mostra } = useAvviso();
   const schermo = useWindowDimensions();
   const chiave = useRef('');
+  const [versione, setVersione] = useState(0); // cresce a ogni ritorno sulla Sala: il riquadro di Family Wall si aggiorna
 
   const idSala = ID_SALE[quale];
   const sala = SALE[idSala];
@@ -208,6 +211,21 @@ export default function SaleScreen({ suTuttoSchermo }) {
     setDati(d || VUOTI()); setModelli(mod);
   }, [data, servizio]);
   useFocusEffect(useCallback(() => { carica().catch(() => {}); }, [carica]));
+  useFocusEffect(useCallback(() => { setVersione((n) => n + 1); }, []));
+
+  /** Una prenotazione di Family Wall confermata e messa a tavola (anche in un altro giorno o servizio). */
+  const suMessa = useCallback(({ data: giorno, servizio: serv, sala: id, salaChiesta, nome }) => {
+    const dove = `${SALE[id].nome.toLowerCase()}${id !== salaChiesta ? ' (nell\'altra non entrava)' : ''}`;
+    if (giorno === data && serv === servizio) {
+      carica().catch(() => {});
+      setQuale(ID_SALE.indexOf(id));
+      mostra(`${nome} a tavola in ${dove}: per spostarla tienila premuta ✓`);
+    } else {
+      mostra(`${nome} a tavola ${fmtData(giorno)}, ${serv.toLowerCase()}, in ${dove} ✓`);
+    }
+  }, [data, servizio, carica, mostra]);
+  const suVaiAlGiorno = useCallback((giorno, serv) => { setScelta(null); setData(giorno); if (SERVIZI.includes(serv)) setServizio(serv); }, []);
+  const suCambiato = useCallback(() => { carica().catch(() => {}); }, [carica]);
 
   /** Ogni modifica si salva subito per questo giorno e questo servizio. */
   const cambia = useCallback((nuovi) => {
@@ -393,6 +411,8 @@ export default function SaleScreen({ suTuttoSchermo }) {
       )}
 
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+        <RiquadroFamilyWall data={data} servizio={servizio} salaVista={idSala} versione={versione}
+          suMessa={suMessa} suVaiAlGiorno={suVaiAlGiorno} suCambiato={suCambiato} mostra={mostra} />
         <Text style={{ fontSize: 15, fontWeight: '700', color: COLORS.text, marginLeft: 4 }}>
           {tot.tavolate === 0 ? 'Nessuna prenotazione in questa sala'
             : `${plurale(tot.tavolate, 'tavolata', 'tavolate')} · ${plurale(tot.persone, 'persona', 'persone')} · ${tot.posti} posti`}

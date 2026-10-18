@@ -2,6 +2,7 @@ import * as SQLite from 'expo-sqlite';
 import { oggiLocale, piuGiorni, limitiGiorni, giornoDi, daIsoLocale, arrotonda, ALLERGENI } from './utile';
 import { SALE, ID_SALE, SERVIZI, pianoPulito, senzaPrenotazioni, totali as totaliSale } from './sale';
 import { CATEGORIE_SPESA } from './conti';
+import { confronta, mettiATavola, togliTavolata, linkValido } from './familywall';
 
 let apertura = null;
 
@@ -231,6 +232,20 @@ async function preparaSchema() {
       data TEXT,
       servizio TEXT,
       dati TEXT NOT NULL,
+      aggiornato TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS prenotazioni_esterne (
+      uid TEXT PRIMARY KEY,
+      data TEXT NOT NULL,
+      testo TEXT NOT NULL,
+      colore TEXT,
+      stato TEXT NOT NULL DEFAULT 'nuova',
+      tavolata_id TEXT,
+      posto_data TEXT,
+      posto_servizio TEXT,
+      cambiata INTEGER NOT NULL DEFAULT 0,
+      sparita INTEGER NOT NULL DEFAULT 0,
       aggiornato TEXT
     );
 
@@ -716,7 +731,7 @@ async function elencoTabelle() {
 const TABELLE_LOCALI = ['preferenze'];
 
 /** Tabelle aggiunte dopo i primi backup: se il backup da ripristinare non le contiene, non vengono svuotate. */
-const TABELLE_NUOVE = ['menu_dati', 'cucina_posti', 'disposizioni', 'incassi', 'spese'];
+const TABELLE_NUOVE = ['menu_dati', 'cucina_posti', 'disposizioni', 'incassi', 'spese', 'prenotazioni_esterne'];
 
 export async function esportaTutto() {
   const tabelle = (await elencoTabelle()).filter((t) => !TABELLE_LOCALI.includes(t));
@@ -859,6 +874,130 @@ export async function salvaModelloSale(nome, dati) {
 }
 
 export const eliminaModelloSale = (id) => exec("DELETE FROM disposizioni WHERE tipo = 'modello' AND id = ?", [id]);
+
+/* ---------- prenotazioni da Family Wall ----------
+   Tabella `prenotazioni_esterne`: un evento del calendario per riga (chiave = UID dell'evento), con il testo così com'è e lo stato
+   ('nuova' = da confermare, 'confermata', 'scartata'). Per le confermate restano l'id della tavolata e il giorno/servizio in cui
+   è stata messa; `cambiata` / `sparita` segnalano ciò che è cambiato in Family Wall dopo la conferma. Nel backup.
+   Il link del calendario sta nelle preferenze locali (non va nel backup) e si cambia solo con il PIN del titolare. */
+
+/** Le prenotazioni importate da un giorno in poi, più le confermate segnalate di qualunque giorno. */
+export const prenotazioniEsterne = (da) => query(
+  'SELECT * FROM prenotazioni_esterne WHERE data >= ? OR cambiata = 1 OR sparita = 1 ORDER BY data, uid', [da]);
+
+export async function salvaLinkFamilyWall(testo) {
+  const link = linkValido(testo);
+  if (!link) throw new Error('Il link non è valido: copialo da Family Wall con "Copia"');
+  await salvaPreferenza('familywall_link', link);
+  await exec("DELETE FROM preferenze WHERE chiave IN ('familywall_ultimo', 'familywall_errore')");
+}
+
+/** Scollega il calendario: il link si toglie, le prenotazioni già importate restano. */
+export const scollegaFamilyWall = () =>
+  exec("DELETE FROM preferenze WHERE chiave IN ('familywall_link', 'familywall_ultimo', 'familywall_errore')");
+
+/** Applica gli eventi letti dal calendario (vedi `confronta` in familywall.js). → { nuove, cambiate, sparite } */
+export async function applicaCalendario(eventi, oggi = oggiLocale()) {
+  const d = await getDb();
+  let esito = null;
+  await d.withTransactionAsync(async () => {
+    const righe = await query('SELECT * FROM prenotazioni_esterne');
+    const c = confronta(righe, eventi, oggi);
+    const ora = new Date().toISOString();
+    for (const r of c.inserisci) {
+      await exec("INSERT INTO prenotazioni_esterne (uid, data, testo, colore, stato, aggiornato) VALUES (?, ?, ?, ?, 'nuova', ?)",
+        [r.uid, r.data, r.testo, r.colore, ora]);
+    }
+    for (const { uid, ...campi } of c.aggiorna) {
+      const nomi = Object.keys(campi);
+      await exec(`UPDATE prenotazioni_esterne SET ${nomi.map((n) => `${n} = ?`).join(', ')}, aggiornato = ? WHERE uid = ?`,
+        [...nomi.map((n) => campi[n]), ora, uid]);
+    }
+    for (const uid of c.elimina) await exec('DELETE FROM prenotazioni_esterne WHERE uid = ?', [uid]);
+    esito = {
+      nuove: c.inserisci.length,
+      cambiate: c.aggiorna.filter((x) => x.cambiata === 1).length,
+      sparite: c.aggiorna.filter((x) => x.sparita === 1).length,
+    };
+  });
+  return esito;
+}
+
+const rigaEsterna = async (uid) => {
+  const r = await queryOne('SELECT * FROM prenotazioni_esterne WHERE uid = ?', [uid]);
+  if (!r) throw new Error('Prenotazione non trovata: aggiorna il calendario');
+  return r;
+};
+const pianiDelGiorno = async (data, servizio) => {
+  const r = await queryOne("SELECT dati FROM disposizioni WHERE tipo = 'giorno' AND data = ? AND servizio = ?", [data, servizio]);
+  return r ? pianiPuliti(leggiJson(r.dati, {}), pianoPulito) : null;
+};
+/** Come salvaDisposizioneGiorno, ma da usare dentro una transazione già aperta. */
+const scriviPianiDelGiorno = async (data, servizio, piani) => {
+  const testo = JSON.stringify(pianiPuliti(piani, pianoPulito));
+  const r = await queryOne("SELECT id FROM disposizioni WHERE tipo = 'giorno' AND data = ? AND servizio = ?", [data, servizio]);
+  if (r) await exec('UPDATE disposizioni SET dati = ?, aggiornato = ? WHERE id = ?', [testo, new Date().toISOString(), r.id]);
+  else await exec("INSERT INTO disposizioni (tipo, data, servizio, dati, aggiornato) VALUES ('giorno', ?, ?, ?, ?)", [data, servizio, testo, new Date().toISOString()]);
+};
+const togliDalGiorno = async (r) => {
+  if (!r.tavolata_id || !r.posto_data || !r.posto_servizio) return;
+  const piani = await pianiDelGiorno(r.posto_data, r.posto_servizio);
+  if (piani) await scriviPianiDelGiorno(r.posto_data, r.posto_servizio, togliTavolata(piani, r.tavolata_id));
+};
+
+/**
+ * Conferma una prenotazione: la tavolata (già compilata dalla scheda) va nel posto migliore della sala scelta, o nell'altra
+ * se lì non entra, nel giorno e nel servizio indicati. → { sala, f }
+ */
+export async function confermaPrenotazioneEsterna(uid, { data, servizio, sala, tavolata }) {
+  if (!GIORNO.test(String(data))) throw new Error('Data non valida');
+  if (!SERVIZI.includes(servizio)) throw new Error('Servizio non valido');
+  const d = await getDb();
+  let esito = null;
+  await d.withTransactionAsync(async () => {
+    const r = await rigaEsterna(uid);
+    if (r.stato === 'confermata') throw new Error('Questa prenotazione è già a tavola');
+    const messa = mettiATavola(await pianiDelGiorno(data, servizio), sala, tavolata);
+    if (!messa) throw new Error('Non c\'è posto per questa tavolata in nessuna delle due sale');
+    await scriviPianiDelGiorno(data, servizio, messa.piani);
+    await exec(`UPDATE prenotazioni_esterne SET stato = 'confermata', tavolata_id = ?, posto_data = ?, posto_servizio = ?,
+      cambiata = 0, sparita = 0, aggiornato = ? WHERE uid = ?`, [tavolata.id, data, servizio, new Date().toISOString(), uid]);
+    esito = { sala: messa.sala, f: messa.f };
+  });
+  return esito;
+}
+
+/** "Non è una prenotazione": non viene più proposta (torna solo se in Family Wall l'evento cambia). */
+export const scartaPrenotazioneEsterna = (uid) =>
+  exec("UPDATE prenotazioni_esterne SET stato = 'scartata', aggiornato = ? WHERE uid = ? AND stato <> 'confermata'", [new Date().toISOString(), uid]);
+
+/** Cambiata in Family Wall dopo la conferma: si toglie la tavolata e la prenotazione torna da confermare con il testo nuovo. */
+export async function rifaiPrenotazioneEsterna(uid) {
+  const d = await getDb();
+  await d.withTransactionAsync(async () => {
+    const r = await rigaEsterna(uid);
+    await togliDalGiorno(r);
+    await exec(`UPDATE prenotazioni_esterne SET stato = 'nuova', tavolata_id = NULL, posto_data = NULL, posto_servizio = NULL,
+      cambiata = 0, sparita = 0, aggiornato = ? WHERE uid = ?`, [new Date().toISOString(), uid]);
+  });
+}
+
+/** Sparita da Family Wall: si toglie la tavolata e la prenotazione. */
+export async function togliPrenotazioneEsterna(uid) {
+  const d = await getDb();
+  await d.withTransactionAsync(async () => {
+    const r = await rigaEsterna(uid);
+    await togliDalGiorno(r);
+    await exec('DELETE FROM prenotazioni_esterne WHERE uid = ?', [uid]);
+  });
+}
+
+/** Cambiata o sparita, ma va bene così: la tavolata resta e la segnalazione sparisce (una sparita non viene più seguita). */
+export async function lasciaPrenotazioneEsterna(uid) {
+  const r = await rigaEsterna(uid);
+  if (r.sparita) return exec('DELETE FROM prenotazioni_esterne WHERE uid = ?', [uid]);
+  return exec('UPDATE prenotazioni_esterne SET cambiata = 0, aggiornato = ? WHERE uid = ?', [new Date().toISOString(), uid]);
+}
 
 /* ---------- incassi e costi ----------
    Incassi: una riga per giorno, divisa per metodo di pagamento, IVA inclusa. Spese: personale e altre spese scritte a mano.
