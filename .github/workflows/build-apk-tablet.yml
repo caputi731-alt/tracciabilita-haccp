@@ -93,6 +93,19 @@ jobs:
       - name: Genera il progetto Android nativo
         run: npx expo prebuild --platform android --clean
 
+      - name: Tieni nell'APK solo le librerie a 32 bit (anche quelle già precompilate)
+        run: |
+          python3 - <<'PY'
+          import sys
+          p = 'android/app/build.gradle'
+          s = open(p).read()
+          if s.count('defaultConfig {') != 1:
+              sys.exit('build.gradle inatteso: blocco defaultConfig non trovato')
+          s = s.replace('defaultConfig {', "defaultConfig {\n        ndk { abiFilters 'armeabi-v7a' }", 1)
+          open(p, 'w').write(s)
+          print('Solo armeabi-v7a')
+          PY
+
       - name: Firma con la chiave dell'app
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -149,8 +162,9 @@ jobs:
         run: |
           unzip -l dist/*.apk | grep -oE 'lib/[^ ]+\.so' | sort > librerie.txt
           cat librerie.txt
-          if grep -qv '^lib/armeabi-v7a/' librerie.txt; then
-            echo "::error::L'APK contiene librerie di altre architetture: doveva essere solo armeabi-v7a"; exit 1
+          altre=$(grep -v '^lib/armeabi-v7a/' librerie.txt | head -8 | tr '\n' ' ' || true)
+          if [ -n "$altre" ]; then
+            echo "::error::L'APK contiene librerie di altre architetture: $altre"; exit 1
           fi
           for lib in libexpo-modules-core.so libexpo-sqlite.so librnscreens.so libhermes.so libreactnative.so; do
             if ! grep -q "lib/armeabi-v7a/$lib" librerie.txt; then
