@@ -278,51 +278,54 @@ export function noteTavolata({ adulti, bambini = 0, neonati = 0, min = null, max
 /* ---------- confronto con quello che la suite ha già ---------- */
 
 export const FINESTRA_GIORNI = 400; // quanto avanti si guarda nel calendario
+export const GIORNI_INDIETRO = 92; // quanto indietro (come il calendario del Menù, `finestraCalendario` in menuPonte.js)
 const firma = (x) => `${x.data}|${x.testo}|${x.colore || ''}`;
 export const testoEvento = (e) => [e.titolo, e.descrizione].filter(Boolean).join('\n');
 
 /**
  * Cosa cambiare nelle prenotazioni salvate (righe della tabella `prenotazioni_esterne`) dopo aver letto il calendario.
- * Si guardano solo i giorni da oggi in poi. Nulla di confermato viene cancellato da solo:
+ * Nulla di confermato viene cancellato da solo, e (scelta di Luca del 19/10/2026) nulla dei giorni passati: le prenotazioni
+ * passate restano anche se non sono state confermate, così il calendario del Menù le mostra ancora.
+ * Da oggi in poi:
  * - evento nuovo → riga 'nuova' (da confermare);
  * - evento cambiato: se era da confermare si aggiorna; se era scartato torna da confermare; se era confermato si aggiorna
  *   e viene segnalato (`cambiata`), la tavolata resta dov'è;
  * - evento sparito: se era da confermare o scartato la riga si toglie; se era confermato viene segnalato (`sparita`).
- * Righe dei giorni passati ancora da confermare o scartate: si tolgono (non servono più).
+ * Giorni passati (fino a `GIORNI_INDIETRO`): un evento che manca si aggiunge (così tornano anche quelle cancellate prima di
+ * questa scelta) e uno cambiato si aggiorna se non era confermato; nessuna segnalazione e nessuna cancellazione.
  * → { inserisci: [riga], aggiorna: [{ uid, ...campi }], elimina: [uid] }
  */
 export function confronta(righe, eventi, oggi = oggiLocale()) {
+  const inizio = piuGiorni(oggi, -GIORNI_INDIETRO);
   const fine = piuGiorni(oggi, FINESTRA_GIORNI);
   const salvate = new Map(righe.map((r) => [r.uid, r]));
   const visti = new Set();
   const out = { inserisci: [], aggiorna: [], elimina: [] };
 
   for (const e of eventi) {
-    if (!e.data || e.data < oggi || e.data > fine || visti.has(e.uid)) continue;
+    if (!e.data || e.data < inizio || e.data > fine || visti.has(e.uid)) continue;
     visti.add(e.uid);
+    const passato = e.data < oggi;
     const nuovo = { data: e.data, testo: testoEvento(e), colore: e.colore || '' };
     const r = salvate.get(e.uid);
     if (!r) { out.inserisci.push({ uid: e.uid, ...nuovo, stato: 'nuova' }); continue; }
     const cambiato = firma(r) !== firma(nuovo);
     if (r.stato === 'confermata') {
+      if (passato) continue;
       if (cambiato) out.aggiorna.push({ uid: r.uid, ...nuovo, cambiata: 1, sparita: 0 });
       else if (r.sparita) out.aggiorna.push({ uid: r.uid, sparita: 0 });
     } else if (cambiato) {
-      out.aggiorna.push({ uid: r.uid, ...nuovo, stato: 'nuova' });
+      out.aggiorna.push({ uid: r.uid, ...nuovo, stato: r.stato === 'scartata' && passato ? 'scartata' : 'nuova' });
     }
   }
 
   for (const r of righe) {
-    if (visti.has(r.uid)) continue;
+    if (visti.has(r.uid) || r.data < oggi) continue;
     if (r.stato === 'confermata') {
-      if (r.data >= oggi && !r.sparita) out.aggiorna.push({ uid: r.uid, sparita: 1 });
+      if (!r.sparita) out.aggiorna.push({ uid: r.uid, sparita: 1 });
     } else {
       out.elimina.push(r.uid);
     }
-  }
-  // giorni passati: le righe non confermate non servono più anche se l'evento c'è ancora
-  for (const r of righe) {
-    if (r.stato !== 'confermata' && r.data < oggi && !out.elimina.includes(r.uid)) out.elimina.push(r.uid);
   }
   return out;
 }

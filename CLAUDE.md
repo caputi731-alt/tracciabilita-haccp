@@ -209,7 +209,9 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
 - Tabella `prenotazioni_esterne` (nel backup, in `TABELLE_NUOVE`): una riga per evento, stato `nuova` (da confermare) / `confermata` /
   `scartata`; per le confermate `tavolata_id`, `posto_data`, `posto_servizio`; `cambiata` / `sparita` = cambiata o sparita in Family Wall
   dopo la conferma. Nulla di confermato si cancella da solo: decide chi guarda ("Rifai la scheda", "Lascia com'è", "Togli la tavolata").
-  Si guardano solo i giorni da oggi a 400 giorni avanti.
+  Si guardano i giorni da tre mesi fa (`GIORNI_INDIETRO`) a 400 giorni avanti. Giorni passati (scelta di Luca del 19/10/2026): nessuna
+  riga si cancella, anche se non confermata, così il calendario del Menù le mostra ancora; gli eventi passati mancanti si aggiungono
+  (senza annunciarli come "nuove") e quelli cambiati si aggiornano se non confermati; niente segnalazioni `cambiata` / `sparita`.
 - Il link sta nelle preferenze locali (`familywall_link`, mai nel backup, mai mostrato) insieme a `familywall_ultimo` e
   `familywall_errore`; si collega, cambia o scollega solo dopo il PIN del titolare (`costiSbloccati` / `sbloccaCosti`).
 - `familywallAggiorna.js`: `aggiornaDaFamilyWall` (scarica e applica) e `aggiornaSeServe` (all'apertura della Sala, al massimo ogni

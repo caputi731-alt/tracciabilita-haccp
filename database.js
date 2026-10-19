@@ -915,7 +915,7 @@ export async function applicaCalendario(eventi, oggi = oggiLocale()) {
     }
     for (const uid of c.elimina) await exec('DELETE FROM prenotazioni_esterne WHERE uid = ?', [uid]);
     esito = {
-      nuove: c.inserisci.length,
+      nuove: c.inserisci.filter((r) => r.data >= oggi).length, // quelle dei giorni passati non vanno annunciate
       cambiate: c.aggiorna.filter((x) => x.cambiata === 1).length,
       sparite: c.aggiorna.filter((x) => x.sparita === 1).length,
     };

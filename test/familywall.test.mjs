@@ -124,10 +124,11 @@ test('confronto: nuove, cambiate, sparite; nulla di confermato si cancella da so
     ev('c1', '2026-10-22', 'Verdi 9'),       // cambiata dopo la conferma
     ev('s1', '2026-10-24', 'Compleanno'),    // uguale
     ev('x1', '2026-10-25', 'Nuova 3'),
-    ev('x2', '2026-10-01', 'Passata 3'),     // giorno passato: non si importa
+    ev('x2', '2026-10-01', 'Passata 3'),     // giorno passato mancante: si aggiunge
+    ev('x4', '2026-06-01', 'Troppo vecchia 3'), // oltre tre mesi fa: no
     ev('x3', '2029-01-01', 'Lontana 3'),     // oltre la finestra
   ], oggi);
-  assert.deepEqual(r.inserisci.map((x) => x.uid), ['x1']);
+  assert.deepEqual(r.inserisci.map((x) => x.uid).sort(), ['x1', 'x2']);
   assert.equal(r.inserisci[0].stato, 'nuova');
   const agg = Object.fromEntries(r.aggiorna.map((x) => [x.uid, x]));
   assert.equal(agg.n1.testo, 'Rossi 5');
@@ -136,9 +137,16 @@ test('confronto: nuove, cambiate, sparite; nulla di confermato si cancella da so
   assert.equal(agg.c1.testo, 'Verdi 9');
   assert.equal(agg.c2.sparita, 1);
   assert.ok(!agg.s1);
-  assert.deepEqual(r.elimina.sort(), ['n2', 'p1']);
-  // la confermata del passato resta
-  assert.ok(!r.elimina.includes('p2') && !agg.p2);
+  // si toglie solo la da confermare futura sparita; le passate restano, confermate o no, senza segnalazioni
+  assert.deepEqual(r.elimina, ['n2']);
+  assert.ok(!agg.p1 && !agg.p2);
+  // il giorno dopo la prenotazione di ieri non confermata resta (caso del 18/10/2026)
+  const ieri = confronta([{ uid: 'd1', data: '2026-10-18', testo: 'Rossi 4', colore: '', stato: 'nuova' }],
+    [ev('d1', '2026-10-18', 'Rossi 4')], '2026-10-19');
+  assert.deepEqual(ieri, { inserisci: [], aggiorna: [], elimina: [] });
+  // passata cambiata: si aggiorna se non confermata, la confermata non viene segnalata
+  const pc = confronta([righe[5], righe[6]], [ev('p1', '2026-10-10', 'Vecchia 4'), ev('p2', '2026-10-11', 'Fatta 4')], oggi);
+  assert.deepEqual(pc.aggiorna.map((x) => [x.uid, x.testo, x.stato]), [['p1', 'Vecchia 4', 'nuova']]);
   // una prenotazione sparita che torna non è più segnalata
   const r2 = confronta([{ ...righe[3], sparita: 1 }], [ev('c2', '2026-10-23', 'Neri 2')], oggi);
   assert.deepEqual(r2.aggiorna, [{ uid: 'c2', sparita: 0 }]);
