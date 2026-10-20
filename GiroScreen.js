@@ -2,15 +2,16 @@
  * Giro di controllo guidato: le temperature e le pulizie che mancano oggi, una alla volta, e in fondo le scadenze.
  * Ogni passo si salva subito con le stesse funzioni delle schermate Temperature e Sanificazione; l'elenco dei passi è in giro.js.
  */
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, ScrollView, TextInput } from 'react-native';
-import { S, COLORS, aNumero, fmtData, oggiLocale, piuGiorni } from './theme';
+import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView } from 'react-native';
+import { S, COLORS, fmtData, oggiLocale, piuGiorni } from './theme';
 import { Bottone, Icona, Vuoto, Caricamento } from './UI';
 import {
   listaPuntiControllo, temperatureDiOggi, areeConStato, lottiInScadenza,
-  registraTemperatura, registraSanificazione, annullaTemperatura, annullaSanificazione,
+  registraTemperatura, registraSanificazione, ultimeTemperature, annullaTemperatura, annullaSanificazione,
 } from './database';
 import { passiGiro } from './giro';
+import TastierinoTemperatura from './TastierinoTemperatura';
 import { aggiornaPromemoria } from './notifiche';
 
 const gradi = (n) => `${String(n).replace('.', ',')}°C`;
@@ -19,16 +20,15 @@ const QUANDO = { scaduto: 'scaduto', oggi: 'scade oggi', domani: 'scade domani' 
 export default function GiroScreen({ navigation }) {
   const [passi, setPassi] = useState(null);
   const [i, setI] = useState(0);
-  const [valore, setValore] = useState('');
-  const [errore, setErrore] = useState(null);
+  const [ultime, setUltime] = useState({}); // ultima temperatura di ogni frigorifero prima di oggi: il tastierino parte da lì
   const [esito, setEsito] = useState({ temperature: 0, pulizie: 0, saltati: 0, fuori: [] });
   const [ultimo, setUltimo] = useState(null); // ultima registrazione fatta, per poterla correggere subito
-  const campo = useRef(null);
 
   useEffect(() => {
     (async () => {
       const oggi = oggiLocale();
       try {
+        setUltime(await ultimeTemperature(oggi));
         setPassi(passiGiro({
           punti: await listaPuntiControllo(), temperatureOggi: await temperatureDiOggi(), aree: await areeConStato(),
           lotti: await lottiInScadenza(1), oggi, domani: piuGiorni(oggi, 1),
@@ -45,14 +45,10 @@ export default function GiroScreen({ navigation }) {
   const avanti = (cambi = {}, registrato = null) => {
     setEsito((e) => ({ ...e, ...cambi }));
     setUltimo(registrato);
-    setValore('');
-    setErrore(null);
     setI((n) => n + 1);
   };
 
-  const salvaTemperatura = async () => {
-    const numero = aNumero(valore);
-    if (numero === null) { setErrore('Scrivi la temperatura in numeri, per esempio 3,5'); return; }
+  const salvaTemperatura = async (numero) => {
     const r = await registraTemperatura(passo.punto.id, numero, null, null);
     avanti({
       temperature: esito.temperature + 1,
@@ -78,8 +74,6 @@ export default function GiroScreen({ navigation }) {
       setEsito((e) => ({ ...e, pulizie: e.pulizie - 1 }));
     }
     setUltimo(null);
-    setValore('');
-    setErrore(null);
     setI((n) => n - 1);
   };
 
@@ -142,20 +136,16 @@ export default function GiroScreen({ navigation }) {
     <ScrollView style={S.screen} contentContainerStyle={S.content} keyboardShouldPersistTaps="handled">
       {avanzamento}
 
-      {passo.tipo === 'temperatura' && (
-        <View style={S.card}>
-          <Icona nome="thermometer" size={32} colore={COLORS.azione} />
-          <Text style={[S.h1, { marginTop: 8 }]}>{passo.punto.nome}</Text>
-          <Text style={S.muted}>Temperatura · limiti {passo.punto.temp_min}°C / {passo.punto.temp_max}°C</Text>
-          <TextInput ref={campo} key={passo.punto.id} autoFocus value={valore} onChangeText={(v) => { setValore(v); setErrore(null); }}
-            keyboardType="decimal-pad" placeholder="°C" placeholderTextColor={COLORS.segnaposto} onSubmitEditing={salvaTemperatura}
-            accessibilityLabel={`Temperatura di ${passo.punto.nome}`}
-            style={[S.input, { fontSize: 36, fontWeight: '700', textAlign: 'center', paddingVertical: 18, marginTop: 14 }, errore && S.inputErrore]} />
-          {!!errore && <Text style={S.testoErrore} accessibilityLiveRegion="polite">{errore}</Text>}
-          <Bottone testo="Salva e avanti" icona="check" onPress={salvaTemperatura} />
-          <Bottone testo="Salta" ghost onPress={() => avanti({ saltati: esito.saltati + 1 })} />
-        </View>
-      )}
+      {passo.tipo === 'temperatura' && (() => {
+        const prossimo = passi[i + 1];
+        return (
+          <View style={S.card}>
+            <TastierinoTemperatura key={`${passo.punto.id}-${i}`} punto={passo.punto} ultima={ultime[passo.punto.id] || null}
+              sopra="Temperatura" testoSalva={prossimo && prossimo.tipo === 'temperatura' ? `Salva e vai a ${prossimo.punto.nome}` : 'Salva, avanti'}
+              onSalva={salvaTemperatura} onSalta={() => avanti({ saltati: esito.saltati + 1 })} />
+          </View>
+        );
+      })()}
 
       {passo.tipo === 'pulizia' && (
         <View style={S.card}>

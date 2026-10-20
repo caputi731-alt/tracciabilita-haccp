@@ -55,6 +55,15 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
   registrazione per i 14 giorni successivi; quello di oggi salta se non c'è più niente da fare. Le scadenze avvisano solo nei giorni in
   cui qualcosa scade (`avvisiScadenze`). Il tocco apre `Temperature` (con `{ daNotifica }` parte l'inserimento in sequenza),
   `Sanificazione` o `Magazzino`. Impostazioni: `<RiquadroPromemoria tipo=… />` nelle tre schermate.
+- Tastierino delle temperature (fase 4, 20/10/2026): `TastierinoTemperatura.js` (componente) + `tastierino.js` (puro,
+  `test/tastierino.test.mjs`: `premi`, `aggiungi` ±0,5, `statoValore`, `settimanaPunti`). Parte dal valore dell'ultima rilevazione
+  prima del giorno (`ultimeTemperature(giorno)` in database.js: il "valore di ieri", già scritto in grigio: la prima cifra lo sostituisce),
+  tasti ±0,5, "±" per i congelatori, "Ieri" per rimetterlo; dice subito se è nei limiti. Il chiamante dà `key` diversa per ogni
+  frigorifero. Usato in: scheda del frigo sulla mappa (`SchedaPosto`, con `ultimaPrima` e "Salva e vai a <prossimo>": `prossimo` /
+  `onProssimo` da HomeScreen = il primo altro frigorifero sulla mappa con temperatura da fare), registro (`TemperatureScreen`: una riga
+  per frigorifero con valore del giorno e 7 giorni a pallini da `temperatureTraGiorni`, non conformità di temperatura aperte, frecce
+  per il giorno e "Un altro giorno" col calendario, "Registra le N mancanti" in fondo; tastierino a tutto schermo, singolo o in
+  sequenza; le correzioni restano da "Ultime rilevazioni") e giro di controllo.
 - Giro di controllo: `GiroScreen.js` (rotta `Giro`, dal pulsante della Home), passi calcolati da `passiGiro` in giro.js: temperature
   mancanti, pulizie da fare, lotti scaduti o in scadenza entro domani. Ogni passo salva con le funzioni di sempre.
 - Pulizie: "da fare" secondo la frequenza dell'area (`areeConStato`, `GIORNI_FREQUENZA`).

@@ -12,7 +12,7 @@ import { daIsoLocale } from './utile';
 import { Icona, PulsanteCerca } from './UI';
 import {
   lottiInScadenza, temperatureDiOggi, listaPuntiControllo, nonConformitaAperte,
-  areeConStato, prodottiDaCompletare, lottiBloccati, leggiPreferenza, menuLeggi, collegamentiCucina,
+  areeConStato, prodottiDaCompletare, lottiBloccati, leggiPreferenza, menuLeggi, collegamentiCucina, ultimeTemperature,
 } from './database';
 import { FREDDI, PULSANTI, statiCucine, datiScena } from './cucine';
 import SchedaPosto from './SchedaPosto';
@@ -192,6 +192,7 @@ export default function HomeScreen({ navigation }) {
   const [ncAperte, setNcAperte] = useState(0);
   const [pulizie, setPulizie] = useState({ fatte: 0, totali: 0 });
   const [aree, setAree] = useState([]);
+  const [ultimePrima, setUltimePrima] = useState({}); // ultima temperatura di ogni frigorifero prima di oggi
   const [backup, setBackup] = useState(null);
   const [daCompletare, setDaCompletare] = useState(0);
   const [bloccati, setBloccati] = useState(0);
@@ -216,6 +217,7 @@ export default function HomeScreen({ navigation }) {
           const aree = await areeConStato();
           setPulizie({ fatte: aree.filter((a) => !a.daFare).length, totali: aree.length });
           setAree(aree);
+          setUltimePrima(await ultimeTemperature(oggiLocale()));
           setCucina({ collegamenti: (await collegamentiCucina()).filter((c) => c.punto_controllo_id), punti, temperature: t });
           setBackup(await statoBackup());
           const ultimaEsterna = await leggiPreferenza('backup_esterno_ultimo');
@@ -442,7 +444,10 @@ export default function HomeScreen({ navigation }) {
 
       {/* Scheda dell'attrezzatura toccata nella scena */}
       {!!scelto && (
-        <SchedaPosto posto={FREDDI.find((p) => p.id === scelto)} stato={stati[scelto]} punti={cucina.punti} collegamenti={cucina.collegamenti}
+        <SchedaPosto key={scelto} posto={FREDDI.find((p) => p.id === scelto)} stato={stati[scelto]} punti={cucina.punti} collegamenti={cucina.collegamenti}
+          ultimaPrima={stati[scelto] && stati[scelto].punto ? ultimePrima[stati[scelto].punto.id] : null}
+          prossimo={(() => { const f = FREDDI.find((p) => p.id !== scelto && stati[p.id] && stati[p.id].c === 'fare'); return f ? { id: f.id, nome: stati[f.id].nome } : null; })()}
+          onProssimo={setScelto}
           onChiudi={() => setScelto(null)} onCambiato={carica}
           apri={(rotta, parametri) => { setScelto(null); apri(rotta, parametri); }} />
       )}

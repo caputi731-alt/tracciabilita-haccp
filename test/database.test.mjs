@@ -394,3 +394,18 @@ test('etichette: produzioni non scadute fra cui scegliere e foglio preparato che
   await db.salvaFoglioEtichette([]);
   assert.deepEqual(await db.foglioEtichette(), []);
 });
+
+test('tastierino: ultima temperatura prima di oggi e rilevazioni della settimana', async () => {
+  const pc = (await db.exec("INSERT INTO punti_controllo (nome, tipo, temp_min, temp_max) VALUES ('Frigo tastierino', 'frigorifero', 0, 4)")).lastInsertRowId;
+  const oggi = oggiLocale();
+  await db.registraTemperatura(pc, 2, null, piuGiorni(oggi, -3));
+  await db.registraTemperatura(pc, 2.5, null, piuGiorni(oggi, -1));
+  await db.registraTemperatura(pc, 3.5, null, null); // oggi: non è il "valore di ieri"
+  const ultime = await db.ultimeTemperature(oggi);
+  assert.equal(ultime[pc].temperatura, 2.5);
+  assert.equal(giornoDi(ultime[pc].data_ora), piuGiorni(oggi, -1));
+  // guardando un giorno passato vale l'ultima prima di quel giorno
+  assert.equal((await db.ultimeTemperature(piuGiorni(oggi, -1)))[pc].temperatura, 2);
+  const righe = (await db.temperatureTraGiorni(piuGiorni(oggi, -6), oggi)).filter((r) => r.punto_controllo_id === pc);
+  assert.equal(righe.length, 3);
+});

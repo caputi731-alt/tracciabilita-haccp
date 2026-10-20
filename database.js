@@ -665,6 +665,28 @@ export async function situazioneTemperature(n = 7) {
   }));
 }
 
+/**
+ * Ultima temperatura di ogni frigorifero registrata prima del giorno indicato (il "valore di ieri" che il tastierino propone).
+ * Restituisce { [punto_controllo_id]: { temperatura, data_ora } }.
+ */
+export async function ultimeTemperature(giorno = oggiLocale()) {
+  const [inizio] = limitiGiorni(giorno, giorno);
+  const righe = await query(
+    `SELECT r.punto_controllo_id, r.temperatura, r.data_ora FROM registro_temperature r
+     JOIN (SELECT punto_controllo_id, MAX(data_ora) AS m FROM registro_temperature WHERE data_ora < ? GROUP BY punto_controllo_id) x
+       ON x.punto_controllo_id = r.punto_controllo_id AND x.m = r.data_ora
+     ORDER BY r.id`, [inizio]);
+  const esito = {};
+  for (const r of righe) esito[r.punto_controllo_id] = { temperatura: r.temperatura, data_ora: r.data_ora };
+  return esito;
+}
+
+/** Rilevazioni dei giorni da `da` ad `a` (compresi), per la settimana a pallini del registro. */
+export function temperatureTraGiorni(da, a) {
+  const [inizio, fine] = limitiGiorni(da, a);
+  return query('SELECT punto_controllo_id, data_ora, esito FROM registro_temperature WHERE data_ora >= ? AND data_ora < ?', [inizio, fine]);
+}
+
 /** Corregge una rilevazione già salvata, lasciando traccia del valore originale. */
 export async function modificaTemperatura(id, nuovaTemperatura) {
   const nuova = Number(nuovaTemperatura);

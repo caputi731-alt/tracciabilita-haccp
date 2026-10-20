@@ -9,15 +9,19 @@ import { S, COLORS, aNumero, numeroPerCampo } from './theme';
 import { Campo, Bottone, Selettore, Sezione, VistaModale, useAvviso, useErrori } from './UI';
 import { registraTemperatura, collegaPosto, salvaPuntoControllo } from './database';
 import { limitiProposti } from './cucine';
+import TastierinoTemperatura from './TastierinoTemperatura';
 import { aggiornaPromemoria } from './notifiche';
 
 const gradi = (n) => `${String(Math.round(Number(n) * 10) / 10).replace('.', ',').replace('-', '−')}°C`;
 const ora = (iso) => new Date(iso).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
 
-export default function SchedaPosto({ posto, stato, punti, collegamenti, onChiudi, onCambiato, apri }) {
+/**
+ * `ultimaPrima` = ultima temperatura prima di oggi (il tastierino parte da lì); `prossimo` = { id, nome } del prossimo frigorifero
+ * sulla mappa che oggi aspetta ancora la temperatura: dopo il salvataggio `onProssimo(id)` apre la sua scheda.
+ */
+export default function SchedaPosto({ posto, stato, punti, collegamenti, onChiudi, onCambiato, apri, ultimaPrima, prossimo, onProssimo }) {
   const { punto, ultima } = stato || {};
-  const [valore, setValore] = useState('');
-  const [errore, setErrore] = useState(null);
+  const [salvate, setSalvate] = useState(0); // fa ripartire il tastierino dopo ogni salvataggio
   const [form, setForm] = useState({ nome: '', temp_min: '', temp_max: '' });
   const { errori, segnala, azzera, riepilogo } = useErrori();
   const { avviso, mostra } = useAvviso();
@@ -27,7 +31,7 @@ export default function SchedaPosto({ posto, stato, punti, collegamenti, onChiud
     if (!posto) return;
     const base = punto || limitiProposti(posto.type);
     setForm({ nome: punto ? punto.nome : '', temp_min: numeroPerCampo(base.temp_min), temp_max: numeroPerCampo(base.temp_max) });
-    setValore(''); setErrore(null); azzera();
+    azzera();
   }, [posto?.id, punto?.id, punto?.nome, punto?.temp_min, punto?.temp_max]);
   if (!posto) return null;
 
@@ -63,13 +67,12 @@ export default function SchedaPosto({ posto, stato, punti, collegamenti, onChiud
     mostra('Salvato ✓');
   };
 
-  const salvaTemperatura = async () => {
-    const numero = aNumero(valore);
-    if (numero === null) { setErrore({ testo: 'Scrivi la temperatura in numeri, per esempio 3,5', id: Math.random() }); return; }
+  const salvaTemperatura = async (numero) => {
     const r = await registraTemperatura(punto.id, numero, null, null);
-    setValore(''); setErrore(null);
     aggiornaPromemoria();
     await onCambiato();
+    if (r.conforme && prossimo && onProssimo) { onProssimo(prossimo.id); return; }
+    setSalvate((n) => n + 1);
     mostra(r.conforme ? `Salvato ✓ ${gradi(numero)}` : `${gradi(numero)} fuori limite: aperta una non conformità`);
   };
 
@@ -113,10 +116,13 @@ export default function SchedaPosto({ posto, stato, punti, collegamenti, onChiud
               <Text style={{ fontSize: 15, fontWeight: '700', color: fuori ? COLORS.danger : ultima ? COLORS.ok : COLORS.warning }}>
                 {fuori ? `Fuori limite alle ${ora(ultima.data_ora)}` : ultima ? `Nei limiti · rilevata alle ${ora(ultima.data_ora)}` : 'Oggi non ancora registrata'}
               </Text>
-              <Campo label={ultima ? 'Nuova rilevazione' : 'Temperatura di adesso'} value={valore} errore={errore}
-                onChange={(v) => { setValore(v); setErrore(null); }} keyboardType="numbers-and-punctuation" placeholder="°C" />
-              <Bottone testo="Registra temperatura" icona="thermometer" onPress={salvaTemperatura} />
               {fuori && <Bottone testo="Apri le non conformità" ghost colore={COLORS.danger} onPress={() => apri('NonConformita')} />}
+            </View>
+
+            <View style={S.card}>
+              <Text style={titolino}>{ultima ? 'Nuova rilevazione' : 'Temperatura di adesso'}</Text>
+              <TastierinoTemperatura key={`${punto.id}-${salvate}`} punto={punto} ultima={ultimaPrima || null} nascondiNome
+                testoSalva={prossimo ? `Salva e vai a ${prossimo.nome}` : 'Salva'} onSalva={salvaTemperatura} />
             </View>
 
             <Sezione titolo="Nome e limiti" icona="pencil-outline">
