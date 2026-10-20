@@ -130,8 +130,12 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
   anche per sinonimi in `parole`) e le "Preferite" scelte con la stellina (preferenza locale `sezioni_preferite`, non va nel backup).
   Le voci con `sezione` (Cucina, Sala, Menù, Incassi) si aprono con `suSezione` = `vai` di PrincipaleScreen. Una schermata nuova
   va aggiunta anche in `SEZIONI_SUITE`, o non si troverà con la ricerca.
-- `HomeScreen.js`: riquadro dei controlli di oggi (anello disegnato con due mezzi cerchi, senza librerie grafiche),
-  stato di temperature/pulizie/scadenze, cose da sistemare, prossimo menù (`prossimoMenu` in menuPonte.js) e pulsante "Registra".
+- `HomeScreen.js` (fase 3, 20/10/2026): in alto data, "Cucina" e `PulsanteCerca`; sotto la mappa il riquadro `RiquadroOggi`: titolo
+  ("Oggi mancano N cose"), "N di M fatte" (apre il pannello dei dettagli), barra di avanzamento, promemoria toccabili e i pulsanti
+  "Fai il giro (N passi)" (passi = `passiGiro`) e "+" (pannello "Cosa registri?"). Titolo e promemoria li calcola `riquadroOggi`
+  (giro.js, provato in test/giro.test.mjs): temperature → `Temperature { daNotifica }` (sequenza), pulizie → `Sanificazione`,
+  scadenze → `Magazzino` (con `lottoId` se è uno solo); le cose da sistemare (avvisi con testo `breve`) sono promemoria anch'esse.
+  Non c'è più il pulsante "Registra" sopra la mappa. Pannello dei dettagli: temperature/pulizie/scadenze, avvisi, prossimo menù.
 - Carattere Inter (`@expo-google-fonts/inter`, nell'APK, nessuna rete): `caratteri.js` aggancia `Text` e `TextInput` e sceglie il file in base a
   `fontWeight` (400 fino a 500, 600, 700 da 700 in su). Le pagine web (Menù, cucine, sale) usano le copie in `menu/vendor/fonts/Inter_*.ttf`.
   Negli stili si continua a scrivere solo `fontWeight`; non mettere `fontFamily` a mano (tranne nelle intestazioni di navigazione).
@@ -141,7 +145,7 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
   `metro.config.js` serve solo a quello (piattaforma "web") e non cambia l'APK. Usarla prima di ogni modifica visibile.
 - Tema scuro: segue il telefono e si decide all'avvio (`TEMA_SCURO` e le due tavolozze `CHIARO`/`SCURO` in `theme.js`, stesse chiavi;
   `COLORS` resta fisso finché l'app è aperta). Mai colori scritti a mano nelle schermate: sopra un fondo `azione` il testo è
-  `COLORS.suAzione`, sopra `terra` è `suTerra`, i campi hanno fondo `campo`; il riquadro della Home usa le chiavi `eroe…`.
+  `COLORS.suAzione`, sopra `terra` è `suTerra`, i campi hanno fondo `campo`; le chiavi `eroe…` non sono più usate dalla Home (restano nella tavolozza).
   `caratteri.js` dà `COLORS.text` ai testi senza colore (non a quelli dentro un altro testo). PDF, etichette e pagine dei menù restano chiari.
   Il Menù riceve `scuro` dalla suite e usa la parte "Tema scuro" di `menu/css/suite.css`. Controllare sempre entrambi i temi:
   `SCHEMI=dark,light python3 test/anteprima/vedi.py …`. Finestre di sistema (Alert, barra di navigazione di Android) non ancora adattate.
@@ -165,9 +169,9 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
   Non conformità. Disegna solo quando qualcosa cambia; l'inquadratura
   si adatta alla forma del riquadro (`adatta`); i tag hanno altezza fissa sullo schermo e non si coprono (`sistemaTag`).
   I colori sono quelli di `theme.js` scritti a mano: se cambia la tavolozza vanno aggiornati anche lì.
-- `HomeScreen.js`: con la mappa (`CucineVista.js`, WebView) la schermata è data in alto, mappa che riempie lo spazio, in basso la riga dei
-  controlli di oggi e il pannello "dettagli" (Modal) con temperature, pulizie, scadenze, avvisi e prossimo menù. Se il 3D non parte entro
-  8 secondi o dà errore, torna la Home senza mappa con il riquadro grande: deve sempre restare utilizzabile.
+- `HomeScreen.js`: con la mappa (`CucineVista.js`, WebView) la schermata è barra in alto, mappa che riempie lo spazio, in basso il
+  riquadro di oggi e il pannello "dettagli" (Modal) con temperature, pulizie, scadenze, avvisi e prossimo menù. Se il 3D non parte entro
+  8 secondi o dà errore, torna la Home senza mappa con lo stesso riquadro e i dettagli sotto: deve sempre restare utilizzabile.
 - Prova della pagina: `python3 test/cucine-vista.py [cartella immagini]` (Playwright; gira anche su GitHub prima della build).
   Nell'anteprima del browser (`vedi.py`) la scena si vede davvero, dentro un iframe.
 - `Vista3D.js` è la WebView comune alle due scene (cucine e sale): manda i dati, riceve i messaggi, gestisce "il 3D non parte".

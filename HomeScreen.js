@@ -7,7 +7,7 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Modal, Pressable } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { S, COLORS, TEMA_SCURO, giorniAllaScadenza, oggiLocale } from './theme';
+import { S, COLORS, TEMA_SCURO, giorniAllaScadenza, oggiLocale, piuGiorni } from './theme';
 import { daIsoLocale } from './utile';
 import { Icona, PulsanteCerca } from './UI';
 import {
@@ -18,6 +18,7 @@ import { FREDDI, PULSANTI, statiCucine, datiScena } from './cucine';
 import SchedaPosto from './SchedaPosto';
 import { statoBackup } from './backupAutomatico';
 import { prossimoMenu } from './menuPonte';
+import { passiGiro, riquadroOggi } from './giro';
 
 const REGISTRA = [
   { titolo: 'Carico merce', rotta: 'CaricoMerce', icona: 'truck-delivery-outline', tono: 'verde' },
@@ -32,36 +33,6 @@ const STATI_MENU = { bozza: 'bozza', inviata: 'proposta inviata', confermata: 'c
 const MESI = ['GEN', 'FEB', 'MAR', 'APR', 'MAG', 'GIU', 'LUG', 'AGO', 'SET', 'OTT', 'NOV', 'DIC'];
 const maiuscola = (t) => t.charAt(0).toUpperCase() + t.slice(1);
 const plurale = (n, uno, molti) => `${n} ${n === 1 ? uno : molti}`;
-
-/** Anello di avanzamento disegnato con due mezzi cerchi che ruotano (niente librerie grafiche). */
-function Anello({ fatti, totali, lato = 88, spessore = 9, colore, traccia, children }) {
-  const gradi = totali > 0 ? Math.min(1, fatti / totali) * 360 : 0;
-  const cerchio = { width: lato, height: lato, borderRadius: lato / 2, borderWidth: spessore };
-  // metà dell'anello colorato, che ruotando entra nella metà visibile
-  const meta = (aDestra, rotazione) => (
-    <View style={{
-      position: 'absolute', top: 0, left: aDestra ? lato / 2 : 0, width: lato / 2, height: lato, overflow: 'hidden',
-    }}>
-      <View style={{
-        position: 'absolute', top: 0, left: aDestra ? -lato / 2 : 0, width: lato, height: lato,
-        transform: [{ rotate: `${rotazione}deg` }],
-      }}>
-        <View style={{ position: 'absolute', top: 0, left: aDestra ? 0 : lato / 2, width: lato / 2, height: lato, overflow: 'hidden' }}>
-          <View style={[cerchio, { position: 'absolute', top: 0, left: aDestra ? 0 : -lato / 2, borderColor: colore }]} />
-        </View>
-      </View>
-    </View>
-  );
-  return (
-    <View accessible accessibilityRole="image" accessibilityLabel={`${fatti} controlli fatti su ${totali}`}
-      style={{ width: lato, height: lato, alignItems: 'center', justifyContent: 'center' }}>
-      <View style={[cerchio, { position: 'absolute', top: 0, left: 0, borderColor: traccia }]} />
-      {gradi > 0 && meta(true, Math.min(gradi, 180))}
-      {gradi > 180 && meta(false, gradi - 180)}
-      {children}
-    </View>
-  );
-}
 
 /** Un problema della vista 3D (modulo mancante, errore nel disegno) resta chiuso qui: la Home passa alla versione senza cucine. */
 class RiparoCucine extends React.Component {
@@ -129,12 +100,98 @@ function RigaAvviso({ grave, titolo, testo, onPress, prima }) {
   );
 }
 
+/**
+ * Riquadro "Oggi" (proposta A, fase 3): quante cose mancano, barra di avanzamento, promemoria toccabili (calcolati da
+ * riquadroOggi in giro.js, più le cose da sistemare), "Fai il giro" e "+" per registrare altro.
+ */
+function RiquadroOggi({ dati, avvisi, passi, onPromemoria, onGiro, onRegistra, onImposta, onDettagli }) {
+  const { titolo, fatti, totali, promemoria, mancanti } = dati;
+  const quota = totali > 0 ? Math.min(1, fatti / totali) : 0;
+  const tutti = [...promemoria, ...avvisi.map((a) => ({ tipo: 'avviso', testo: a.breve, tono: a.grave ? 'grave' : 'info', vai: a.vai }))];
+  const COLORI = {
+    fare: [COLORS.terraSoft, COLORS.terraScuro, COLORS.terra],
+    grave: [COLORS.dangerSoft, COLORS.danger, COLORS.danger],
+    info: [COLORS.card, COLORS.text, COLORS.border],
+  };
+  const ICONE = { temperature: 'thermometer', pulizie: 'spray-bottle', scadenze: 'clock-outline', avviso: 'alert-circle-outline' };
+  return (
+    <View accessibilityLabel="Controlli di oggi" style={{
+      backgroundColor: COLORS.card, borderRadius: 20, borderWidth: 1, borderColor: COLORS.border, padding: 16, gap: 12,
+    }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <Text accessibilityRole="header" style={{ flex: 1, fontSize: 17, fontWeight: '700' }}>{titolo}</Text>
+        <TouchableOpacity onPress={onDettagli} accessibilityRole="button" accessibilityLabel="Tutto quello di oggi"
+          style={{ flexDirection: 'row', alignItems: 'center', minHeight: 44, paddingLeft: 8 }}>
+          <Text style={{ fontSize: 13, color: COLORS.muted }}>{totali > 0 ? `${fatti} di ${totali} fatte` : 'Dettagli'}</Text>
+          <Icona nome="chevron-up" size={18} colore={COLORS.muted} style={{ marginLeft: 2 }} />
+        </TouchableOpacity>
+      </View>
+      {totali > 0 && (
+        <View accessible accessibilityRole="progressbar" accessibilityLabel={`${fatti} controlli fatti su ${totali}`}
+          style={{ height: 6, borderRadius: 3, backgroundColor: COLORS.contenitore, overflow: 'hidden' }}>
+          <View style={{ width: `${Math.round(quota * 100)}%`, height: 6, backgroundColor: COLORS.azione }} />
+        </View>
+      )}
+      {tutti.length > 0 && (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+          {tutti.map((p) => {
+            const [fondo, testo, bordo] = COLORI[p.tono] || COLORI.info;
+            return (
+              <TouchableOpacity key={`${p.tipo}-${p.testo}`} onPress={() => (p.vai ? p.vai() : onPromemoria(p))} activeOpacity={0.8}
+                accessibilityRole="button" accessibilityLabel={p.testo}
+                style={{
+                  flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44, paddingHorizontal: 12, borderRadius: 12,
+                  borderWidth: 1, borderColor: bordo, backgroundColor: fondo, maxWidth: '100%',
+                }}>
+                <Icona nome={ICONE[p.tipo]} size={18} colore={testo} />
+                <Text numberOfLines={1} style={{ fontSize: 14, fontWeight: p.tono === 'info' ? '500' : '600', color: testo, flexShrink: 1 }}>
+                  {p.testo}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        {totali === 0 ? (
+          <TouchableOpacity onPress={onImposta} activeOpacity={0.85} accessibilityRole="button"
+            style={{ flex: 1, minHeight: 52, borderRadius: 14, backgroundColor: COLORS.azione, alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontSize: 16, fontWeight: '600', color: COLORS.suAzione }}>Imposta i controlli</Text>
+          </TouchableOpacity>
+        ) : passi > 0 ? (
+          <TouchableOpacity onPress={onGiro} activeOpacity={0.85} accessibilityRole="button"
+            accessibilityLabel={`Fai il giro di controllo, ${passi} ${passi === 1 ? 'passo' : 'passi'}`}
+            style={{
+              flex: 1, minHeight: 52, borderRadius: 14, backgroundColor: COLORS.azione,
+              flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+            }}>
+            <Text style={{ fontSize: 16, fontWeight: '600', color: COLORS.suAzione }}>
+              {mancanti > 0 ? `Fai il giro (${passi} ${passi === 1 ? 'passo' : 'passi'})` : 'Controlla le scadenze'}
+            </Text>
+            <Icona nome="chevron-right" size={22} colore={COLORS.suAzione} />
+          </TouchableOpacity>
+        ) : null}
+        <TouchableOpacity onPress={onRegistra} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Registra altro"
+          style={{
+            ...(totali > 0 && passi === 0 ? { flex: 1 } : { width: 52, flexShrink: 0 }), minHeight: 52, borderRadius: 14,
+            borderWidth: 1, borderColor: COLORS.bordoCampo, backgroundColor: COLORS.card,
+            flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+          }}>
+          <Icona nome="plus" size={24} />
+          {totali > 0 && passi === 0 && <Text style={{ fontSize: 16, fontWeight: '600' }}>Registra</Text>}
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
 export default function HomeScreen({ navigation }) {
   const [scadenze, setScadenze] = useState([]);
   const [tempFatte, setTempFatte] = useState(0);
   const [puntiTot, setPuntiTot] = useState(0);
   const [ncAperte, setNcAperte] = useState(0);
   const [pulizie, setPulizie] = useState({ fatte: 0, totali: 0 });
+  const [aree, setAree] = useState([]);
   const [backup, setBackup] = useState(null);
   const [daCompletare, setDaCompletare] = useState(0);
   const [bloccati, setBloccati] = useState(0);
@@ -158,6 +215,7 @@ export default function HomeScreen({ navigation }) {
           // pulizie di ogni frequenza: giornaliere, settimanali e mensili scadute
           const aree = await areeConStato();
           setPulizie({ fatte: aree.filter((a) => !a.daFare).length, totali: aree.length });
+          setAree(aree);
           setCucina({ collegamenti: (await collegamentiCucina()).filter((c) => c.punto_controllo_id), punti, temperature: t });
           setBackup(await statoBackup());
           const ultimaEsterna = await leggiPreferenza('backup_esterno_ultimo');
@@ -186,59 +244,58 @@ export default function HomeScreen({ navigation }) {
   const tempMancanti = Math.max(0, puntiTot - tempFatte);
   const pulizieMancanti = Math.max(0, pulizie.totali - pulizie.fatte);
   const totali = puntiTot + pulizie.totali;
-  const fatti = totali - tempMancanti - pulizieMancanti;
-  const mancanti = tempMancanti + pulizieMancanti;
   const scaduti = scadenze.filter((l) => giorniAllaScadenza(l.data_scadenza) < 0).length;
   const backupOk = backup && backup.cartella && backup.giorni !== null && backup.giorni <= 2 && !backup.errore;
   const esternoOk = esterno !== undefined && esterno !== null && esterno <= 7;
 
   const apri = (rotta, parametri) => { setRegistra(false); setPannello(false); navigation.navigate(rotta, parametri); };
 
-  // il riquadro in alto: cosa manca oggi e il pulsante per farlo subito
-  let titolo; let dettaglio; let pulsante = null;
-  if (totali === 0) {
-    titolo = 'Nessun controllo impostato';
-    dettaglio = 'Aggiungi frigoriferi e aree di pulizia';
-    pulsante = { testo: 'Imposta i controlli', vai: () => apri('Anagrafiche', { scheda: 'Frigoriferi' }) };
-  } else if (mancanti === 0) {
-    titolo = 'Tutto fatto';
-    dettaglio = 'Temperature e pulizie di oggi registrate';
-  } else {
-    titolo = mancanti === 1 ? 'Ne manca 1' : `Ne mancano ${mancanti}`;
-    dettaglio = [tempMancanti ? plurale(tempMancanti, 'temperatura', 'temperature') : '',
-      pulizieMancanti ? plurale(pulizieMancanti, 'pulizia', 'pulizie') : ''].filter(Boolean).join(' · ');
-    // un solo percorso guidato: prima le temperature che mancano, poi le pulizie, in fondo le scadenze
-    pulsante = { testo: 'Inizia il giro di controllo', vai: () => apri('Giro') };
-  }
-
   const avvisi = [];
   if (bloccati > 0) {
-    avvisi.push({ grave: true, titolo: `${bloccati} lott${bloccati > 1 ? 'i bloccati' : 'o bloccato'} (richiamo)`,
+    avvisi.push({ grave: true, breve: `${bloccati} lott${bloccati > 1 ? 'i bloccati' : 'o bloccato'}`,
+      titolo: `${bloccati} lott${bloccati > 1 ? 'i bloccati' : 'o bloccato'} (richiamo)`,
       testo: 'Merce da tenere separata finché non è risolto', vai: () => apri('Magazzino') });
   }
   if (ncAperte > 0) {
-    avvisi.push({ grave: true, titolo: `${ncAperte} non conformità apert${ncAperte > 1 ? 'e' : 'a'}`,
+    avvisi.push({ grave: true, breve: `${ncAperte} non conformità apert${ncAperte > 1 ? 'e' : 'a'}`,
+      titolo: `${ncAperte} non conformità apert${ncAperte > 1 ? 'e' : 'a'}`,
       testo: "Da chiudere con un'azione correttiva", vai: () => apri('NonConformita') });
   }
   if (backup && !backupOk) {
     avvisi.push({ grave: !backup.cartella || !!backup.errore,
+      breve: !backup.cartella ? 'Backup non attivo' : backup.errore ? 'Backup non riuscito' : 'Backup vecchio',
       titolo: !backup.cartella ? 'Backup automatico non attivo' : backup.errore ? 'Backup non riuscito' : 'Backup vecchio',
       testo: !backup.cartella ? 'Attivalo: se il telefono si rompe perdi tutti i registri'
         : backup.errore ? 'Controlla la cartella dei backup'
         : backup.giorni === null ? 'Nessun backup ancora eseguito' : `Ultimo backup ${backup.giorni} giorni fa`,
       vai: () => apri('Documenti', { scheda: 'Backup e dati' }) });
   } else if (backup && esterno !== undefined && !esternoOk) {
-    avvisi.push({ grave: false, titolo: 'Copia fuori dal telefono',
+    avvisi.push({ grave: false, breve: 'Copia fuori dal telefono', titolo: 'Copia fuori dal telefono',
       testo: esterno === null ? 'Mai fatta: se il telefono si rompe o si perde, i registri vanno persi'
         : `L'ultima è di ${esterno} giorni fa: inviala a Drive o per email`,
       vai: () => apri('Documenti', { scheda: 'Backup e dati' }) });
   }
   if (daCompletare > 0) {
-    avvisi.push({ grave: false, titolo: `${daCompletare} prodott${daCompletare > 1 ? 'i' : 'o'} da completare`,
+    avvisi.push({ grave: false, breve: `${daCompletare} prodott${daCompletare > 1 ? 'i' : 'o'} da completare`,
+      titolo: `${daCompletare} prodott${daCompletare > 1 ? 'i' : 'o'} da completare`,
       testo: "Allergeni e conservazione da verificare sull'etichetta", vai: () => apri('Anagrafiche', { scheda: 'Prodotti' }) });
   }
 
   const giornoMenu = menu ? daIsoLocale(menu.data) : null;
+
+  const oggi = oggiLocale();
+  const datiOggi = riquadroOggi({ tempMancanti, pulizieMancanti, totali, scadenze, oggi });
+  const passi = passiGiro({ punti: cucina.punti, temperatureOggi: cucina.temperature, aree, lotti: scadenze, oggi, domani: piuGiorni(oggi, 1) }).length;
+  const suPromemoria = (p) => {
+    if (p.tipo === 'temperature') apri('Temperature', { daNotifica: Date.now() });
+    else if (p.tipo === 'pulizie') apri('Sanificazione');
+    else apri('Magazzino', p.lottoId ? { lottoId: p.lottoId } : undefined);
+  };
+  const riquadro = (
+    <RiquadroOggi dati={datiOggi} avvisi={avvisi} passi={passi} onPromemoria={suPromemoria}
+      onGiro={() => apri('Giro')} onRegistra={() => setRegistra(true)} onDettagli={() => (conCucine ? setPannello(true) : null)}
+      onImposta={() => apri('Anagrafiche', { scheda: 'Frigoriferi' })} />
+  );
 
   // barra in alto (proposta A): la data, il titolo della sezione e il pulsante per cercare in tutta l'app
   const barraAlta = (stile) => (
@@ -333,22 +390,6 @@ export default function HomeScreen({ navigation }) {
         )}
     </>
   );
-  const daSistemare = [avvisi.length ? plurale(avvisi.length, 'cosa da sistemare', 'cose da sistemare') : '',
-    scaduti ? plurale(scaduti, 'lotto scaduto', 'lotti scaduti') : scadenze.length ? plurale(scadenze.length, 'scadenza vicina', 'scadenze vicine') : '']
-    .filter(Boolean).join(' · ') || 'Temperature, pulizie, scadenze, prossimo menù';
-
-  const pulsanteRegistra = (stile) => (
-    <TouchableOpacity onPress={() => setRegistra(true)} activeOpacity={0.85} accessibilityRole="button"
-      accessibilityLabel="Registra"
-      style={[{
-        position: 'absolute', right: 16, bottom: 16, height: 56, borderRadius: 18, paddingLeft: 18, paddingRight: 22,
-        backgroundColor: COLORS.terra, flexDirection: 'row', alignItems: 'center', elevation: 4,
-      }, stile]}>
-      <Icona nome="plus" size={24} colore={COLORS.suTerra} />
-      <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.suTerra, marginLeft: 8 }}>Registra</Text>
-    </TouchableOpacity>
-  );
-
   return (
     <View style={S.screen}>
       {conCucine ? (
@@ -367,84 +408,18 @@ export default function HomeScreen({ navigation }) {
                 }}>Tocca un frigorifero per dargli il nome</Text>
               </View>
             )}
-            {pulsanteRegistra({ bottom: 36 })}
           </View>
-          <View style={{
-            backgroundColor: COLORS.bg, borderTopLeftRadius: 28, borderTopRightRadius: 28, marginTop: -24,
-            paddingHorizontal: 16, paddingBottom: 12,
-          }}>
-            <TouchableOpacity onPress={() => setPannello(true)} activeOpacity={0.7} accessibilityRole="button"
-              accessibilityLabel={`Apri i dettagli di oggi. ${daSistemare}`}
-              style={{ minHeight: 52, alignItems: 'center', justifyContent: 'center', paddingTop: 8 }}>
-              <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: COLORS.bordoCampo, marginBottom: 6 }} />
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Text numberOfLines={1} style={{ fontSize: 14, fontWeight: '700', color: avvisi.some((x) => x.grave) || scaduti ? COLORS.danger : COLORS.muted, flexShrink: 1 }}>
-                  {daSistemare}
-                </Text>
-                <Icona nome="chevron-up" size={20} colore={COLORS.muted} style={{ marginLeft: 4 }} />
-              </View>
-            </TouchableOpacity>
-          <TouchableOpacity onPress={pulsante ? pulsante.vai : undefined} disabled={!pulsante} activeOpacity={0.8}
-            accessibilityRole="button" accessibilityLabel={`Controlli di oggi: ${titolo}. ${dettaglio}${pulsante ? `. ${pulsante.testo}` : ''}`}
-            style={{
-              backgroundColor: COLORS.eroe, borderRadius: 24, padding: 14, marginTop: 6, minHeight: 76,
-              flexDirection: 'row', alignItems: 'center',
-            }}>
-            {totali > 0 && (
-              <Anello fatti={fatti} totali={totali} lato={48} spessore={6} colore={COLORS.suEroeTenue} traccia={COLORS.eroeTraccia}>
-                {mancanti === 0
-                  ? <Icona nome="check-bold" size={20} colore={COLORS.suEroe} />
-                  : <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.suEroe }}>{fatti}/{totali}</Text>}
-              </Anello>
-            )}
-            <View style={{ flex: 1, marginLeft: totali > 0 ? 14 : 4 }}>
-              <Text style={{ fontSize: 18, fontWeight: '700', color: COLORS.suEroe }}>{titolo}</Text>
-              <Text style={{ fontSize: 14, color: COLORS.suEroeTenue }}>{pulsante && mancanti > 0 ? `${dettaglio} · inizia il giro` : dettaglio}</Text>
-            </View>
-            {!!pulsante && (
-              <View style={{
-                width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.eroePulsante, alignItems: 'center', justifyContent: 'center',
-              }}>
-                <Icona nome="arrow-right" size={22} colore={COLORS.suEroePulsante} />
-              </View>
-            )}
-          </TouchableOpacity>
+          <View style={{ backgroundColor: COLORS.bg, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 10 }}>
+            {riquadro}
           </View>
         </>
       ) : (
         <>
-          <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 20, paddingBottom: 96 }}>
+          <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 20, paddingBottom: 32 }}>
             {intestazione}
-        <View style={{ backgroundColor: COLORS.eroe, borderRadius: 28, padding: 24, marginBottom: 12 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <View style={{ flex: 1, paddingRight: 12 }}>
-              <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.suEroeTenue }}>Controlli di oggi</Text>
-              <Text style={{ fontSize: 28, fontWeight: '700', color: COLORS.suEroe, letterSpacing: -0.6, marginTop: 2 }}>{titolo}</Text>
-              <Text style={{ fontSize: 16, color: COLORS.suEroeTenue, marginTop: 2 }}>{dettaglio}</Text>
-            </View>
-            {totali > 0 && (
-              <Anello fatti={fatti} totali={totali} colore={COLORS.suEroeTenue} traccia={COLORS.eroeTraccia}>
-                {mancanti === 0
-                  ? <Icona nome="check-bold" size={30} colore={COLORS.suEroe} />
-                  : <Text style={{ fontSize: 20, fontWeight: '700', color: COLORS.suEroe }}>{fatti}/{totali}</Text>}
-              </Anello>
-            )}
-          </View>
-          {!!pulsante && (
-            <TouchableOpacity onPress={pulsante.vai} activeOpacity={0.8} accessibilityRole="button"
-              style={{
-                marginTop: 20, minHeight: 52, borderRadius: 26, backgroundColor: COLORS.eroePulsante,
-                flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16,
-              }}>
-              <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.suEroePulsante, marginRight: 8 }}>{pulsante.testo}</Text>
-              <Icona nome="arrow-right" size={20} colore={COLORS.suEroePulsante} />
-            </TouchableOpacity>
-          )}
-        </View>
-
+            <View style={{ marginBottom: 12 }}>{riquadro}</View>
 {dettagli}
           </ScrollView>
-          {pulsanteRegistra()}
         </>
       )}
 
