@@ -1,7 +1,8 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, TextInput, TouchableOpacity, Modal, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { S, COLORS, fmtData, fmtDataOra, giorniAllaScadenza, aNumero, numeroPerCampo, arrotonda } from './theme';
+import { S, COLORS, fmtData, fmtDataOra, giorniAllaScadenza, aNumero, numeroPerCampo, arrotonda, oggiLocale } from './theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Campo, Bottone, Chips, ModaleModifica, useAvviso, conferma, useFoto, AnteprimaFoto, VistaModale, Segmenti, useErrori, Sezione, Caricamento, Vuoto, Icona,
 } from './UI';
@@ -12,6 +13,7 @@ import {
 } from './database';
 import { stampaSchedaLotto } from './schedaLotto';
 import RiquadroPromemoria from './RiquadroPromemoria';
+import { dosiRapide, scadenzaBreve } from './magazzino';
 
 const MOTIVI = ['Richiamo del fornitore', 'Allerta sanitaria', 'Sospetta non conformità'];
 
@@ -20,6 +22,21 @@ const coloreStato = (stato) =>
     : stato === 'bloccato' || stato === 'scartato' ? COLORS.danger : COLORS.muted);
 
 const fmtQ = (n) => (n === null || n === undefined ? '—' : numeroPerCampo(arrotonda(n)));
+
+/** Pulsante di una dose rapida: compatto e bloccato finché lo scarico non è finito (niente doppi scarichi). */
+function Dose({ testo, onPress, etichetta }) {
+  const [occupato, setOccupato] = useState(false);
+  return (
+    <TouchableOpacity disabled={occupato} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel={etichetta || testo}
+      onPress={async () => { setOccupato(true); try { await onPress(); } finally { setOccupato(false); } }}
+      style={{
+        flex: 1, minHeight: 46, borderRadius: 12, borderWidth: 1, borderColor: COLORS.bordoCampo, backgroundColor: COLORS.card,
+        alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, opacity: occupato ? 0.5 : 1,
+      }}>
+      <Text numberOfLines={1} style={{ fontSize: 15, fontWeight: '600' }}>{testo}</Text>
+    </TouchableOpacity>
+  );
+}
 
 function Riquadro({ titolo, children }) {
   return (
@@ -82,6 +99,8 @@ export default function MagazzinoScreen({ route, navigation }) {
   const [azione, setAzione] = useState(null); // { tipo: 'blocca' | 'sblocca', lotti: [id], testo }
   const [cerca, setCerca] = useState(route?.params?.cerca || '');
   const [aperti, setAperti] = useState({});
+  const margini = useSafeAreaInsets();
+  const [espanso, setEspanso] = useState(null); // gruppo con lo scarico rapido aperto nella riga
   const [sel, setSel] = useState(null);           // lotto aperto nel dettaglio
   const [storico, setStorico] = useState([]);
   const [uscita, setUscita] = useState(null);     // { gruppo | lotto, qta, causale }
@@ -119,6 +138,11 @@ export default function MagazzinoScreen({ route, navigation }) {
     Dispensa: (l) => !l.conservazione || l.conservazione === 'ambiente',
     'In scadenza': (l) => { const g = giorniAllaScadenza(l.data_scadenza); return g !== null && g <= 3; },
   };
+  // quanti prodotti in ogni filtro (un prodotto con più lotti conta una volta)
+  const conteggi = {};
+  for (const f of Object.keys(FILTRI)) {
+    conteggi[f] = new Set(lotti.filter(FILTRI[f]).map((l) => `${l.prodotto_id}|${l.unita_misura || ''}`)).size;
+  }
   for (const l of lotti.filter(FILTRI[filtro] || FILTRI.Tutti)) {
     const k = `${l.prodotto_id}|${l.unita_misura || ''}`;
     if (!mappa[k]) {
@@ -200,26 +224,28 @@ export default function MagazzinoScreen({ route, navigation }) {
   };
 
   /* --- uscite: su un gruppo si scarica in ordine FIFO, anche su più lotti --- */
-  const confermaUscita = async () => {
+  // `u` = { gruppo | lotto, qta, causale }; `rapido` = dalla dose della riga (gli errori si mostrano senza la finestra)
+  const confermaUscita = async (u = uscita, rapido = false) => {
     azzera();
-    const q = aNumero(uscita.qta);
-    if (q === null || q <= 0) return segnala('qta', 'Inserisci una quantità maggiore di zero, es. 0,5');
-    const tutti0 = uscita.lotto ? [uscita.lotto] : uscita.gruppo.lotti;
-    const elenco = utilizzabili(tutti0, uscita.causale);
+    const avvisa = (campo, testo) => (rapido ? Alert.alert('Scarico non registrato', testo) : segnala(campo, testo));
+    const q = aNumero(u.qta);
+    if (q === null || q <= 0) return avvisa('qta', 'Inserisci una quantità maggiore di zero, es. 0,5');
+    const tutti0 = u.lotto ? [u.lotto] : u.gruppo.lotti;
+    const elenco = utilizzabili(tutti0, u.causale);
     const um = tutti0[0].unita_misura || '';
     if (elenco.length === 0) {
-      return segnala('qta', 'Lotto scaduto: non si può usare. Scegli la causale "scarto".');
+      return avvisa('qta', 'Lotto scaduto: non si può usare. Scegli la causale "scarto".');
     }
     const disponibile = elenco.reduce((t, l) => t + Number(l.quantita_residua), 0);
     if (q > disponibile + 0.0005) {
       const scaduti = tutti0.length - elenco.length;
-      return segnala('qta', `Ne sono disponibili solo ${fmtQ(disponibile)} ${um}${scaduti ? ` (${scaduti} ${scaduti === 1 ? 'lotto scaduto escluso' : 'lotti scaduti esclusi'}: scaricali come scarto)` : ''}`);
+      return avvisa('qta', `Ne sono disponibili solo ${fmtQ(disponibile)} ${um}${scaduti ? ` (${scaduti} ${scaduti === 1 ? 'lotto scaduto escluso' : 'lotti scaduti esclusi'}: scaricali come scarto)` : ''}`);
     }
     let resto = q;
     const usati = [];
     const movimenti = [];
-    const idLotto = uscita.lotto ? uscita.lotto.id : null;
-    const causale = uscita.causale;
+    const idLotto = u.lotto ? u.lotto.id : null;
+    const causale = u.causale;
     try {
       for (const l of elenco) {
         if (resto <= 0.0005) break;
@@ -232,11 +258,11 @@ export default function MagazzinoScreen({ route, navigation }) {
     } catch (e) {
       // la giacenza è cambiata nel frattempo: si annulla quanto già scaricato in questo giro
       for (const m of movimenti) { try { await annullaUscita(m); } catch (e2) { /* resta visibile nei movimenti */ } }
-      setUscita(null);
+      setUscita(null); setEspanso(null);
       if (idLotto) await ricaricaLotto(idLotto); else ricarica();
       return Alert.alert('Scarico non registrato', String(e?.message || e));
     }
-    setUscita(null);
+    setUscita(null); setEspanso(null);
     if (idLotto) await ricaricaLotto(idLotto); else ricarica();
     mostra(`Scaricati ${fmtQ(q)} ${um} (${usati.length > 1 ? `lotti ${usati.join(', ')}` : `lotto ${usati[0]}`})`, {
       testo: 'Annulla',
@@ -349,7 +375,7 @@ export default function MagazzinoScreen({ route, navigation }) {
                 {q > 0 && q <= disp + 1e-9 && (
                   <Text style={[S.muted, { marginTop: 10 }]}>Verrà scaricato: {piano.join(' + ')}</Text>
                 )}
-                <Bottone testo="Conferma uscita" onPress={confermaUscita}
+                <Bottone testo="Conferma uscita" onPress={() => confermaUscita()}
                   colore={uscita.causale === 'consumo' ? undefined : COLORS.danger} />
                 <Bottone testo="Annulla" ghost onPress={() => { azzera(); setUscita(null); }} />
               </View>
@@ -379,17 +405,25 @@ export default function MagazzinoScreen({ route, navigation }) {
         {modo === 'In giacenza' && lotti.length > 0 && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}
             contentContainerStyle={{ gap: 8 }}>
-            {['Tutti', 'Frigo', 'Congelati', 'Dispensa', 'In scadenza'].map((f) => (
-              <TouchableOpacity key={f} onPress={() => setFiltro(f)}
-                style={[S.chip, filtro === f && S.chipOn, { marginRight: 0, marginBottom: 0 }]}>
-                <Text style={[S.chipText, filtro === f && S.chipTextOn]}>{f}</Text>
-              </TouchableOpacity>
-            ))}
+            {['Tutti', 'In scadenza', 'Frigo', 'Congelati', 'Dispensa'].map((f) => {
+              const n = conteggi[f];
+              const avviso = f === 'In scadenza' && n > 0;
+              return (
+                <TouchableOpacity key={f} onPress={() => setFiltro(f)} accessibilityRole="button" accessibilityState={{ selected: filtro === f }}
+                  accessibilityLabel={`${f}: ${n}`}
+                  style={[S.chip, { marginRight: 0, marginBottom: 0, minHeight: 44, borderRadius: 22 },
+                    avviso && { backgroundColor: COLORS.terraSoft, borderColor: COLORS.terra },
+                    filtro === f && { backgroundColor: COLORS.text, borderColor: COLORS.text }]}>
+                  <Text style={[S.chipText, avviso && { color: COLORS.terraScuro, fontWeight: '600' },
+                    filtro === f && { color: COLORS.bg, fontWeight: '600' }]}>{f} {n}</Text>
+                </TouchableOpacity>
+              );
+            })}
           </ScrollView>
         )}
       </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={S.content}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={[S.content, { paddingBottom: 110 }]}>
         {bloccati.length > 0 && (
           <View style={[S.card, { backgroundColor: COLORS.dangerSoft, borderColor: COLORS.danger }]}>
             <Text style={{ color: COLORS.danger, fontWeight: '800', fontSize: 16 }}>
@@ -447,60 +481,104 @@ export default function MagazzinoScreen({ route, navigation }) {
           )
         )}
 
-        {modo === 'In giacenza' && gruppi.map((g) => {
-          const primo = g.lotti[0];
-          const aperto = !!aperti[g.chiave];
-          return (
-            <View key={g.chiave} style={[S.card, { borderWidth: 1.5, borderColor: coloreScadenza(primo.data_scadenza) }]}>
-              <TouchableOpacity activeOpacity={0.7}
-                onPress={() => setAperti((s) => ({ ...s, [g.chiave]: !s[g.chiave] }))}>
-                <View style={S.row}>
-                  <Text style={{ fontSize: 17, fontWeight: '800', color: COLORS.text, flex: 1, paddingRight: 8 }}>
-                    {g.prodotto}
-                  </Text>
-                  <Text style={{ fontSize: 17, fontWeight: '800', color: COLORS.text }}>
-                    {fmtQ(g.totale)} {g.unita}
-                  </Text>
-                </View>
-                <Text style={S.muted}>
-                  {g.lotti.length} {g.lotti.length === 1 ? 'lotto' : 'lotti'} · {aperto ? '▲ nascondi' : '▼ vedi lotti'}
-                </Text>
-                <Text style={{ marginTop: 4, color: coloreScadenza(primo.data_scadenza), fontWeight: '700' }}>
-                  Primo da usare: {testoScadenza(primo.data_scadenza)}
-                </Text>
-              </TouchableOpacity>
-
-              {g.lotti.every((l) => lottoScaduto(l)) ? (
-                <Bottone testo="Scarta (scaduto)" colore={COLORS.danger} icona="delete-outline"
-                  onPress={() => setUscita({ gruppo: g, qta: fmtQ(g.totale), causale: 'scarto' })} />
-              ) : (
-                <Bottone testo="Scarica"
-                  onPress={() => setUscita({ gruppo: g, qta: '', causale: 'consumo' })} />
-              )}
-
-              {aperto && g.lotti.map((l, i) => (
-                <TouchableOpacity key={l.id} onPress={() => apriLotto(l)}
-                  style={{ paddingVertical: 10, borderTopWidth: 1, borderTopColor: COLORS.border, marginTop: i ? 0 : 12 }}>
-                  <View style={S.row}>
-                    <Text style={{ fontWeight: '700', color: COLORS.text, flex: 1 }}>
-                      {i === 0 ? '① ' : ''}Lotto {l.numero_lotto || '—'}
-                    </Text>
-                    <Text style={{ fontWeight: '700', color: COLORS.text }}>{fmtQ(l.quantita_residua)} {l.unita_misura}</Text>
+        {modo === 'In giacenza' && gruppi.length > 0 && (
+          <View style={[S.card, { padding: 0, overflow: 'hidden' }]}>
+            {gruppi.map((g, n) => {
+              const primo = g.lotti[0];
+              const aperto = !!aperti[g.chiave];
+              const rapido = espanso === g.chiave;
+              const tuttiScaduti = g.lotti.every((l) => lottoScaduto(l));
+              const utili = utilizzabili(g.lotti, 'consumo');
+              const disp = utili.reduce((t, l) => t + Number(l.quantita_residua), 0);
+              const breve = scadenzaBreve(primo.data_scadenza, oggiLocale());
+              const tinte = breve && breve.tono === 'grave' ? [COLORS.dangerSoft, COLORS.danger]
+                : breve && breve.tono === 'fare' ? [COLORS.terraSoft, COLORS.terraScuro] : [COLORS.contenitore, COLORS.muted];
+              const categoria = primo.categoria || '';
+              return (
+                <View key={g.chiave} style={{ borderTopWidth: n ? 1 : 0, borderTopColor: COLORS.border, backgroundColor: rapido ? COLORS.primarySoft : COLORS.card }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingLeft: 14, paddingRight: 8, minHeight: 66 }}>
+                    <TouchableOpacity activeOpacity={0.7} style={{ flex: 1, paddingVertical: 10 }} accessibilityRole="button"
+                      accessibilityLabel={`${g.prodotto}, ${fmtQ(g.totale)} ${g.unita}. ${aperto ? 'Nascondi' : 'Mostra'} i lotti`}
+                      onPress={() => setAperti((x) => ({ ...x, [g.chiave]: !x[g.chiave] }))}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Text numberOfLines={1} style={{ fontSize: 16, fontWeight: '600', flexShrink: 1 }}>{g.prodotto}</Text>
+                        {!!breve && (
+                          <Text style={{ fontSize: 12, fontWeight: '600', color: tinte[1], backgroundColor: tinte[0], borderRadius: 6,
+                            paddingHorizontal: 6, paddingVertical: 2, overflow: 'hidden' }}>{breve.testo}</Text>
+                        )}
+                      </View>
+                      <Text style={{ fontSize: 13, color: COLORS.muted }}>
+                        {g.lotti.length} {g.lotti.length === 1 ? 'lotto' : 'lotti'}{categoria ? ` · ${categoria}` : ''} · {aperto ? 'nascondi' : 'vedi lotti'}
+                      </Text>
+                    </TouchableOpacity>
+                    <Text style={{ fontSize: 16, fontWeight: '700' }}>{fmtQ(g.totale)} {g.unita}</Text>
+                    {tuttiScaduti ? (
+                      <TouchableOpacity onPress={() => setUscita({ gruppo: g, qta: fmtQ(g.totale), causale: 'scarto' })}
+                        accessibilityRole="button" accessibilityLabel={`Scarta ${g.prodotto}, scaduto`}
+                        style={{ minWidth: 48, height: 44, paddingHorizontal: 10, borderRadius: 12, backgroundColor: COLORS.danger, alignItems: 'center', justifyContent: 'center' }}>
+                        <Text style={{ color: COLORS.card, fontWeight: '600', fontSize: 14 }}>Scarta</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <TouchableOpacity onPress={() => setEspanso(rapido ? null : g.chiave)} accessibilityRole="button"
+                        accessibilityState={{ expanded: rapido }} accessibilityLabel={`Scarica ${g.prodotto}`}
+                        style={{ width: 48, height: 44, borderRadius: 12, borderWidth: 1, borderColor: COLORS.bordoCampo,
+                          backgroundColor: rapido ? COLORS.azione : COLORS.card, alignItems: 'center', justifyContent: 'center' }}>
+                        <Icona nome={rapido ? 'close' : 'minus'} size={22} colore={rapido ? COLORS.suAzione : COLORS.text} />
+                      </TouchableOpacity>
+                    )}
                   </View>
-                  <Text style={S.muted}>
-                    {l.fornitore} · ricevuto {fmtData(l.data_ricevimento)}
-                    {l.colli ? ` · ${l.colli} ${l.colli === 1 ? 'collo' : 'colli'}` : ''}
-                  </Text>
-                  <Text style={{ color: coloreScadenza(l.data_scadenza), fontWeight: '600' }}>
-                    {testoScadenza(l.data_scadenza)}  <Text style={{ color: COLORS.azione }}>› dettagli</Text>
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          );
-        })}
+
+                  {rapido && utili.length > 0 && (
+                    <View style={{ paddingHorizontal: 14, paddingBottom: 12, gap: 8 }}>
+                      <Text style={{ fontSize: 13, color: COLORS.muted }}>
+                        Scarica da: lotto {utili[0].numero_lotto || '—'} · {testoScadenza(utili[0].data_scadenza)}
+                      </Text>
+                      <View style={{ flexDirection: 'row', gap: 6 }}>
+                        {dosiRapide(g.unita, disp, utili[0].quantita_residua).map((d) => (
+                          <Dose key={d.testo} testo={d.testo}
+                            etichetta={d.testo === 'Tutto' ? `Scarica tutto il lotto, ${fmtQ(d.qta)} ${g.unita}` : `Scarica ${d.testo}`}
+                            onPress={() => confermaUscita({ gruppo: g, qta: fmtQ(d.qta), causale: 'consumo' }, true)} />
+                        ))}
+                        <Dose testo="Altro…" etichetta="Scrivi la quantità o scegli scarto o reso"
+                          onPress={() => setUscita({ gruppo: g, qta: '', causale: 'consumo' })} />
+                      </View>
+                    </View>
+                  )}
+
+                  {aperto && g.lotti.map((l, i) => (
+                    <TouchableOpacity key={l.id} onPress={() => apriLotto(l)} accessibilityRole="button"
+                      style={{ paddingVertical: 10, paddingHorizontal: 14, borderTopWidth: 1, borderTopColor: COLORS.border, backgroundColor: COLORS.bg }}>
+                      <View style={S.row}>
+                        <Text style={{ fontWeight: '600', flex: 1 }}>{i === 0 ? 'Primo da usare · ' : ''}Lotto {l.numero_lotto || '—'}</Text>
+                        <Text style={{ fontWeight: '600' }}>{fmtQ(l.quantita_residua)} {l.unita_misura}</Text>
+                      </View>
+                      <Text style={{ fontSize: 13, color: COLORS.muted }}>
+                        {l.fornitore} · ricevuto {fmtData(l.data_ricevimento)}{l.colli ? ` · ${l.colli} ${l.colli === 1 ? 'collo' : 'colli'}` : ''}
+                      </Text>
+                      <Text style={{ fontSize: 13, color: coloreScadenza(l.data_scadenza), fontWeight: '600' }}>
+                        {testoScadenza(l.data_scadenza)}  <Text style={{ color: COLORS.azione }}>› dettagli</Text>
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              );
+            })}
+          </View>
+        )}
         <RiquadroPromemoria tipo="scadenze" />
       </ScrollView>
+
+      {!sel && (
+        <TouchableOpacity onPress={() => navigation.navigate('CaricoMerce')} activeOpacity={0.85} accessibilityRole="button"
+          accessibilityLabel="Carica merce"
+          style={{
+            position: 'absolute', right: 16, bottom: 20 + margini.bottom, height: 56, paddingHorizontal: 20, borderRadius: 18,
+            backgroundColor: COLORS.azione, flexDirection: 'row', alignItems: 'center', gap: 8, elevation: 4,
+          }}>
+          <Icona nome="plus" size={22} colore={COLORS.suAzione} />
+          <Text style={{ fontSize: 16, fontWeight: '600', color: COLORS.suAzione }}>Carica merce</Text>
+        </TouchableOpacity>
+      )}
 
       {!sel && modaleUscita}
 

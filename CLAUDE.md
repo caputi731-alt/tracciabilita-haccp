@@ -116,6 +116,12 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
 - Allergeni: `prodotti.allergeni_verificati` (1 quando il prodotto è salvato dall'anagrafica, 0 se creato dalle fatture). `tabellaAllergeni()` + `htmlTabellaAllergeni()` per il documento clienti.
 - Schema: una sola definizione per tabella in `initDatabase`; le colonne nuove si aggiungono con `aggiungiSeManca`.
 - Contenuto di una modale: sempre dentro `VistaModale` (UI.js), non uno `ScrollView` figlio diretto di `<Modal>` (su Android non scorrerebbe fino al primo nuovo layout).
+- Magazzino compatto (fase 6, 20/10/2026): in `MagazzinoScreen.js` "In giacenza" è un'unica scheda a righe (prodotto, etichetta breve
+  della scadenza `scadenzaBreve`, lotti e categoria, quantità, pulsante "−"); il nome apre i lotti, il "−" apre nella riga lo scarico
+  rapido dal primo lotto da usare con le dosi `dosiRapide` (magazzino.js, puro, `test/magazzino.test.mjs`: kg e l 0,5/1, g e ml
+  100/500, pezzi e confezioni 1/2, più "Tutto" = il primo lotto; mai dosi più grandi del disponibile) e "Altro…" (la finestra di
+  sempre con quantità e causale). Le dosi usano `confermaUscita(u, true)`: stesso scarico FIFO e stesso "Annulla". Filtri con il numero
+  di prodotti, "In scadenza" in ambra; "Carica merce" sempre visibile in basso a destra.
 - Struttura schermate: Magazzino contiene anche la rintracciabilità (modalità "In giacenza" / "Tutti i lotti"); la rotta `Rintracciabilita` punta a MagazzinoScreen per compatibilità. `CaricoMerce` è l'ingresso unico verso ImportaFattura e Ricevimento. PDF del lotto in `schedaLotto.js`.
 - Anagrafiche (Prodotti/Fornitori/Ricette/Frigoriferi) e Documenti e dati (Registri PDF/Backup) sono contenitori a linguette: le schermate interne restano file separati e si aprono anche da rotta diretta con `{ scheda: '...' }`.
 
@@ -124,6 +130,7 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
   (grigi chiari, verde #1E6B4A per le azioni, ambra #A15C07 per le cose da fare, carattere Inter). Si applica a fasi:
   1 colori e carattere, 2 barra in alto con "Cerca" ovunque, 3 riquadro sotto la mappa, 4 tastierino delle temperature (scheda del frigo,
   registro, giro), 5 pulizie a un tocco (prodotto previsto dell'area, nessun operatore, "Annulla" 10 minuti), 6 magazzino compatto.
+  Tutte e sei applicate il 20/10/2026.
   Restano com'erano: le scene 3D di cucine e sale (cambiano solo i colori dei cartellini), la barra in basso, le pagine dei menù.
   Prima: mockup Material Design 3 verde oliva e terracotta dell'8/10/2026.
 - Ricerca in tutta l'app (fase 2, 20/10/2026): `CercaScreen.js` (rotta `Cerca`, senza intestazione) dal pulsante `PulsanteCerca` (UI.js)
