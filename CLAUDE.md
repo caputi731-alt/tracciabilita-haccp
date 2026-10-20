@@ -105,7 +105,12 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
 - Anagrafiche (Prodotti/Fornitori/Ricette/Frigoriferi) e Documenti e dati (Registri PDF/Backup) sono contenitori a linguette: le schermate interne restano file separati e si aprono anche da rotta diretta con `{ scheda: '...' }`.
 
 ## Aspetto e navigazione della suite (tappa 2)
-- Mockup approvato da Luca l'8/10/2026 (Material Design 3, verdi oliva e terracotta): artifact "Suite Tenuta Coppa — Mockup".
+- Aspetto attuale: proposta A "pulito professionale" dell'artifact "Tenuta Coppa — Restyling designer", scelta da Luca il 20/10/2026
+  (grigi chiari, verde #1E6B4A per le azioni, ambra #A15C07 per le cose da fare, carattere Inter). Si applica a fasi:
+  1 colori e carattere, 2 barra in alto con "Cerca" ovunque, 3 riquadro sotto la mappa, 4 tastierino delle temperature (scheda del frigo,
+  registro, giro), 5 pulizie a un tocco (prodotto previsto dell'area, nessun operatore, "Annulla" 10 minuti), 6 magazzino compatto.
+  Restano com'erano: le scene 3D di cucine e sale (cambiano solo i colori dei cartellini), la barra in basso, le pagine dei menù.
+  Prima: mockup Material Design 3 verde oliva e terracotta dell'8/10/2026.
 - `PrincipaleScreen.js` è la rotta `Home`: barra in basso con Cucina (`HomeScreen.js`, la mappa delle cucine), Sala (`SaleScreen.js`),
   Gestione e Altro (`AltroScreen.js`, tutte le altre funzioni, Magazzino compreso), scelta di Luca del 9/10/2026.
   Gestione ha due linguette: Menù (`MenuScreen.js`) e Incassi (`IncassiScreen.js`). Il tasto indietro dalle altre sezioni torna a Cucina.
@@ -119,7 +124,8 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
   va aggiunta anche in `SEZIONI_SUITE`, o non si troverà con la ricerca.
 - `HomeScreen.js`: riquadro dei controlli di oggi (anello disegnato con due mezzi cerchi, senza librerie grafiche),
   stato di temperature/pulizie/scadenze, cose da sistemare, prossimo menù (`prossimoMenu` in menuPonte.js) e pulsante "Registra".
-- Carattere Manrope: `caratteri.js` aggancia `Text` e `TextInput` e sceglie il file in base a `fontWeight` (500/700/800).
+- Carattere Inter (`@expo-google-fonts/inter`, nell'APK, nessuna rete): `caratteri.js` aggancia `Text` e `TextInput` e sceglie il file in base a
+  `fontWeight` (400 fino a 500, 600, 700 da 700 in su). Le pagine web (Menù, cucine, sale) usano le copie in `menu/vendor/fonts/Inter_*.ttf`.
   Negli stili si continua a scrivere solo `fontWeight`; non mettere `fontFamily` a mano (tranne nelle intestazioni di navigazione).
 - Schermate interne: intestazione chiara (`COLORS.bg`), senza ombra.
 - Anteprima nel browser per controllare l'aspetto senza telefono: `test/anteprima/vedi.py` (istruzioni nel file; PIN di prova 123456,
@@ -260,7 +266,7 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
   `PrincipaleScreen` (proprietà `attiva`, `comandi`, `suEsci`, `suVista`); una volta aperta resta caricata e nascosta.
   Si carica con `require` alla prima apertura dentro il riparo `Riparo`, e `menuInvio.js` al momento dell'uso: un problema del modulo non ferma il resto dell'app.
 - Aspetto del Menù nella suite: `menu/css/suite.css` (vale con la classe `suite` su `<html>`, messa da `00-suite.js`): colori, Manrope
-  e forme di `theme.js`; la barra delle sezioni del Menù diventa una riga di linguette in alto (Calendario, Proposte, Stampe, Didattica,
+  e forme di `theme.js` (carattere Inter); la barra delle sezioni del Menù diventa una riga di linguette in alto (Calendario, Proposte, Stampe, Didattica,
   Impostazioni). Se cambia la tavolozza in `theme.js` va aggiornata anche lì. Le pagine dei menù (`.pg`) non devono cambiare:
   lo controlla `test/menu-suite.py`. Dopo ogni disegno la pagina chiama `window.suiteVista()` e manda `{ tipo: 'vista', profonda }`.
 - Dati condivisi (tappa 3, scelte di Luca del 8/10/2026): l'archivio del Menù resta quello dell'app web (chiave `state` di `menu_dati`),
@@ -303,8 +309,8 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
 - Se la compilazione Android fallisce, il passo "Compila l'APK" scrive le righe d'errore nel riepilogo della build.
 
 ## Linee guida UX (pacchetto build 60)
-- Colori (tavolozza della suite, vedi `theme.js`): `COLORS.azione` è il verde oliva di pulsanti, collegamenti e scelte attive;
-  `COLORS.terra` (terracotta) è l'accento del pulsante "Registra" e delle cose da sistemare; gli stati usano `ok`/`warning`/`danger`
+- Colori (tavolozza della suite, vedi `theme.js`): `COLORS.azione` è il verde di pulsanti, collegamenti e scelte attive;
+  `COLORS.terra` (ora ambra; il nome della chiave è rimasto) è l'accento del pulsante "Registra" e delle cose da sistemare; gli stati usano `ok`/`warning`/`danger`
   e sono sempre scritti anche a parole. Niente bordo colorato solo a sinistra sulle schede: lo stato si mostra con un contorno intero.
 - Testi: `S.muted` 15pt, etichette 13pt; pulsanti ≥ 50px, chip ≥ 46px.
 - Errori di compilazione: `useErrori()` + prop `errore` su `Campo`/`Selettore` + `{riepilogo}` sopra il pulsante. Niente `Alert` per dati mancanti.

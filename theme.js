@@ -5,83 +5,83 @@ export {
   ALLERGENI, aNumero, numeroPerCampo, oggiLocale, isoLocale, piuGiorni, giornoDi, arrotonda, escHtml,
 } from './utile';
 
-// Tavolozza della suite (Material Design 3, dal mockup approvato l'8/10/2026): verdi oliva e un accento terracotta.
+// Tavolozza della suite (proposta A "pulito professionale", approvata da Luca il 20/10/2026): grigi chiari, un verde deciso
+// per le azioni e un ambra per le cose da fare. Prima era verde oliva e terracotta (mockup dell'8/10/2026).
 const CHIARO = {
-  bg: '#F6F5EC',            // fondo delle schermate
+  bg: '#F5F6F8',            // fondo delle schermate
   card: '#FFFFFF',
   campo: '#FFFFFF',         // fondo dei campi di testo
-  contenitore: '#ECEBDD',   // superfici in secondo piano: barra in basso, tasti neutri, selettori
-  primary: '#2F4F23',
-  primaryDark: '#1A3310',   // testo sopra primarySoft
-  primarySoft: '#D7E8C6',
-  text: '#1B1D17',
-  muted: '#5B5F52',
-  border: '#E4E3D6',
+  contenitore: '#EEF0F3',   // superfici in secondo piano: tasti neutri, selettori
+  primary: '#1E6B4A',
+  primaryDark: '#14513A',   // testo sopra primarySoft
+  primarySoft: '#E3F1EA',
+  text: '#12161C',
+  muted: '#5A6370',
+  border: '#E2E5EA',
   danger: '#B3261E',
   dangerSoft: '#FBE9E7',
   warning: '#8A4B00',
-  warningSoft: '#FBEBD5',
-  ok: '#2F6B2A',
-  accent: '#6B8F54',
+  warningSoft: '#FDF1DF',
+  ok: '#1E6B4A',
+  accent: '#3D8A66',
   // bordo dei campi (visibile: contrasto 3:1 sul bianco) e testo dei segnaposto
-  bordoCampo: '#8A8E7E',
-  segnaposto: '#6A6E60',
+  bordoCampo: '#8A929C',
+  segnaposto: '#5F6873',
   campoErrore: '#FFF8F7',
-  // colore delle azioni (pulsanti, collegamenti, scelte attive): il verde oliva principale
-  azione: '#2F4F23',
-  azioneDark: '#1A3310',
-  azioneSoft: '#D7E8C6',
+  // colore delle azioni (pulsanti, collegamenti, scelte attive)
+  azione: '#1E6B4A',
+  azioneDark: '#14513A',
+  azioneSoft: '#E3F1EA',
   suAzione: '#FFFFFF',      // testo e icone sopra un fondo "azione" (pulsanti pieni)
-  // accento terracotta: il pulsante "Registra" e le cose che chiedono attenzione senza essere un errore
-  terra: '#9C4524',
-  terraSoft: '#FBDDCF',
-  terraScuro: '#5C2410',    // testo sopra terraSoft
+  // accento ambra (la chiave resta "terra" per non cambiare le schermate): le cose che chiedono attenzione senza essere un errore
+  terra: '#A15C07',
+  terraSoft: '#FDF1DF',
+  terraScuro: '#6B3D04',    // testo sopra terraSoft
   suTerra: '#FFFFFF',
   // riquadro "Controlli di oggi" della Home
-  eroe: '#2F4F23',
+  eroe: '#1E6B4A',
   suEroe: '#FFFFFF',
-  suEroeTenue: '#D7E8C6',
-  eroeTraccia: '#4A6E3B',
-  eroePulsante: '#D7E8C6',
-  suEroePulsante: '#1A3310',
+  suEroeTenue: '#CDE7DA',
+  eroeTraccia: '#3D8A66',
+  eroePulsante: '#E3F1EA',
+  suEroePulsante: '#14513A',
 };
 
-// Tema scuro (stesso mockup, schermata "Home scura"): nel Material 3 scuro i colori d'azione diventano chiari
-// e il testo che ci sta sopra scuro. Le chiavi sono le stesse del tema chiaro.
+// Tema scuro: stesse chiavi del tema chiaro; i colori d'azione diventano chiari e il testo che ci sta sopra scuro.
 const SCURO = {
-  bg: '#12140F',
-  card: '#1D2017',
-  campo: '#23261C',
-  contenitore: '#23261C',
-  primary: '#C9E0B5',
-  primaryDark: '#D7E8C6',
-  primarySoft: '#2C4721',
-  text: '#E6E5D9',
-  muted: '#B0B3A4',
-  border: '#2E3226',
+  bg: '#0F1215',
+  card: '#191D22',
+  campo: '#20252B',
+  contenitore: '#20252B',
+  primary: '#7FD1A8',
+  primaryDark: '#A6E3C4',
+  primarySoft: '#1D3B2E',
+  text: '#E8EAED',
+  muted: '#A9B1BA',
+  border: '#2A3038',
   danger: '#FFB4AB',
   dangerSoft: '#4A1512',
   warning: '#F2C078',
   warningSoft: '#3F2A08',
-  ok: '#A6D69A',
-  accent: '#8FB377',
-  bordoCampo: '#8F9285',
-  segnaposto: '#9A9D8E',
+  ok: '#7FD1A8',
+  accent: '#5DB58A',
+  bordoCampo: '#8A929C',
+  segnaposto: '#9AA3AD',
   campoErrore: '#3A1512',
-  azione: '#C9E0B5',
-  azioneDark: '#D7E8C6',
-  azioneSoft: '#2C4721',
-  suAzione: '#14290C',
-  terra: '#F2B79C',
-  terraSoft: '#5C2A14',
-  terraScuro: '#FBDDCF',
-  suTerra: '#4A1A06',
-  eroe: '#2C4721',
-  suEroe: '#E6E5D9',
-  suEroeTenue: '#C9E0B5',
-  eroeTraccia: '#456A36',
-  eroePulsante: '#C9E0B5',
-  suEroePulsante: '#14290C',
+  azione: '#7FD1A8',
+  azioneDark: '#A6E3C4',
+  azioneSoft: '#1D3B2E',
+  suAzione: '#0B2A1C',
+  terra: '#F2B866',
+  terraSoft: '#4A3010',
+  terraScuro: '#FCE3C0',
+  suTerra: '#3A2200',
+  eroe: '#1D3B2E',
+  suEroe: '#E8EAED',
+  suEroeTenue: '#A6E3C4',
+  eroeTraccia: '#2E5A45',
+  eroePulsante: '#7FD1A8',
+  suEroePulsante: '#0B2A1C',
 };
 
 /** Il tema segue quello del telefono e si decide all'avvio: cambiando tema nelle impostazioni, l'app lo prende alla riapertura. */
@@ -139,34 +139,36 @@ export const S = StyleSheet.create({
 
   card: {
     backgroundColor: COLORS.card,
-    borderRadius: 24,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: COLORS.border,
     padding: 16,
     marginBottom: 12,
   },
 
-  h1: { fontSize: 28, fontWeight: '700', color: COLORS.text, marginBottom: 4, letterSpacing: -0.6 },
-  h2: { fontSize: 18, fontWeight: '700', color: COLORS.text, marginBottom: 10, letterSpacing: -0.2 },
+  h1: { fontSize: 24, fontWeight: '700', color: COLORS.text, marginBottom: 4, letterSpacing: -0.4 },
+  h2: { fontSize: 17, fontWeight: '700', color: COLORS.text, marginBottom: 10, letterSpacing: -0.2 },
 
   label: {
-    fontSize: 13, fontWeight: '700', color: COLORS.muted, marginBottom: 6, marginTop: 14,
+    fontSize: 13, fontWeight: '600', color: COLORS.muted, marginBottom: 6, marginTop: 14,
   },
   input: {
-    borderWidth: 1, borderColor: COLORS.bordoCampo, borderRadius: 14, paddingHorizontal: 14,
+    borderWidth: 1, borderColor: COLORS.bordoCampo, borderRadius: 12, paddingHorizontal: 14,
     paddingVertical: 13, fontSize: 16, backgroundColor: COLORS.campo, color: COLORS.text,
   },
 
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
 
   btn: {
-    backgroundColor: COLORS.azione, borderRadius: 26, paddingVertical: 14, paddingHorizontal: 20, minHeight: 52,
+    backgroundColor: COLORS.azione, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 20, minHeight: 52,
     alignItems: 'center', justifyContent: 'center', marginTop: 14,
   },
-  btnText: { color: COLORS.suAzione, fontSize: 16, fontWeight: '700' },
+  btnText: { color: COLORS.suAzione, fontSize: 16, fontWeight: '600' },
   btnGhost: {
-    borderWidth: 1, borderColor: COLORS.bordoCampo, borderRadius: 26, minHeight: 50,
+    borderWidth: 1, borderColor: COLORS.bordoCampo, borderRadius: 14, minHeight: 50,
     paddingVertical: 13, paddingHorizontal: 20, alignItems: 'center', justifyContent: 'center', marginTop: 10,
   },
-  btnGhostText: { color: COLORS.azione, fontSize: 15, fontWeight: '700' },
+  btnGhostText: { color: COLORS.azione, fontSize: 15, fontWeight: '600' },
 
   chip: {
     paddingHorizontal: 16, paddingVertical: 12, minHeight: 46, justifyContent: 'center',
@@ -175,7 +177,7 @@ export const S = StyleSheet.create({
   },
   chipOn: { backgroundColor: COLORS.azioneSoft, borderColor: COLORS.azione },
   chipText: { color: COLORS.text, fontSize: 15 },
-  chipTextOn: { color: COLORS.azioneDark, fontWeight: '700' },
+  chipTextOn: { color: COLORS.azioneDark, fontWeight: '600' },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 6 },
 
   muted: { color: COLORS.muted, fontSize: 15, lineHeight: 21 },
@@ -191,15 +193,15 @@ export const S = StyleSheet.create({
     borderRadius: 20, overflow: 'hidden', marginBottom: 10,
   },
   sectionTitle: {
-    fontSize: 13, fontWeight: '700', color: COLORS.muted, textTransform: 'uppercase',
-    letterSpacing: 1, marginTop: 22, marginBottom: 8, marginLeft: 4,
+    fontSize: 12, fontWeight: '600', color: COLORS.muted, textTransform: 'uppercase',
+    letterSpacing: 0.6, marginTop: 22, marginBottom: 8, marginLeft: 4,
   },
   tile: {
-    backgroundColor: COLORS.card, borderRadius: 20, padding: 16, marginBottom: 10,
+    backgroundColor: COLORS.card, borderRadius: 16, borderWidth: 1, borderColor: COLORS.border, padding: 16, marginBottom: 10,
     flexDirection: 'row', alignItems: 'center',
   },
   tileAccent: { width: 4, borderRadius: 4, alignSelf: 'stretch', marginRight: 12, backgroundColor: COLORS.primary },
-  tileTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text },
+  tileTitle: { fontSize: 16, fontWeight: '600', color: COLORS.text },
   tileDesc: { fontSize: 14, color: COLORS.muted, marginTop: 2 },
   chevron: { fontSize: 22, color: COLORS.muted, marginLeft: 8 },
 });

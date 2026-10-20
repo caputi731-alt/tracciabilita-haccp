@@ -1,5 +1,5 @@
 /**
- * Carattere della suite: Manrope, per tutti i testi dell'app.
+ * Carattere della suite: Inter, per tutti i testi dell'app (proposta A approvata da Luca il 20/10/2026; prima era Manrope).
  * React Native non ha un carattere "di tutta l'app" e su Android un carattere caricato a mano ha un file per ogni
  * spessore: qui si aggancia il disegno di Text e TextInput e, dove lo stile non indica già un carattere (per esempio
  * le icone), si sceglie il file giusto in base a fontWeight. Se qualcosa non va, i testi restano col carattere di sistema.
@@ -10,17 +10,17 @@
 import React from 'react';
 import { Text, TextInput, StyleSheet } from 'react-native';
 import { COLORS } from './theme';
-import { Manrope_500Medium } from '@expo-google-fonts/manrope/500Medium';
-import { Manrope_700Bold } from '@expo-google-fonts/manrope/700Bold';
-import { Manrope_800ExtraBold } from '@expo-google-fonts/manrope/800ExtraBold';
+import { Inter_400Regular } from '@expo-google-fonts/inter/400Regular';
+import { Inter_600SemiBold } from '@expo-google-fonts/inter/600SemiBold';
+import { Inter_700Bold } from '@expo-google-fonts/inter/700Bold';
 
 /** File da caricare all'avvio (vedi App.js). */
-export const CARATTERI = { Manrope_500Medium, Manrope_700Bold, Manrope_800ExtraBold };
+export const CARATTERI = { Inter_400Regular, Inter_600SemiBold, Inter_700Bold };
 
-/** Nome del file di carattere per uno spessore: normale fino a 500, grassetto a 600–700, nero da 800. */
+/** Nome del file di carattere per uno spessore: normale fino a 500, semigrassetto a 600, grassetto da 700. */
 export function carattereDi(peso) {
   const n = peso === 'bold' ? 700 : peso === 'normal' || peso === undefined || peso === null ? 400 : Number(peso) || 400;
-  return n >= 800 ? 'Manrope_800ExtraBold' : n >= 600 ? 'Manrope_700Bold' : 'Manrope_500Medium';
+  return n >= 700 ? 'Inter_700Bold' : n >= 600 ? 'Inter_600SemiBold' : 'Inter_400Regular';
 }
 
 // React Native segnala con questo contesto se un testo sta dentro un altro testo
@@ -33,7 +33,7 @@ try {
 
 let caratteriCaricati = false;
 
-/** Da chiamare quando i file dei caratteri sono caricati: da quel momento i testi usano Manrope. */
+/** Da chiamare quando i file dei caratteri sono caricati: da quel momento i testi usano Inter. */
 export function usaCaratteri() {
   caratteriCaricati = true;
 }

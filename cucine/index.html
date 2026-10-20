@@ -6,18 +6,18 @@
 <title>Cucine</title>
 <style>
 /* Scena 3D delle cucine, mostrata dentro la suite da CucineVista.js. Colori di theme.js: se cambia la tavolozza va aggiornata anche qui. */
-@font-face{font-family:Manrope;font-weight:100 500;src:url(../menu/vendor/fonts/Manrope_500Medium.ttf) format('truetype')}
-@font-face{font-family:Manrope;font-weight:600 900;src:url(../menu/vendor/fonts/Manrope_800ExtraBold.ttf) format('truetype')}
-:root{--a:#EEF1E4;--b:#D9DECB;--carta:#FFFFFF;--testo:#1B1D17;--tenue:#5B5F52;--attivo:#D7E8C6}
-:root.scuro{--a:#262A1F;--b:#171A13;--carta:#1D2017;--testo:#E6E5D9;--tenue:#B0B3A4;--attivo:#2C4721}
+@font-face{font-family:Inter;font-weight:100 500;src:url(../menu/vendor/fonts/Inter_400Regular.ttf) format('truetype')}
+@font-face{font-family:Inter;font-weight:600 900;src:url(../menu/vendor/fonts/Inter_700Bold.ttf) format('truetype')}
+:root{--a:#EEF1E4;--b:#D9DECB;--carta:#FFFFFF;--testo:#12161C;--tenue:#5A6370;--attivo:#E3F1EA}
+:root.scuro{--a:#262A1F;--b:#171A13;--carta:#191D22;--testo:#E8EAED;--tenue:#A9B1BA;--attivo:#1D3B2E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;height:100%;overflow:hidden;background:linear-gradient(var(--a),var(--b));font-family:Manrope,system-ui,sans-serif;-webkit-user-select:none;user-select:none}
+html,body{margin:0;height:100%;overflow:hidden;background:linear-gradient(var(--a),var(--b));font-family:Inter,system-ui,sans-serif;-webkit-user-select:none;user-select:none}
 canvas{display:block;width:100%;height:100%;touch-action:none}
 .vista{position:fixed;left:10px;top:10px;display:flex;gap:2px;background:var(--carta);border-radius:999px;padding:4px;box-shadow:0 2px 8px rgba(0,0,0,.14)}
-.vista button{border:0;background:none;border-radius:999px;padding:0 14px;min-height:40px;font:700 14px Manrope,system-ui,sans-serif;color:var(--tenue)}
+.vista button{border:0;background:none;border-radius:999px;padding:0 14px;min-height:40px;font:700 14px Inter,system-ui,sans-serif;color:var(--tenue)}
 .vista button[aria-pressed="true"]{background:var(--attivo);color:var(--testo)}
 .zoom{position:fixed;right:10px;top:10px;display:flex;flex-direction:column;gap:6px}
-.zoom button{width:44px;height:44px;border-radius:14px;border:0;background:var(--carta);color:var(--testo);font:700 20px Manrope,system-ui,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.14)}
+.zoom button{width:44px;height:44px;border-radius:14px;border:0;background:var(--carta);color:var(--testo);font:700 20px Inter,system-ui,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.14)}
 </style>
 </head>
 <body>
@@ -96,34 +96,34 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
     return { g, h };
   }
 
-  const TINTE = { ok: '#2F6B2A', crit: '#B3261E', fare: '#9C4524', neutro: '#6B6F62' };
+  const TINTE = { ok: '#1E6B4A', crit: '#B3261E', fare: '#A15C07', neutro: '#5A6370' };
   /* tag: una riga (pulsante "Magazzino", frigorifero ancora senza nome) oppure due, nome sopra e temperatura sotto */
   function etichetta(testo, c, icona, nome){
     const due = !!nome, H = due ? 176 : 112, cv = document.createElement('canvas'); cv.width = 512; cv.height = H; const g = cv.getContext('2d');
-    const F1 = '700 38px Manrope, system-ui, sans-serif', F2 = '800 50px Manrope, system-ui, sans-serif';
+    const F1 = '700 38px Inter, system-ui, sans-serif', F2 = '700 50px Inter, system-ui, sans-serif';
     let n = nome || '';
     if (due) { g.font = F1; while (n.length > 3 && g.measureText(n).width > 400) n = n.slice(0, -2).trimEnd() + '…'; }
     g.font = F2; const t2 = g.measureText(testo).width + (due ? 34 : 0); g.font = F1; const t1 = due ? g.measureText(n).width : 0;
     const w = Math.min(500, Math.max(t1, t2) + (due ? 64 : 96)), x0 = 256 - w / 2, r = due ? 40 : 44, y0 = 12, y1 = H - 12;
     g.beginPath(); g.moveTo(x0 + r, y0); g.arcTo(x0 + w, y0, x0 + w, y1, r); g.arcTo(x0 + w, y1, x0, y1, r); g.arcTo(x0, y1, x0, y0, r); g.arcTo(x0, y0, x0 + w, y0, r); g.closePath();
     const pieno = c === 'crit' || icona;
-    g.fillStyle = pieno ? (icona ? '#2F4F23' : TINTE.crit) : '#ffffff'; g.fill(); g.lineWidth = 5; g.strokeStyle = icona ? '#2F4F23' : TINTE[c]; g.stroke();
+    g.fillStyle = pieno ? (icona ? '#1E6B4A' : TINTE.crit) : '#ffffff'; g.fill(); g.lineWidth = 5; g.strokeStyle = icona ? '#1E6B4A' : TINTE[c]; g.stroke();
     g.textBaseline = 'middle';
     if (due) {
-      g.font = F1; g.fillStyle = pieno ? '#ffffff' : '#5B5F52'; g.textAlign = 'center'; g.fillText(n, 256, 54);
+      g.font = F1; g.fillStyle = pieno ? '#ffffff' : '#5A6370'; g.textAlign = 'center'; g.fillText(n, 256, 54);
       g.font = F2; const tw = g.measureText(testo).width, xi = 256 - (tw + 34) / 2;
       g.fillStyle = pieno ? '#ffffff' : TINTE[c]; g.beginPath(); g.arc(xi + 12, 116, 12, 0, 7); g.fill();
-      g.fillStyle = pieno ? '#ffffff' : '#1B1D17'; g.textAlign = 'left'; g.fillText(testo, xi + 34, 119);
+      g.fillStyle = pieno ? '#ffffff' : '#12161C'; g.textAlign = 'left'; g.fillText(testo, xi + 34, 119);
     } else {
       g.font = F2; g.fillStyle = pieno ? '#ffffff' : TINTE[c]; g.beginPath(); g.arc(x0 + 40, 56, 13, 0, 7); g.fill();
-      g.fillStyle = pieno ? '#ffffff' : '#1B1D17'; g.fillText(testo, x0 + 64, 59, w - 80);
+      g.fillStyle = pieno ? '#ffffff' : '#12161C'; g.fillText(testo, x0 + 64, 59, w - 80);
     }
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthTest: false, transparent: true })); sp.renderOrder = 10;
     sp.userData.base = [512, H]; sp.userData.righe = due ? 2 : 1; sp.userData.pieno = w / 512; return sp;
   }
   function targa(testo, scuro){
     const cv = document.createElement('canvas'); cv.width = 512; cv.height = 96; const g = cv.getContext('2d');
-    g.font = '800 54px Manrope, system-ui, sans-serif'; g.fillStyle = scuro ? '#C9E0B5' : '#2F4F23'; g.textBaseline = 'middle'; g.fillText(testo.toUpperCase(), 8, 52, 496);
+    g.font = '700 54px Inter, system-ui, sans-serif'; g.fillStyle = scuro ? '#7FD1A8' : '#1E6B4A'; g.textBaseline = 'middle'; g.fillText(testo.toUpperCase(), 8, 52, 496);
     const me = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 0.79), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true })); me.rotation.x = -Math.PI / 2; return me;
   }
 
@@ -316,8 +316,8 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
   // quanti colori diversi ci sono nell'immagine appena disegnata (una scena vuota ne ha uno solo)
   window.__colori = () => { renderer.render(scene, cam); const gl = renderer.getContext(), w = gl.drawingBufferWidth, h = gl.drawingBufferHeight, px = new Uint8Array(4), s = new Set();
     for (let i = 1; i < 24; i++) for (let j = 1; j < 24; j++) { gl.readPixels(Math.floor(w * i / 24), Math.floor(h * j / 24), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); if (px[3]) s.add((px[0] >> 4) + ',' + (px[1] >> 4) + ',' + (px[2] >> 4)); } return s.size; };
-  // le etichette usano Manrope: quando il carattere è pronto si ridisegnano
-  if (document.fonts && document.fonts.load) document.fonts.load('800 50px Manrope').then(() => { Object.keys(perId).forEach(id => { perId[id].breve = undefined; }); if (window.__ultimi) window.__cucine(window.__ultimi); }).catch(() => {});
+  // le etichette usano Inter: quando il carattere è pronto si ridisegnano
+  if (document.fonts && document.fonts.load) document.fonts.load('700 50px Inter').then(() => { Object.keys(perId).forEach(id => { perId[id].breve = undefined; }); if (window.__ultimi) window.__cucine(window.__ultimi); }).catch(() => {});
   const originale = window.__cucine; window.__cucine = (d) => { window.__ultimi = d; originale(d); };
   invia({ tipo: 'pronta' });
 })();

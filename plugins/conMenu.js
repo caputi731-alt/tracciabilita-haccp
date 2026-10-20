@@ -10,7 +10,7 @@ const fs = require('fs');
 const path = require('path');
 const { withDangerousMod, withAndroidManifest } = require('expo/config-plugins');
 
-// cucine/ e sale/ prendono il carattere Manrope da ../menu/vendor/fonts e sale/ prende three.js da ../cucine: le cartelle stanno affiancate
+// cucine/ e sale/ prendono il carattere Inter da ../menu/vendor/fonts e sale/ prende three.js da ../cucine: le cartelle stanno affiancate
 const CARTELLE = ['menu', 'cucine', 'sale'];
 const PACCHETTI = ['com.whatsapp', 'com.whatsapp.w4b'];
 

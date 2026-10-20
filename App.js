@@ -92,7 +92,7 @@ export default function App() {
         screenOptions={{
           headerStyle: { backgroundColor: COLORS.bg },
           headerTintColor: COLORS.text,
-          headerTitleStyle: { fontFamily: 'Manrope_700Bold', fontSize: 20 },
+          headerTitleStyle: { fontFamily: 'Inter_700Bold', fontSize: 20 },
           headerShadowVisible: false,
           contentStyle: { backgroundColor: COLORS.bg },
         }}

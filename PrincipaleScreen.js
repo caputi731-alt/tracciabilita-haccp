@@ -162,7 +162,7 @@ export default function PrincipaleScreen({ navigation, route }) {
 
       {barra && (
         <View accessibilityRole="tablist" style={{
-          flexDirection: 'row', backgroundColor: COLORS.contenitore, paddingTop: 12,
+          flexDirection: 'row', backgroundColor: COLORS.card, borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 10,
           paddingBottom: 12 + margini.bottom,
         }}>
           {SEZIONI.map((s) => {

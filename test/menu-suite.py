@@ -168,7 +168,7 @@ with sync_playwright() as p:
     asp = pg.evaluate("""()=>{const n=document.querySelector('.nav').getBoundingClientRect(),c=getComputedStyle(document.body);
       return{suite:document.documentElement.classList.contains('suite'),alto:n.top,basso:innerHeight-n.bottom,carattere:c.fontFamily,
         titolo:document.querySelector('.top h1').textContent,voci:[...document.querySelectorAll('.nav button')].map(b=>b.textContent)}}""")
-    ok(asp['suite'] and asp['carattere'].startswith('Manrope') and asp['titolo'] == 'Menù', 'dentro la suite: carattere e titolo come le altre sezioni')
+    ok(asp['suite'] and asp['carattere'].startswith('Inter') and asp['titolo'] == 'Menù', 'dentro la suite: carattere e titolo come le altre sezioni')
     ok(asp['alto'] < 80 and asp['basso'] > 300 and asp['voci'] == ['Calendario', 'Proposte', 'Stampe', 'Didattica', 'Impostazioni'],
        'le sezioni del Menù sono linguette in alto (in basso resta solo la barra della suite)')
     pg.evaluate("window.__ricevuti.length=0;openEditor('m1')")
@@ -188,7 +188,7 @@ with sync_playwright() as p:
     scuro = pg.evaluate(STILI)
     fondo = pg.evaluate("getComputedStyle(document.body).backgroundColor")
     pg.evaluate("document.documentElement.classList.remove('scuro')")
-    ok(fondo == 'rgb(18, 20, 15)' and scuro == senza, 'tema scuro: cambia il contorno, le pagine dei menù restano su carta chiara e identiche')
+    ok(fondo == 'rgb(15, 18, 21)' and scuro == senza, 'tema scuro: cambia il contorno, le pagine dei menù restano su carta chiara e identiche')
     ok(len(con) > 300 and con == senza, f'pagine dei menù identiche a prima in tutti i template ({len(con)} elementi confrontati)')
 
     # ---------- portate collegate alle ricette della suite: gli allergeni vengono dalla ricetta ----------

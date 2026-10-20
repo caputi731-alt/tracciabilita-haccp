@@ -1,19 +1,19 @@
 /* Aspetto del Menù dentro la suite Tenuta Coppa: stessi colori, carattere e forme delle altre sezioni (vedi theme.js).
    Vale solo con la classe "suite" su <html>, messa da js/00-suite.js; le pagine dei menù (.pg) non cambiano. */
-@font-face{font-family:Manrope;font-style:normal;font-weight:100 500;font-display:swap;src:url(../vendor/fonts/Manrope_500Medium.ttf) format('truetype')}
-@font-face{font-family:Manrope;font-style:normal;font-weight:600 700;font-display:swap;src:url(../vendor/fonts/Manrope_700Bold.ttf) format('truetype')}
-@font-face{font-family:Manrope;font-style:normal;font-weight:800 900;font-display:swap;src:url(../vendor/fonts/Manrope_800ExtraBold.ttf) format('truetype')}
+@font-face{font-family:Inter;font-style:normal;font-weight:100 500;font-display:swap;src:url(../vendor/fonts/Inter_400Regular.ttf) format('truetype')}
+@font-face{font-family:Inter;font-style:normal;font-weight:600;font-display:swap;src:url(../vendor/fonts/Inter_600SemiBold.ttf) format('truetype')}
+@font-face{font-family:Inter;font-style:normal;font-weight:700 900;font-display:swap;src:url(../vendor/fonts/Inter_700Bold.ttf) format('truetype')}
 
-html.suite{--paper:#F6F5EC;--ink:#1B1D17;--muted:#5B5F52;--line:#E4E3D6;--olive:#2F4F23;--olive-2:#1A3310;--olive-soft:#D7E8C6;--wine:#B3261E;--r:20px;
-  --cont:#ECEBDD;--campo:#8A8E7E;--terra:#9C4524;--alto:60px}
-html.suite,html.suite body{font-family:Manrope,system-ui,sans-serif}
+html.suite{--paper:#F5F6F8;--ink:#12161C;--muted:#5A6370;--line:#E2E5EA;--olive:#1E6B4A;--olive-2:#14513A;--olive-soft:#E3F1EA;--wine:#B3261E;--r:20px;
+  --cont:#EEF0F3;--campo:#8A929C;--terra:#A15C07;--alto:60px}
+html.suite,html.suite body{font-family:Inter,system-ui,sans-serif}
 /* le pagine dei menù restano com'erano: carattere e colore di partenza dell'app originale */
 /* (:where non aggiunge peso alla regola: i caratteri propri di ogni tipo di pagina, .pg-v .pg-c .pg-l, continuano a vincere) */
 :where(html.suite .pg,html.suite #rh){font-family:Figtree,system-ui,sans-serif;color:#22281F}
 
 /* intestazione: titolo come nelle altre sezioni, senza riga sotto */
 html.suite .top{background:var(--paper);-webkit-backdrop-filter:none;backdrop-filter:none;border-bottom:0;height:var(--alto);min-height:var(--alto);padding:8px 12px 8px 20px}
-html.suite .top h1{font:700 28px/1.15 Manrope,sans-serif;letter-spacing:-.6px}
+html.suite .top h1{font:700 28px/1.15 Inter,sans-serif;letter-spacing:-.6px}
 html.suite.profonda .top h1{font-size:20px;letter-spacing:-.2px}
 html.suite .tb{border:0;background:var(--cont);color:var(--olive-2);font-weight:700;min-height:44px;padding:10px 18px}
 
@@ -25,18 +25,18 @@ html.suite .nav button.on{background:var(--olive-soft);color:var(--olive-2);font
 html.suite .nav svg{display:none}
 html.suite .main{padding-bottom:100px}
 html.suite.con-nav .main{padding-top:66px}
-html.suite .fab{bottom:18px;border-radius:18px;background:var(--terra);box-shadow:0 4px 12px rgba(92,36,16,.3)}
+html.suite .fab{bottom:18px;border-radius:18px;background:var(--terra);box-shadow:0 4px 12px rgba(161,92,7,.3)}
 html.suite .toast{bottom:92px;border-radius:14px;font-weight:500}
 html.suite .toast button{color:var(--olive-soft)}
-html.suite .busy{background:rgba(246,245,236,.94)}
+html.suite .busy{background:rgba(245,246,248,.94)}
 
-/* titoli: Manrope al posto del corsivo */
-html.suite .grp>h2{font:700 13px/1.2 Manrope,sans-serif;letter-spacing:.3px}
-html.suite .calh h2{font:700 20px/1.2 Manrope,sans-serif;letter-spacing:-.2px}
-html.suite .dh,html.suite .dcat{font:700 18px/1.25 Manrope,sans-serif}
-html.suite .sec-h h3{font:700 17px/1.2 Manrope,sans-serif}
-html.suite .sh-h h3,html.suite .dlg h3{font:700 20px/1.2 Manrope,sans-serif;letter-spacing:-.2px}
-html.suite .mc-date b{font:800 24px/1 Manrope,sans-serif}
+/* titoli: Inter al posto del corsivo */
+html.suite .grp>h2{font:700 13px/1.2 Inter,sans-serif;letter-spacing:.3px}
+html.suite .calh h2{font:700 20px/1.2 Inter,sans-serif;letter-spacing:-.2px}
+html.suite .dh,html.suite .dcat{font:700 18px/1.25 Inter,sans-serif}
+html.suite .sec-h h3{font:700 17px/1.2 Inter,sans-serif}
+html.suite .sh-h h3,html.suite .dlg h3{font:700 20px/1.2 Inter,sans-serif;letter-spacing:-.2px}
+html.suite .mc-date b{font:700 24px/1 Inter,sans-serif}
 html.suite .mc-t,html.suite .pk.on,html.suite .tchip.on{font-weight:700}
 
 /* schede senza contorno, pulsanti e campi come nel resto della suite */
@@ -62,8 +62,8 @@ html.suite .dlg{border-radius:28px}
 
 /* ---------- Tema scuro (classe "scuro" su <html>, messa da js/00-suite.js quando la suite è in tema scuro) ----------
    Stessi colori di theme.js. Le pagine dei menù e le anteprime di stampa restano su carta chiara: sono ciò che si stampa. */
-html.suite.scuro{color-scheme:dark;--paper:#12140F;--ink:#E6E5D9;--muted:#B0B3A4;--line:#2E3226;--olive:#C9E0B5;--olive-2:#D7E8C6;--olive-soft:#2C4721;--wine:#FFB4AB;
-  --cont:#23261C;--campo:#8F9285;--terra:#F2B79C;--scheda:#1D2017;--su-olive:#14290C}
+html.suite.scuro{color-scheme:dark;--paper:#0F1215;--ink:#E8EAED;--muted:#A9B1BA;--line:#2A3038;--olive:#7FD1A8;--olive-2:#A6E3C4;--olive-soft:#1D3B2E;--wine:#FFB4AB;
+  --cont:#20252B;--campo:#8A929C;--terra:#F2B866;--scheda:#191D22;--su-olive:#0B2A1C}
 html.suite.scuro .card,html.suite.scuro .mcard,html.suite.scuro .sec,html.suite.scuro .list,html.suite.scuro .fcard,html.suite.scuro .day,
 html.suite.scuro .drow,html.suite.scuro .trow,html.suite.scuro .crow,html.suite.scuro .sheet,html.suite.scuro .dlg{background:var(--scheda)}
 html.suite.scuro .btn,html.suite.scuro .stat button,html.suite.scuro .chips button,html.suite.scuro .algs button{background:transparent}
@@ -73,22 +73,22 @@ html.suite.scuro .btn.pri,html.suite.scuro .algs button.on,html.suite.scuro .pk.
 html.suite.scuro .btn.pri{background:var(--olive)}
 html.suite.scuro .algs button.on{background:var(--olive)}
 html.suite.scuro .btn.danger-f{color:#4A1512}
-html.suite.scuro .fab{color:#4A1A06;box-shadow:0 4px 12px rgba(0,0,0,.5)}
-html.suite.scuro .toast{background:#E6E5D9;color:#1B1D17}
-html.suite.scuro .toast button{color:#2F4F23}
-html.suite.scuro .busy{background:rgba(18,20,15,.94)}
+html.suite.scuro .fab{color:#3A2200;box-shadow:0 4px 12px rgba(0,0,0,.5)}
+html.suite.scuro .toast{background:#E8EAED;color:#12161C}
+html.suite.scuro .toast button{color:#1E6B4A}
+html.suite.scuro .busy{background:rgba(15,18,21,.94)}
 html.suite.scuro .shbg{background:rgba(0,0,0,.6)}
-html.suite.scuro .pill{color:color-mix(in srgb,var(--c) 45%,#fff);background:color-mix(in srgb,var(--c) 28%,#1D2017)}
-html.suite.scuro .stat button.on{background:color-mix(in srgb,var(--c) 26%,#1D2017)}
+html.suite.scuro .pill{color:color-mix(in srgb,var(--c) 45%,#fff);background:color-mix(in srgb,var(--c) 28%,#191D22)}
+html.suite.scuro .stat button.on{background:color-mix(in srgb,var(--c) 26%,#191D22)}
 html.suite.scuro .hint[style*="color:#8A5A12"]{color:#F2C078 !important}
 html.suite.scuro .pv .pg{box-shadow:0 10px 30px rgba(0,0,0,.6)}
 html.suite.scuro select.inp{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23B0B3A4' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")}
 
 /* ---------- Prenotazioni della suite nel calendario (scelta di Luca del 18/10/2026) ---------- */
 html.suite .day{gap:2px}
-html.suite .day .cop{font:800 11px/13px Manrope,sans-serif;height:13px;color:var(--olive);letter-spacing:-.2px}
+html.suite .day .cop{font:700 11px/13px Inter,sans-serif;height:13px;color:var(--olive);letter-spacing:-.2px}
 html.suite .day .cop.da,html.suite .legend .cop.da{color:var(--terra)}
-html.suite .legend .cop{font:800 11px/1 Manrope,sans-serif;color:var(--olive)}
+html.suite .legend .cop{font:700 11px/1 Inter,sans-serif;color:var(--olive)}
 html.suite .pren-tot{margin:4px 2px 6px;font-size:14px;color:var(--muted)}
 html.suite .pren-tot b{color:var(--terra)}
 html.suite .pren-list{margin-bottom:12px}

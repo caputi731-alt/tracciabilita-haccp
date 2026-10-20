@@ -6,15 +6,15 @@
 <title>Sale</title>
 <style>
 /* Scena 3D di una sala con i tavoli, mostrata dentro la suite da SaleVista.js. Colori di theme.js: se cambia la tavolozza va aggiornata anche qui. */
-@font-face{font-family:Manrope;font-weight:100 500;src:url(../menu/vendor/fonts/Manrope_500Medium.ttf) format('truetype')}
-@font-face{font-family:Manrope;font-weight:600 900;src:url(../menu/vendor/fonts/Manrope_800ExtraBold.ttf) format('truetype')}
-:root{--a:#EEF1E4;--b:#D9DECB;--carta:#FFFFFF;--testo:#1B1D17}
-:root.scuro{--a:#262A1F;--b:#171A13;--carta:#1D2017;--testo:#E6E5D9}
+@font-face{font-family:Inter;font-weight:100 500;src:url(../menu/vendor/fonts/Inter_400Regular.ttf) format('truetype')}
+@font-face{font-family:Inter;font-weight:600 900;src:url(../menu/vendor/fonts/Inter_700Bold.ttf) format('truetype')}
+:root{--a:#EEF1E4;--b:#D9DECB;--carta:#FFFFFF;--testo:#12161C}
+:root.scuro{--a:#262A1F;--b:#171A13;--carta:#191D22;--testo:#E8EAED}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;height:100%;overflow:hidden;background:linear-gradient(var(--a),var(--b));font-family:Manrope,system-ui,sans-serif;-webkit-user-select:none;user-select:none}
+html,body{margin:0;height:100%;overflow:hidden;background:linear-gradient(var(--a),var(--b));font-family:Inter,system-ui,sans-serif;-webkit-user-select:none;user-select:none}
 canvas{display:block;width:100%;height:100%;touch-action:none}
 .zoom{position:fixed;right:10px;top:10px;display:flex;flex-direction:column;gap:6px}
-.zoom button{width:44px;height:44px;border-radius:14px;border:0;background:var(--carta);color:var(--testo);font:700 20px Manrope,system-ui,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.14)}
+.zoom button{width:44px;height:44px;border-radius:14px;border:0;background:var(--carta);color:var(--testo);font:700 20px Inter,system-ui,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.14)}
 </style>
 </head>
 <body>
@@ -57,11 +57,11 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
     const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
   }
 
-  const TINTE = { ok: '#2F6B2A', crit: '#B3261E', neutro: '#6B6F62' };
+  const TINTE = { ok: '#1E6B4A', crit: '#B3261E', neutro: '#5A6370' };
   /* tag di una tavolata: sopra la sigla (e il nome di chi ha prenotato), sotto i posti */
   function etichetta(titolo, breve, c){
     const H = 176, cv = document.createElement('canvas'); cv.width = 512; cv.height = H; const g = cv.getContext('2d');
-    const F1 = '800 44px Manrope, system-ui, sans-serif', F2 = '700 40px Manrope, system-ui, sans-serif';
+    const F1 = '700 44px Inter, system-ui, sans-serif', F2 = '700 40px Inter, system-ui, sans-serif';
     let n = titolo; g.font = F1; while (n.length > 3 && g.measureText(n).width > 420) n = n.slice(0, -2).trimEnd() + '…';
     const t1 = g.measureText(n).width; g.font = F2; const t2 = g.measureText(breve).width;
     const w = Math.min(500, Math.max(t1, t2) + 60), x0 = 256 - w / 2, r = 40, y0 = 12, y1 = H - 12;
@@ -69,8 +69,8 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
     const pieno = c !== 'neutro';
     g.fillStyle = pieno ? TINTE[c] : '#ffffff'; g.fill(); g.lineWidth = 5; g.strokeStyle = TINTE[c]; g.stroke();
     g.textBaseline = 'middle'; g.textAlign = 'center';
-    g.font = F1; g.fillStyle = pieno ? '#ffffff' : '#1B1D17'; g.fillText(n, 256, 58);
-    g.font = F2; g.fillStyle = pieno ? '#ffffff' : '#5B5F52'; g.fillText(breve, 256, 118);
+    g.font = F1; g.fillStyle = pieno ? '#ffffff' : '#12161C'; g.fillText(n, 256, 58);
+    g.font = F2; g.fillStyle = pieno ? '#ffffff' : '#5A6370'; g.fillText(breve, 256, 118);
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthTest: false, transparent: true })); sp.renderOrder = 10;
     sp.userData.base = [512, H]; sp.userData.pieno = w / 512; return sp;
   }
@@ -83,9 +83,9 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
   let cx = 0, cy = 0;
   function cartello(testo){
     const cv = document.createElement('canvas'); cv.width = 256; cv.height = 72; const g = cv.getContext('2d');
-    g.font = '800 34px Manrope, system-ui, sans-serif'; const w = Math.min(244, g.measureText(testo).width + 40), x0 = 128 - w / 2;
+    g.font = '700 34px Inter, system-ui, sans-serif'; const w = Math.min(244, g.measureText(testo).width + 40), x0 = 128 - w / 2;
     g.beginPath(); g.moveTo(x0 + 28, 8); g.arcTo(x0 + w, 8, x0 + w, 64, 28); g.arcTo(x0 + w, 64, x0, 64, 28); g.arcTo(x0, 64, x0, 8, 28); g.arcTo(x0, 8, x0 + w, 8, 28); g.closePath();
-    g.fillStyle = '#9C4524'; g.fill(); g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(testo, 128, 38, 220);
+    g.fillStyle = '#A15C07'; g.fill(); g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(testo, 128, 38, 220);
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthTest: false, transparent: true })); sp.renderOrder = 9;
     sp.userData.base = [256, 72]; sp.userData.cartello = true; return sp;
   }
@@ -347,8 +347,8 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
   window.__schermoPunto = (x, y, sala) => { const z = stanzaDi(sala); return sulloSchermo(new THREE.Vector3(x - z.cx, 0, y - z.cy)); };
   window.__colori = () => { renderer.render(scene, cam); const gl = renderer.getContext(), w = gl.drawingBufferWidth, h = gl.drawingBufferHeight, px = new Uint8Array(4), s = new Set();
     for (let i = 1; i < 24; i++) for (let j = 1; j < 24; j++) { gl.readPixels(Math.floor(w * i / 24), Math.floor(h * j / 24), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); if (px[3]) s.add((px[0] >> 4) + ',' + (px[1] >> 4) + ',' + (px[2] >> 4)); } return s.size; };
-  // i tag usano Manrope: quando il carattere è pronto si ridisegnano
-  if (document.fonts && document.fonts.load) document.fonts.load('800 44px Manrope').then(() => { if (window.__ultimi) window.__sala(window.__ultimi); }).catch(() => {});
+  // i tag usano Inter: quando il carattere è pronto si ridisegnano
+  if (document.fonts && document.fonts.load) document.fonts.load('700 44px Inter').then(() => { if (window.__ultimi) window.__sala(window.__ultimi); }).catch(() => {});
   invia({ tipo: 'pronta' });
 })();
 </script>

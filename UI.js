@@ -521,7 +521,7 @@ export function useAvviso() {
   const avviso = (
     <Animated.View pointerEvents={attivo && azione ? 'box-none' : 'none'} style={{
       position: 'absolute', left: 16, right: 16, bottom: 80, opacity: opacita,
-      backgroundColor: '#30322B', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 16,
+      backgroundColor: '#12161C', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 16,
       elevation: 8, flexDirection: 'row', alignItems: 'center', minHeight: 56,
     }}>
       <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700', flex: 1, textAlign: azione ? 'left' : 'center' }}>
