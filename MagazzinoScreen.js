@@ -80,7 +80,7 @@ export default function MagazzinoScreen({ route, navigation }) {
   const [produzioni, setProduzioni] = useState([]);
   const [impatto, setImpatto] = useState(null);
   const [azione, setAzione] = useState(null); // { tipo: 'blocca' | 'sblocca', lotti: [id], testo }
-  const [cerca, setCerca] = useState('');
+  const [cerca, setCerca] = useState(route?.params?.cerca || '');
   const [aperti, setAperti] = useState({});
   const [sel, setSel] = useState(null);           // lotto aperto nel dettaglio
   const [storico, setStorico] = useState([]);
@@ -158,6 +158,22 @@ export default function MagazzinoScreen({ route, navigation }) {
       }
     })();
   }, [route?.params?.lottoId]);
+
+  // dalla schermata Cerca: "Lotti" ({ cerca }) scrive il nome nella ricerca, "Scarica" ({ scarica: id prodotto }) apre lo scarico
+  const daCerca = route?.params?.t;
+  React.useEffect(() => {
+    if (!daCerca) return;
+    if (route.params.cerca !== undefined) setCerca(route.params.cerca);
+  }, [daCerca]);
+  const scaricoChiesto = React.useRef(null);
+  React.useEffect(() => {
+    const p = route?.params;
+    if (!p || !p.scarica || !caricato || scaricoChiesto.current === p.t) return;
+    scaricoChiesto.current = p.t;
+    const g = gruppi.find((x) => x.lotti[0].prodotto_id === p.scarica && (!p.unita || (x.unita || '') === p.unita))
+      || gruppi.find((x) => x.lotti[0].prodotto_id === p.scarica);
+    if (g) setUscita({ gruppo: g, qta: '', causale: 'consumo' });
+  }, [daCerca, caricato, lotti]);
 
   const confermaAzione = async () => {
     try {

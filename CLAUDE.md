@@ -111,6 +111,14 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
   registro, giro), 5 pulizie a un tocco (prodotto previsto dell'area, nessun operatore, "Annulla" 10 minuti), 6 magazzino compatto.
   Restano com'erano: le scene 3D di cucine e sale (cambiano solo i colori dei cartellini), la barra in basso, le pagine dei menù.
   Prima: mockup Material Design 3 verde oliva e terracotta dell'8/10/2026.
+- Ricerca in tutta l'app (fase 2, 20/10/2026): `CercaScreen.js` (rotta `Cerca`, senza intestazione) dal pulsante `PulsanteCerca` (UI.js)
+  in alto in Cucina e Sala e dal campo di Altro. `cerca.js` (puro, `test/cerca.test.mjs`): `prodottiConGiacenza` (lotti disponibili
+  sommati per prodotto), `portateDelMenu` (archivio del Menù), `cercaTutto` (prodotti anche per numero di lotto o fornitore, ricette,
+  portate, sezioni con `cercaSezioni`), usate di recente (`leggiRecenti`/`aggiungiRecente`, preferenza locale `sezioni_recenti`, non va
+  nel backup; `ricordaSezione` le aggiorna da Cerca e da Altro). Azioni del prodotto: Scarica → `Magazzino { scarica, unita, t }` apre lo
+  scarico del gruppo; Etichetta → `Etichette { precompila }`; Lotti → `Magazzino { cerca, t }` o `{ lottoId }` se si è cercato un lotto.
+  Le sezioni della barra si aprono con `navigate('Home', { sezione, parte, t })`, letto da PrincipaleScreen.
+  Nell'anteprima del browser il passo "~testo" scrive nel campo attivo.
 - `PrincipaleScreen.js` è la rotta `Home`: barra in basso con Cucina (`HomeScreen.js`, la mappa delle cucine), Sala (`SaleScreen.js`),
   Gestione e Altro (`AltroScreen.js`, tutte le altre funzioni, Magazzino compreso), scelta di Luca del 9/10/2026.
   Gestione ha due linguette: Menù (`MenuScreen.js`) e Incassi (`IncassiScreen.js`). Il tasto indietro dalle altre sezioni torna a Cucina.

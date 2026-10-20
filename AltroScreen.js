@@ -1,17 +1,18 @@
 /**
- * Sezione "Altro": tutte le funzioni che non stanno nella barra in basso, più la ricerca di qualsiasi sezione
+ * Sezione "Altro": tutte le funzioni che non stanno nella barra in basso, il campo che apre la ricerca in tutta l'app (CercaScreen.js)
  * e le sezioni preferite in cima (scelte con la stellina; restano su questo telefono, non vanno nel backup).
  * Elenco, ricerca e preferiti stanno in sezioni.js.
  */
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { S, COLORS } from './theme';
 import { Icona } from './UI';
 import { BUILD } from './build';
 import { leggiPreferenza, salvaPreferenza } from './database';
 import {
-  GRUPPI_SEZIONI, cercaSezioni, leggiPreferiti, cambiaPreferito, vociPreferite, vociDelGruppo,
+  GRUPPI_SEZIONI, leggiPreferiti, cambiaPreferito, vociPreferite, vociDelGruppo,
 } from './sezioni';
+import { ricordaSezione } from './CercaScreen';
 
 const CHIAVE_PREFERITI = 'sezioni_preferite';
 
@@ -59,7 +60,6 @@ function Blocco({ titolo, voci, preferiti, onApri, onStella }) {
 }
 
 export default function AltroScreen({ navigation, suSezione }) {
-  const [cerca, setCerca] = useState('');
   const [preferiti, setPreferiti] = useState([]);
 
   useEffect(() => {
@@ -67,6 +67,7 @@ export default function AltroScreen({ navigation, suSezione }) {
   }, []);
 
   const apri = useCallback((voce) => {
+    ricordaSezione(voce.id);
     if (voce.sezione) {
       if (suSezione) suSezione(voce.sezione, voce.parte || null);
     } else {
@@ -82,8 +83,6 @@ export default function AltroScreen({ navigation, suSezione }) {
     });
   }, []);
 
-  const trovate = cercaSezioni(cerca);
-  const staCercando = cerca.trim().length > 0;
   const preferite = vociPreferite(preferiti);
 
   return (
@@ -91,39 +90,22 @@ export default function AltroScreen({ navigation, suSezione }) {
       contentContainerStyle={{ padding: 16, paddingTop: 20, paddingBottom: 32 }}>
       <Text accessibilityRole="header" style={[S.h1, { marginLeft: 4 }]}>Altro</Text>
 
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12 }}>
-        <View style={{ position: 'absolute', left: 14, zIndex: 1 }}>
-          <Icona nome="magnify" colore={COLORS.muted} />
-        </View>
-        <TextInput value={cerca} onChangeText={setCerca} placeholder="Cerca: frigo, ricette, backup…"
-          placeholderTextColor={COLORS.segnaposto} accessibilityLabel="Cerca una sezione" returnKeyType="search"
-          autoCorrect={false} style={[S.input, { flex: 1, paddingLeft: 46, paddingRight: staCercando ? 48 : 14 }]}
-          onSubmitEditing={() => { if (trovate.length) apri(trovate[0]); }} />
-        {staCercando && (
-          <TouchableOpacity onPress={() => setCerca('')} accessibilityRole="button" accessibilityLabel="Cancella la ricerca"
-            style={{ position: 'absolute', right: 0, width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
-            <Icona nome="close-circle" colore={COLORS.muted} />
-          </TouchableOpacity>
-        )}
-      </View>
+      {/* la ricerca è quella di tutta l'app (prodotti, lotti, ricette, portate e sezioni) */}
+      <TouchableOpacity onPress={() => navigation.navigate('Cerca')} activeOpacity={0.8}
+        accessibilityRole="search" accessibilityLabel="Cerca in tutta l'app"
+        style={[S.input, { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12 }]}>
+        <Icona nome="magnify" colore={COLORS.muted} />
+        <Text style={{ fontSize: 16, color: COLORS.segnaposto }}>Cerca: frigo, burrata, ricette, backup…</Text>
+      </TouchableOpacity>
 
-      {staCercando ? (
-        trovate.length
-          ? <Blocco titolo={trovate.length === 1 ? '1 sezione trovata' : `${trovate.length} sezioni trovate`}
-            voci={trovate} preferiti={preferiti} onApri={apri} onStella={stella} />
-          : <Text style={[S.muted, { marginTop: 20, marginLeft: 4 }]}>Nessuna sezione per "{cerca.trim()}". Prova con un'altra parola.</Text>
-      ) : (
-        <>
-          {preferite.length
-            ? <Blocco titolo="Preferite" voci={preferite} preferiti={preferiti} onApri={apri} onStella={stella} />
-            : <Text style={[S.muted, { fontSize: 13, marginTop: 14, marginLeft: 4 }]}>
-              Tocca la stellina accanto a una sezione per tenerla qui in cima.
-            </Text>}
-          {GRUPPI_SEZIONI.map((g) => (
-            <Blocco key={g} titolo={g} voci={vociDelGruppo(g)} preferiti={preferiti} onApri={apri} onStella={stella} />
-          ))}
-        </>
-      )}
+      {preferite.length
+        ? <Blocco titolo="Preferite" voci={preferite} preferiti={preferiti} onApri={apri} onStella={stella} />
+        : <Text style={[S.muted, { fontSize: 13, marginTop: 14, marginLeft: 4 }]}>
+          Tocca la stellina accanto a una sezione per tenerla qui in cima.
+        </Text>}
+      {GRUPPI_SEZIONI.map((g) => (
+        <Blocco key={g} titolo={g} voci={vociDelGruppo(g)} preferiti={preferiti} onApri={apri} onStella={stella} />
+      ))}
       <Text style={{ textAlign: 'center', marginTop: 16, fontSize: 13, color: COLORS.muted }}>Versione: build {BUILD}</Text>
     </ScrollView>
   );

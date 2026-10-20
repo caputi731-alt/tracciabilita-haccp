@@ -9,7 +9,7 @@ import { View, Text, ScrollView, TouchableOpacity, Modal, Pressable } from 'reac
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, TEMA_SCURO, giorniAllaScadenza, oggiLocale } from './theme';
 import { daIsoLocale } from './utile';
-import { Icona } from './UI';
+import { Icona, PulsanteCerca } from './UI';
 import {
   lottiInScadenza, temperatureDiOggi, listaPuntiControllo, nonConformitaAperte,
   areeConStato, prodottiDaCompletare, lottiBloccati, leggiPreferenza, menuLeggi, collegamentiCucina,
@@ -240,12 +240,17 @@ export default function HomeScreen({ navigation }) {
 
   const giornoMenu = menu ? daIsoLocale(menu.data) : null;
 
-  const intestazione = (
-    <View style={{ marginLeft: 4, marginBottom: 16 }}>
-      <Text style={{ fontSize: 13, fontWeight: '700', letterSpacing: 1.2, color: COLORS.muted }}>TENUTA COPPA</Text>
-      <Text accessibilityRole="header" style={[S.h1, { marginBottom: 0 }]}>{oggiScritto}</Text>
+  // barra in alto (proposta A): la data, il titolo della sezione e il pulsante per cercare in tutta l'app
+  const barraAlta = (stile) => (
+    <View style={[{ flexDirection: 'row', alignItems: 'center' }, stile]}>
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontSize: 13, fontWeight: '500', color: COLORS.muted }}>{oggiScritto}</Text>
+        <Text accessibilityRole="header" style={{ fontSize: 24, fontWeight: '700', color: COLORS.text, letterSpacing: -0.4 }}>Cucina</Text>
+      </View>
+      <PulsanteCerca onPress={() => apri('Cerca')} />
     </View>
   );
+  const intestazione = barraAlta({ marginLeft: 4, marginBottom: 16 });
 
   // temperature, pulizie, scadenze, cose da sistemare, prossimo menù: sotto il riquadro (senza mappa) o nel pannello (con la mappa)
   const dettagli = (
@@ -349,12 +354,7 @@ export default function HomeScreen({ navigation }) {
       {conCucine ? (
         <>
           {/* La mappa delle cucine riempie la schermata: sopra solo la data, sotto la riga dei controlli e il pannello dei dettagli */}
-          <View style={{ paddingHorizontal: 20, paddingTop: 14, paddingBottom: 10, flexDirection: 'row', alignItems: 'baseline' }}>
-            <Text accessibilityRole="header" style={{ flex: 1, fontSize: 22, fontWeight: '700', color: COLORS.text, letterSpacing: -0.4 }}>
-              {oggiScritto}
-            </Text>
-            <Text style={{ fontSize: 12, fontWeight: '700', letterSpacing: 1.2, color: COLORS.muted }}>TENUTA COPPA</Text>
-          </View>
+          {barraAlta({ paddingLeft: 20, paddingRight: 16, paddingTop: 12, paddingBottom: 10 })}
           <View style={{ flex: 1, backgroundColor: COLORS.contenitore }}>
             <RiparoCucine suRotto={senzaCucine}>
               <Cucine dati={dati} suPosto={suPosto} suPulsante={suPulsante} suStato={setScena} />

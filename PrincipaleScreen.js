@@ -9,7 +9,7 @@ import { View, Text, TouchableOpacity, BackHandler, Keyboard } from 'react-nativ
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, S } from './theme';
-import { Icona, Vuoto, Segmenti } from './UI';
+import { Icona, Vuoto, Segmenti, PulsanteCerca } from './UI';
 import HomeScreen from './HomeScreen';
 import AltroScreen from './AltroScreen';
 import SaleScreen from './SaleScreen';
@@ -111,6 +111,13 @@ export default function PrincipaleScreen({ navigation, route }) {
       : navigation.navigate(rotta === 'SezioneMagazzino' ? 'Magazzino' : rotta, parametri)),
   }), [navigation, vai]);
 
+  // dalla schermata Cerca: { sezione, parte, t } apre quella sezione della barra
+  const richiesta = route && route.params ? route.params.t : undefined;
+  useEffect(() => {
+    const p = route && route.params;
+    if (p && p.sezione) vai(p.sezione, p.parte || null);
+  }, [richiesta]);
+
   const esciDalMenu = useCallback(() => vai('oggi'), [vai]);
   const apriSala = useCallback((data, servizio) => {
     setAperturaSala({ data, servizio });
@@ -130,10 +137,12 @@ export default function PrincipaleScreen({ navigation, route }) {
         {sezione === 'sale' && (
           <>
             {!salaIntera && (
-              <Text accessibilityRole="header" style={{
-                fontSize: 28, fontWeight: '700', color: COLORS.text, letterSpacing: -0.6,
-                paddingHorizontal: 20, paddingTop: 20,
-              }}>Sala</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', paddingLeft: 20, paddingRight: 16, paddingTop: 14 }}>
+                <Text accessibilityRole="header" style={{ flex: 1, fontSize: 24, fontWeight: '700', color: COLORS.text, letterSpacing: -0.4 }}>
+                  Sala
+                </Text>
+                <PulsanteCerca onPress={() => navigation.navigate('Cerca')} />
+              </View>
             )}
             <SaleScreen navigation={naviga} route={route} suTuttoSchermo={setSalaIntera} apri={aperturaSala} suAperta={azzeraApertura} />
           </>

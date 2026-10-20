@@ -11,6 +11,7 @@ import { useFonts } from 'expo-font';
 import { CARATTERI, usaCaratteri } from './caratteri';
 import EventiScreen from './EventiScreen';
 import GiroScreen from './GiroScreen';
+import CercaScreen from './CercaScreen';
 
 import PrincipaleScreen from './PrincipaleScreen';
 import FornitoriScreen from './FornitoriScreen';
@@ -120,6 +121,7 @@ export default function App() {
         <Stack.Screen name="Produzioni" component={ProduzioniScreen} options={{ title: 'Produzioni' }} />
         <Stack.Screen name="Eventi" component={EventiScreen} options={{ title: 'Eventi' }} />
         <Stack.Screen name="Giro" component={GiroScreen} options={{ title: 'Giro di controllo' }} />
+        <Stack.Screen name="Cerca" component={CercaScreen} options={{ headerShown: false, animation: 'fade' }} />
       </Stack.Navigator>
     </NavigationContainer>
   );

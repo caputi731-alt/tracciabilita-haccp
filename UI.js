@@ -242,6 +242,20 @@ export function Icona({ nome, size = 22, colore = COLORS.text, style }) {
   return <MaterialCommunityIcons name={nome} size={size} color={colore} style={style} />;
 }
 
+/** Pulsante "Cerca" della barra in alto (Cucina, Sala, Altro): apre la ricerca in tutta l'app. */
+export function PulsanteCerca({ onPress }) {
+  return (
+    <TouchableOpacity onPress={onPress} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel="Cerca in tutta l'app"
+      style={{
+        flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44, paddingHorizontal: 16, borderRadius: 22,
+        borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.card,
+      }}>
+      <Icona nome="magnify" size={20} />
+      <Text style={{ fontSize: 15, fontWeight: '500' }}>Cerca</Text>
+    </TouchableOpacity>
+  );
+}
+
 /**
  * Pulsante. Se onPress è asincrono, il pulsante resta bloccato finché l'operazione non finisce:
  * un doppio tocco non salva due volte.
