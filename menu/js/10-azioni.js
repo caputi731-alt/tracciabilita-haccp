@@ -22,6 +22,8 @@ document.addEventListener('click',e=>{
       if(ui.view==='edit'){leaveEdit();ui.view=ui.back||'cal';if(m&&m.date&&ui.view==='cal'){const dt=parseD(m.date);ui.selDate=m.date;ui.cal={y:dt.getFullYear(),m:dt.getMonth()}}}
       else if(ui.view==='preview')ui.view='edit';
       else if(ui.view==='tpl'||ui.view==='dishes')ui.view='settings';
+      else if(ui.view==='elenco')ui.view='elenchi';
+      else if(ui.view==='elenchi')ui.view='list';
       render();break;
     case 'setTpl':if(m){m.templateId=d.id;state.settings.lastTpl=d.id;save();render(true)}break;
     case 'setStatus':if(m){m.status=d.v;save();render(true)}break;
@@ -97,7 +99,7 @@ document.addEventListener('click',e=>{
     case 'spPDF':(async()=>{busy(true,'Preparo il foglio');try{const f=await spPDF();ui.sheet={type:'file',blob:f.blob,name:f.name,mime:f.mime,title:'Segnaposto pronti'}}
       catch(err){toast('Foglio non creato')}finally{busy(false);renderSheet()}})();break;
     case 'waMenu':prezzoOk().then(ok=>{if(ok)waMenu()});break;
-    case 'waFmt':if(ui.sheet.fmt!==d.v){state.settings.waFmt=d.v;save();waMenu(d.v)}break;
+    case 'waFmt':if(ui.sheet.fmt!==d.v){state.settings.waFmt=d.v;save();ui.sheet.elId?elWa(d.v):waMenu(d.v)}break;
     case 'waStep1':waText(ui.sheet);break;
     case 'waFiles':{const sh=ui.sheet;sendFiles(sh.files,'',sh.phone,true);ui.sheet=null;renderSheet();markSent(sh);if(ui.view==='edit')render(true);break}
     case 'waSend':case 'waOther':{const sh=ui.sheet;sh.text=$('#watext').value;sh.phone=$('#waphone').value;
@@ -253,8 +255,10 @@ let rzT;window.addEventListener('resize',()=>{clearTimeout(rzT);rzT=setTimeout(m
 function saveDishNow(msg){
   const sh=ui.sheet,name=$('#dname').value.trim(),cat=$('#dcat').value;if(!name){toast('Scrivi il nome della portata');return false}
   const alg=[...(sh.alg||[])],en=($('#den')?.value||'').trim(),algSet=alg.length>0||!!sh.none;
+  const desc=($('#ddesc')?.value||'').trim(),pr=($('#dprice')?.value||'').trim(),price=pr===''?'':num(pr); // per l'elenco portate (12-elenco.js)
+  if(pr!==''&&!(price>=0)){toast('Il prezzo non è un numero');return false}
   const x=sh.id?state.dishes.find(z=>z.id===sh.id):null,rid=RIC()?(sh.rid||null):(x&&x.rid||null); // fuori dalla suite il collegamento non si tocca
-  if(x){x.name=name;x.cat=cat;x.alg=alg;x.algSet=algSet;x.en=en;if(rid)x.rid=rid;else delete x.rid}
-  else state.dishes.push(Object.assign({id:uid(),name,cat,alg,algSet,en},rid?{rid}:{}));
+  if(x){x.name=name;x.cat=cat;x.alg=alg;x.algSet=algSet;x.en=en;x.desc=desc;x.price=price;if(rid)x.rid=rid;else delete x.rid}
+  else state.dishes.push(Object.assign({id:uid(),name,cat,alg,algSet,en,desc,price},rid?{rid}:{}));
   save();ui.sheet=null;renderSheet();render(true);toast(msg||'Portata salvata');return true;
 }

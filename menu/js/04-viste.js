@@ -75,7 +75,7 @@ function listHTML(){
 }
 function vList(){
   const tabs=[['next','Prossimi'],['past','Passati'],['all','Tutti']];
-  return topbar(`<h1>Menù e proposte</h1>`)+`<main class="main"><div class="seg">${tabs.map(([v,l])=>`<button class="${ui.listTab===v?'on':''}" data-a="listTab" data-v="${v}">${l}</button>`).join('')}</div>
+  return topbar(`<h1>Menù e proposte</h1>`)+`<main class="main"><section class="grp"><div class="list"><button class="trow" data-a="elenchi"><span class="sw" style="display:grid;place-items:center;color:var(--olive)">${I.dish}</span><span>Elenco portate da inviare<small>Nome, prezzo e descrizione, come immagine o PDF</small></span>${I.right}</button></div></section><div class="seg">${tabs.map(([v,l])=>`<button class="${ui.listTab===v?'on':''}" data-a="listTab" data-v="${v}">${l}</button>`).join('')}</div>
   <input class="inp search" type="search" placeholder="Cerca per cliente o evento" data-in="q" value="${esc(ui.q)}"><div id="mlist">${listHTML()}</div></main>`+fab('new','Nuovo menù')+navbar();
 }
 const allCats=()=>[...state.categories,KIDS_CAT,...new Set(state.dishes.map(d=>d.cat).filter(c=>c!==KIDS_CAT&&!state.categories.includes(c)))];
@@ -84,7 +84,7 @@ function dishListHTML(){
   allCats().forEach(c=>{
     const L=state.dishes.filter(d=>d.cat===c&&(!q||norm(d.name).includes(q))).sort((a,b)=>a.name.localeCompare(b.name,'it'));
     if(!L.length&&q)return;
-    out+=`<h3 class="dcat">${esc(c)}</h3>`+(L.length?`<div class="list">${L.map(d=>`<button class="drow" data-a="editDish" data-id="${d.id}"><span>${esc(oneLine(d.name))}${d.en?`<small style="display:block;color:var(--muted);font-size:12px;font-style:italic">${esc(oneLine(d.en))}</small>`:''}${(r=>r?`<small style="display:block;color:var(--muted);font-size:12px">Ricetta: ${esc(r.nome)} · ${ricState(r)==='manca'?'senza ingredienti':r.allergeni.length?'allergeni '+r.allergeni.join(', '):'nessun allergene'}${ricState(r)==='verifica'?' (da verificare)':''}</small>`:d.alg&&d.alg.length?`<small style="display:block;color:var(--muted);font-size:12px">Allergeni ${d.alg.join(', ')}</small>`:d.algSet?`<small style="display:block;color:var(--muted);font-size:12px">Nessun allergene</small>`:'')(ricettaDi(d))}</span>${I.pen}</button>`).join('')}</div>`:`<div class="hint">Nessuna portata.</div>`);
+    out+=`<h3 class="dcat">${esc(c)}</h3>`+(L.length?`<div class="list">${L.map(d=>`<button class="drow" data-a="editDish" data-id="${d.id}"><span>${esc(oneLine(d.name))}${d.price!==undefined&&d.price!==''?` <b style="font-weight:600;white-space:nowrap">${esc(eurC(d.price))}</b>`:''}${d.en?`<small style="display:block;color:var(--muted);font-size:12px;font-style:italic">${esc(oneLine(d.en))}</small>`:''}${(r=>r?`<small style="display:block;color:var(--muted);font-size:12px">Ricetta: ${esc(r.nome)} · ${ricState(r)==='manca'?'senza ingredienti':r.allergeni.length?'allergeni '+r.allergeni.join(', '):'nessun allergene'}${ricState(r)==='verifica'?' (da verificare)':''}</small>`:d.alg&&d.alg.length?`<small style="display:block;color:var(--muted);font-size:12px">Allergeni ${d.alg.join(', ')}</small>`:d.algSet?`<small style="display:block;color:var(--muted);font-size:12px">Nessun allergene</small>`:'')(ricettaDi(d))}</span>${I.pen}</button>`).join('')}</div>`:`<div class="hint">Nessuna portata.</div>`);
   });
   return out||`<div class="empty">Nessuna portata trovata.</div>`;
 }

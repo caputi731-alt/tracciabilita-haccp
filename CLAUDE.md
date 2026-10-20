@@ -282,6 +282,14 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
   che compaiono nella scheda del lotto per i richiami. `produzioniEvento(id)` dice quali portate sono già prodotte.
   Scheda allergeni dell'evento: `allergeniEvento` (evento.js) + `htmlSchedaAllergeniEvento` (report.js); stesse regole del Menù
   (`allergeniAMano` in `eventiMenu` ricalca `algNums`/`algState`): se cambiano là, vanno cambiate anche qui.
+- Elenco portate da inviare (scelte di Luca del 20/10/2026): `menu/js/12-elenco.js`, da Proposte → "Elenco portate da inviare".
+  Le portate dell'archivio hanno `desc` (breve descrizione) e `price` (numero o ''), scritti nella scheda della portata.
+  `state.lists` (tenuto da `normalize`): elenchi con nome, `model` (modello da riusare), `allergens`, `notes`, `sections` con
+  voci `{ dishId, name, desc, price, edited }`. Nome, descrizione e prezzo seguono l'archivio salvo i campi in `edited`, cambiati solo
+  nell'elenco (`elVal`). "Nuovo elenco" = copia di un modello oppure da zero (tutte le categorie, vuote). Allergeni con le regole dei
+  menù (`algNums`/`algState` su `elAlgItem`). Pagina A4 sempre chiara (`.el-pg` in app.css): immagine = una pagina lunga
+  (`elImmagine`), PDF = pagine A4 (`elPagine`: un titolo di sezione non resta mai da solo in fondo). Invio con il foglio `wa`
+  (`sh.elId`). Provato in `test/menu-suite.py`.
 - Ponte pagina ↔ suite: `menu/js/00-suite.js` (lato pagina, caricato per primo) e `menuPonte.js` (lato suite, senza dipendenze
   dal telefono, provato in `test/menuPonte.test.mjs`). La pagina manda messaggi JSON `{ tipo, ... }`; la suite risponde
   eseguendo `window.__suiteRisposta(id, ok, valore)`.

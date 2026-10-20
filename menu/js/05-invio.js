@@ -43,7 +43,7 @@ window.appBack=()=>{
   if($('.busy'))return true;
   if(dlgRes){closeDlg(false);return true}
   if(ui.sheet){ui.sheet=null;renderSheet();return true}
-  if(['edit','preview','tpl','dishes'].includes(ui.view)){$('[data-a=back]')?.click();return true}
+  if(['edit','preview','tpl','dishes','elenchi','elenco'].includes(ui.view)){$('[data-a=back]')?.click();return true}
   if(ui.view==='ostie'&&ui.stampa==='sp'){ui.stampa='ostie';render();return true}
   if(ui.view!=='cal'){ui.view='cal';render();return true}
   return false;

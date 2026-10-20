@@ -225,6 +225,7 @@ function sampleMenu(t){
     kidsSections:KIDS_SECS.map((c,i)=>({name:c,items:state.dishes.filter(d=>d.cat===KIDS_CAT).slice(i,i+1).map(d=>({dishId:d.id,name:d.name}))}))};
 }
 function mountPreviews(){
+  if(ui.view==='elenco'&&window.elMontaAnteprima)elMontaAnteprima();
   if(ui.view==='preview'){const m=getMenu(ui.editId);if(m){mountPreview('pv',m,tplOf(m),ui.pv.mode,ui.pv.lang);mountPreview('pvc',m,tplOf(m),ui.pv.mode,ui.pv.lang,'cover')}}
   if(ui.view==='tpl'){const t=getTpl(ui.tplId);if(t){const sm=sampleMenu(t);mountPreview('tplpv',sm,t,'proposta');mountPreview('tplpvc',sm,t,'proposta','it','cover')}}
 }

@@ -278,6 +278,50 @@ with sync_playwright() as p:
         pg.wait_for_timeout(600)
         ok(bool(json.loads(archivio['state'])['settings'].get('lastBackup')), 'backup segnato come fatto solo dopo la conferma della suite')
 
+    # ---------- elenco portate da inviare (12-elenco.js) ----------
+    pg.evaluate("""()=>{const P=state.dishes.filter(d=>d.cat==='Primi Piatti');P.forEach((d,i)=>{d.price=10+i;d.desc='Descrizione di prova '+i});
+      P[0].alg=[1,7];P[0].algSet=true;delete P[0].rid;ui.sheet=null;renderSheet();ui.view='list';render()}""")
+    pg.click('[data-a=elenchi]'); pg.wait_for_timeout(300)
+    pg.click('[data-a=elNew]'); pg.wait_for_timeout(300)
+    pg.click('.sheet [data-a=elFrom]'); pg.wait_for_timeout(300)
+    el = pg.evaluate("()=>{const e=getEl(ui.elId);return{vista:ui.view,sezioni:e.sections.map(s=>s.name),tutte:allCats()}}")
+    ok(el['vista'] == 'elenco' and el['sezioni'] == el['tutte'], "elenco da zero: tutte le categorie dell'archivio, vuote")
+    i = el['sezioni'].index('Primi Piatti')
+    pg.click(f'[data-a=elPick][data-s="{i}"]'); pg.wait_for_timeout(300)
+    pg.click('[data-a=elPickAll]'); pg.wait_for_timeout(300)
+    pg.click('.sheet [data-a=closeSheet].btn'); pg.wait_for_timeout(300)
+    n_primi = pg.evaluate("state.dishes.filter(d=>d.cat==='Primi Piatti').length")
+    ok(pg.evaluate(f"getEl(ui.elId).sections[{i}].items.length") == n_primi, '"Aggiungi tutte": entrano tutti i primi')
+    pg.click(f'[data-a=elItEdit][data-s="{i}"][data-i="0"]'); pg.wait_for_timeout(300)
+    pg.fill('#elip', '15,50'); pg.click('[data-a=elItSave]'); pg.wait_for_timeout(300)
+    loc = pg.evaluate(f"()=>{{const it=getEl(ui.elId).sections[{i}].items[0];return[it.edited,elVal(it,'price'),elDish(it).price,elVal(it,'desc')]}}")
+    ok(loc[0] == ['price'] and loc[1] == 15.5 and loc[2] == 10 and loc[3] == 'Descrizione di prova 0',
+       "prezzo cambiato nell'elenco: vale solo lì, l'archivio resta com'è")
+    pg.evaluate("()=>{state.dishes.filter(d=>d.cat==='Primi Piatti')[1].price=99;save()}")
+    ok(pg.evaluate(f"elVal(getEl(ui.elId).sections[{i}].items[1],'price')") == 99, "un prezzo aggiornato nell'archivio vale anche negli elenchi già fatti")
+    pg.check('[data-ec=allergens]'); pg.wait_for_timeout(300)
+    pagina = pg.evaluate("elPaginaHTML(elBlocchi(getEl(ui.elId)),false)")
+    ok('€15,50' in pagina and 'Allergeni: 1 Cereali con glutine · 7 Latte/Lattosio' in pagina and 'Antipasti' not in pagina,
+       'pagina: prezzi, legenda degli allergeni, niente sezioni vuote')
+    lungo = pg.evaluate("""async()=>{const e=getEl(ui.elId),s=e.sections.find(x=>x.name==='Primi Piatti');
+      for(let k=0;k<40;k++)s.items.push({dishId:null,name:'Portata lunga di prova '+k,desc:'Descrizione su due righe per riempire la pagina',price:12,edited:[]});
+      const P=elPagine(e),pdf=await elPDF(e),t=new TextDecoder('latin1').decode(await pdf.arrayBuffer()),img=await elImmagine(e);
+      s.items.splice(-40);return{pagine:P.length,nel:(t.match(/\\/Type \\/Page[^s]/g)||[]).length,testa:t.slice(0,5),img:img.size,
+        sezSola:P.some(p=>p.length&&p[p.length-1].k==='sec')}}""")
+    ok(lungo['testa'] == '%PDF-' and lungo['pagine'] >= 2 and lungo['nel'] == lungo['pagine'] and not lungo['sezSola'] and lungo['img'] > 30000,
+       f"elenco lungo: PDF di {lungo['pagine']} pagine A4, mai un titolo di sezione da solo in fondo, immagine creata")
+    pg.click('[data-a=elWa]'); pg.wait_for_selector('#watext', timeout=20000)
+    ok('elenco delle nostre portate' in pg.input_value('#watext') and pg.evaluate("ui.sheet.files[0].name.startsWith('Elenco-portate_')"),
+       "invio dell'elenco: messaggio pronto e file con il nome giusto")
+    pg.evaluate("()=>{ui.sheet=null;renderSheet()}")
+    pg.check('[data-ec=model]'); pg.wait_for_timeout(700)
+    pg.evaluate('window.__suiteSalva()'); pg.wait_for_timeout(300)
+    salvato = json.loads(archivio['state'])
+    ok(len(salvato.get('lists', [])) == 1 and salvato['lists'][0]['model'] is True,
+       'elenco salvato nel database della suite (e nel backup)')
+    avvia()
+    ok(pg.evaluate('state.lists.length') == 1 and pg.evaluate('state.lists[0].model') is True, "dopo il riavvio l'elenco c'è ancora, come modello")
+
     ok(not errori, 'nessun errore JavaScript nella pagina' + (': ' + '; '.join(errori[:3]) if errori else ''))
     b.close()
 

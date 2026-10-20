@@ -35,6 +35,8 @@ function renderSheet(){
     <label class="fld"><span>Nome</span><textarea class="inp" id="dname" rows="3" style="min-height:90px">${esc(d.name)}</textarea></label>
     <label class="fld"><span>Nome in inglese</span><textarea class="inp" id="den" rows="2" style="min-height:70px" placeholder="Per i menù in inglese">${esc(d.en||'')}</textarea></label>
     <p class="hint" style="margin:-6px 2px 12px">Vai a capo per spezzare la riga sul menù, come in Canva.</p>
+    <label class="fld"><span>Breve descrizione</span><textarea class="inp" id="ddesc" rows="2" style="min-height:70px" placeholder="Per l'elenco portate da inviare (facoltativa)">${esc(d.desc||'')}</textarea></label>
+    <label class="fld"><span>Prezzo (€)</span><input class="inp" id="dprice" inputmode="decimal" value="${esc(d.price===undefined||d.price===''?'':String(d.price).replace('.',','))}" placeholder="Per l'elenco portate, es. 12"></label>
     ${RIC()?ricField(sh):''}
     <div id="algman" ${RIC()&&sh.rid?'hidden':''}><label class="fld"><span>Allergeni</span></label>
     ${algChips(sh)}<p class="hint" style="margin:-8px 2px 12px">Se non ne contiene tocca “Nessuno”: così l'app sa che li hai controllati.</p></div>
@@ -58,7 +60,7 @@ function renderSheet(){
     <div class="wa-step"><b>2</b><span>Torna qui e allega ${cosa}${sh.phone?' nella stessa chat':': in WhatsApp scegli la stessa chat'}.</span></div>
     <div class="btns"><button class="btn wa" data-a="waFiles">${I.wa}Allega ${cosa}</button><button class="btn" data-a="waStep1">Riapri il messaggio</button></div>`;
   }else if(sh.type==='wa'){
-    h=head(sh.title)+(sh.menuId?`<div class="seg" style="margin-bottom:8px"><button class="${sh.fmt!=='pdf'?'on':''}" data-a="waFmt" data-v="img">Immagine</button><button class="${sh.fmt==='pdf'?'on':''}" data-a="waFmt" data-v="pdf">PDF</button></div>
+    h=head(sh.title)+(sh.menuId||sh.elId?`<div class="seg" style="margin-bottom:8px"><button class="${sh.fmt!=='pdf'?'on':''}" data-a="waFmt" data-v="img">Immagine</button><button class="${sh.fmt==='pdf'?'on':''}" data-a="waFmt" data-v="pdf">PDF</button></div>
     <p class="hint" style="margin:0 2px 12px">${sh.fmt==='pdf'?'Il PDF è adatto se il cliente deve stamparlo.':'L\'immagine si vede subito in chat, senza doverla aprire.'}</p>`:'')+`<p class="hint" style="margin-bottom:12px;word-break:break-all">${sh.files.map(f=>esc(f.name)).join('<br>')}</p>
     <label class="fld"><span>Numero WhatsApp (facoltativo)</span><input class="inp" type="tel" id="waphone" value="${esc(sh.phone)}" placeholder="Se lo lasci vuoto scegli tu la chat"></label>
     <label class="fld"><span>Messaggio</span><textarea class="inp" id="watext" rows="7" style="min-height:160px">${esc(sh.text)}</textarea></label>
@@ -76,6 +78,7 @@ function renderSheet(){
     h=head(sh.title)+`<p class="hint" style="margin-bottom:14px;word-break:break-all">${esc(sh.name)}</p>
     <div class="btns">${cs?`<button class="btn pri" data-a="shareFile">${I.share}Condividi (WhatsApp, email, stampa…)</button>`:''}${AND&&AND.saveAs?`<div class="btns two"><button class="btn" data-a="saveAs">${I.dl}Salva</button><button class="btn" data-a="downloadFile">${I.eye}Apri</button></div>`:`<button class="btn ${cs?'':'pri'}" data-a="downloadFile">${I.dl}Scarica</button>`}</div>`;
   }
+  else if(String(sh.type).startsWith('el')&&window.elSheetHTML)h=window.elSheetHTML(sh,head); // elenco portate (12-elenco.js)
   el.innerHTML=`<div class="shbg" data-a="closeSheet"></div><div class="sheet" role="dialog" aria-modal="true">${h}</div>`;
   if(sh.type==='dish'&&!sh.id)setTimeout(()=>$('#dname')?.focus(),250);
 }
@@ -83,7 +86,7 @@ function renderSheet(){
 /* ---------- Render ---------- */
 function render(keep){
   const y=window.scrollY;
-  const V={cal:vCal,list:vList,dishes:vDishes,settings:vSettings,edit:vEdit,preview:vPreview,tpl:vTpl,ostie:vOstie,didattica:vDidattica};
+  const V={cal:vCal,list:vList,dishes:vDishes,settings:vSettings,edit:vEdit,preview:vPreview,tpl:vTpl,ostie:vOstie,didattica:vDidattica,elenchi:vElenchi,elenco:vElenco};
   $('#app').innerHTML=(V[ui.view]||vCal)();
   if(window.suiteVista)window.suiteVista(); // dentro la suite: titolo, linguette e barra in basso
   window.scrollTo(0,keep?y:0);

@@ -45,6 +45,7 @@ test('ricerca: senza accenti e maiuscole, anche per sinonimi', () => {
   assert.equal(cercaSezioni('prenotazioni')[0].id, 'sala');
   assert.equal(cercaSezioni('incassi')[0].id, 'incassi');
   assert.ok(ids(cercaSezioni('asl')).includes('registri'));
+  assert.equal(cercaSezioni('listino')[0].id, 'elenco');
 });
 
 test('ricerca: prima chi ha la parola nel titolo; tutte le parole devono esserci', () => {

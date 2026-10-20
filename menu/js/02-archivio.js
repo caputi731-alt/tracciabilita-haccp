@@ -95,7 +95,8 @@ function normalize(s){
     categories:Array.isArray(s.categories)&&s.categories.length?s.categories:d.categories,
     dishes:(Array.isArray(s.dishes)?s.dishes:d.dishes).map(x=>x.en===undefined&&EN_DISHES[enKey(x.name)]?{...x,en:EN_DISHES[enKey(x.name)]}:x),
     templates:Array.isArray(s.templates)&&s.templates.length?s.templates.map(t=>({...SUNDAY,limit:1240,bgColor:'#FFFFFF',ink:'#333333',...t})):d.templates,
-    menus:Array.isArray(s.menus)?s.menus:[]};
+    menus:Array.isArray(s.menus)?s.menus:[],
+    lists:Array.isArray(s.lists)?s.lists:[]}; // elenchi portate da inviare (12-elenco.js)
 }
 
 /* ---------- Stato interfaccia ---------- */

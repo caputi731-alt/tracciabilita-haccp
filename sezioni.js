@@ -58,6 +58,8 @@ export const SEZIONI_SUITE = [
     sezione: 'sale', parole: ['tavoli', 'tavolate', 'prenotazioni', 'family wall', 'camerieri', 'panoramica', 'antica stalla', 'coperti'] },
   { id: 'menu', titolo: 'Menù', desc: 'Calendario, proposte, stampe e invio', icona: 'book-open-page-variant-outline', gruppo: null,
     sezione: 'gestione', parte: 'Menù', parole: ['menu', 'proposta', 'proposte', 'portate', 'calendario', 'whatsapp', 'piatti'] },
+  { id: 'elenco', titolo: 'Elenco portate', desc: 'Menù → Proposte: prezzi e descrizioni da inviare', icona: 'format-list-bulleted',
+    gruppo: null, sezione: 'gestione', parte: 'Menù', parole: ['listino', 'prezzi', 'carta', 'portate', 'primi', 'secondi', 'whatsapp'] },
   { id: 'incassi', titolo: 'Incassi e costi', desc: 'Gestione → Incassi (serve il PIN)', icona: 'cash-register', gruppo: null,
     sezione: 'gestione', parte: 'Incassi', parole: ['soldi', 'cassa', 'costi', 'spese', 'pos', 'contanti', 'risultato', 'iva'] },
 ];
