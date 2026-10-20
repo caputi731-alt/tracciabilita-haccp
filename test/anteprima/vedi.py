@@ -7,7 +7,7 @@ Preparazione (i pacchetti servono solo qui e non vanno salvati in package.json):
 Uso:
     python3 test/anteprima/vedi.py dist-web <cartella immagini> [passo ...]
 Ogni passo è "nome:testo da toccare>altro testo" (vuoto = solo la Home); "=Testo" tocca l'ultimo elemento con quel testo esatto;
-"~testo" scrive quel testo nel campo attivo (per esempio nella ricerca).
+"~testo" scrive quel testo nel campo attivo (per esempio nella ricerca); "@etichetta" tocca l'elemento con quell'etichetta di accessibilità.
 I dati di prova sono in seme.sql (PIN di prova: 123456); con VUOTO=1 il database parte vuoto. La vista 3D delle cucine si vede (pagina vera in un iframe). Limiti: il modulo Menù (WebView), la fotocamera
 e i file del telefono nel browser non ci sono; l'aspetto su Android può differire in piccoli dettagli.
 """
@@ -40,6 +40,10 @@ with sync_playwright() as p:
             nome, azione = passo.split(':', 1)
             pg.goto(U); pg.wait_for_timeout(2600)
             for t in [x for x in azione.split('>') if x]:
+                if t.startswith('@'):
+                    try: pg.get_by_label(t[1:], exact=True).first.click(timeout=4000)
+                    except Exception as e: err.append(f'tocco "{t}": {str(e)[:80]}')
+                    pg.wait_for_timeout(900); continue
                 if t.startswith('~'):
                     pg.keyboard.type(t[1:]); pg.wait_for_timeout(900); continue
                 try: (pg.get_by_text(t[1:], exact=True).last if t.startswith('=') else pg.get_by_text(t, exact=False).first).click(timeout=4000)

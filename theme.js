@@ -45,6 +45,10 @@ const CHIARO = {
   eroeTraccia: '#3D8A66',
   eroePulsante: '#E3F1EA',
   suEroePulsante: '#14513A',
+  // avviso in basso ("Salvato ✓ … Annulla"): superficie scura nel tema chiaro, chiara in quello scuro
+  avviso: '#12161C',
+  suAvviso: '#FFFFFF',
+  avvisoAzione: '#8FD3B0',
 };
 
 // Tema scuro: stesse chiavi del tema chiaro; i colori d'azione diventano chiari e il testo che ci sta sopra scuro.
@@ -82,6 +86,9 @@ const SCURO = {
   eroeTraccia: '#2E5A45',
   eroePulsante: '#7FD1A8',
   suEroePulsante: '#0B2A1C',
+  avviso: '#E8EAED',
+  suAvviso: '#12161C',
+  avvisoAzione: '#14513A',
 };
 
 /** Il tema segue quello del telefono e si decide all'avvio: cambiando tema nelle impostazioni, l'app lo prende alla riapertura. */

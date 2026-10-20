@@ -67,6 +67,12 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
 - Giro di controllo: `GiroScreen.js` (rotta `Giro`, dal pulsante della Home), passi calcolati da `passiGiro` in giro.js: temperature
   mancanti, pulizie da fare, lotti scaduti o in scadenza entro domani. Ogni passo salva con le funzioni di sempre.
 - Pulizie: "da fare" secondo la frequenza dell'area (`areeConStato`, `GIORNI_FREQUENZA`).
+- Pulizie a un tocco (fase 5, 20/10/2026): in `SanificazioneScreen.js` ogni area ha un cerchio; un tocco salva la pulizia con il
+  prodotto previsto dell'area e nessun operatore (scelta di Luca) e mostra "Annulla"; toccando di nuovo il cerchio verde entro
+  10 minuti la si annulla, dopo propone "Registra ancora". Il nome apre la registrazione con prodotto, operatore e note; la matita
+  modifica l'area; "Segna fatte tutte le N da fare" al posto della vecchia selezione multipla. Testi e stato delle righe: `rigaPulizia`
+  e `riepilogoPulizie` in `pulizie.js` (puro, `test/pulizie.test.mjs`). Anteprima: il passo "@etichetta" tocca per etichetta.
+- Avviso in basso (`useAvviso`): colori `avviso` / `suAvviso` / `avvisoAzione` di theme.js (scuro nel tema chiaro, chiaro in quello scuro).
 
 ## Importazione fatture PDF
 - `letturaPdf.js`: estrazione testo da PDF in puro JS (solo `pako`, nessun modulo nativo). Non aggiungere librerie PDF native.

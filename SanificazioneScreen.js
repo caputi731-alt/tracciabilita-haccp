@@ -1,7 +1,14 @@
+/**
+ * Sanificazione (proposta A del 20/10/2026, fase 5: pulizie a un tocco). Ogni area ha un cerchio: un tocco salva la pulizia
+ * con il prodotto previsto dell'area e nessun operatore (scelta di Luca), con "Annulla" per 10 minuti (anche toccando di nuovo
+ * il cerchio verde). Toccando il nome si apre la registrazione con prodotto, operatore e note; la matita modifica l'area.
+ * Testi e stato di ogni riga: pulizie.js.
+ */
 import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Modal, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { S, COLORS, fmtDataOra } from './theme';
+import { S, COLORS, fmtDataOra, oggiLocale } from './theme';
+import { rigaPulizia, riepilogoPulizie } from './pulizie';
 import RiquadroPromemoria from './RiquadroPromemoria';
 import { aggiornaPromemoria } from './notifiche';
 import {
@@ -26,8 +33,7 @@ export default function SanificazioneScreen() {
   const [oggi, setOggi] = useState([]);
   const [recenti, setRecenti] = useState([]);
   const [formArea, setFormArea] = useState(null);
-  const [reg, setReg] = useState(null); // area su cui registrare la pulizia, oppure { multi: true, aree }
-  const [selezione, setSelezione] = useState(null); // null = modalità normale; array di id in selezione multipla
+  const [reg, setReg] = useState(null); // area su cui registrare la pulizia con prodotto, operatore e note
   const [inModifica, setInModifica] = useState(null);
   const { avviso, mostra } = useAvviso();
   const { errori, segnala, azzera, riepilogo } = useErrori();
@@ -63,17 +69,9 @@ export default function SanificazioneScreen() {
     setNote('');
   };
   const salvaReg = async () => {
-    const elenco = reg.multi ? reg.aree : [reg];
-    const ids = [];
-    for (const a of elenco) {
-      ids.push(await registraSanificazione({
-        area_id: a.id,
-        prodotto_utilizzato: reg.multi ? (prodotto || a.prodotto_previsto || '') : prodotto,
-        operatore, note, esito: 'conforme',
-      }));
-    }
+    const elenco = [reg];
+    const ids = [await registraSanificazione({ area_id: reg.id, prodotto_utilizzato: prodotto, operatore, note, esito: 'conforme' })];
     setReg(null);
-    setSelezione(null);
     ricarica();
     aggiornaPromemoria(); // se oggi non resta niente da pulire, il promemoria di oggi non arriva
     mostra(elenco.length > 1 ? `Salvate ${elenco.length} pulizie ✓` : `Salvato ✓ Pulizia: ${elenco[0].nome}`, {
@@ -86,17 +84,38 @@ export default function SanificazioneScreen() {
     });
   };
 
-  const toccaArea = (a) => {
-    if (!selezione) return apriReg(a);
-    setSelezione((sel) => (sel.includes(a.id) ? sel.filter((x) => x !== a.id) : [...sel, a.id]));
+  /* --- un tocco: pulizia fatta, con il prodotto previsto e nessun operatore --- */
+  const segna = async (elenco) => {
+    const ids = [];
+    for (const a of elenco) {
+      ids.push(await registraSanificazione({
+        area_id: a.id, prodotto_utilizzato: a.prodotto_previsto || '', operatore: '', note: '', esito: 'conforme',
+      }));
+    }
+    ricarica();
+    aggiornaPromemoria(); // se oggi non resta niente da pulire, il promemoria di oggi non arriva
+    mostra(elenco.length > 1 ? `${elenco.length} pulizie segnate come fatte` : `${elenco[0].nome} segnata come fatta`, {
+      testo: 'Annulla',
+      onPress: async () => {
+        try {
+          for (const id of ids) await annullaSanificazione(id);
+          mostra(ids.length > 1 ? 'Pulizie annullate' : 'Pulizia annullata');
+        } catch (e) { Alert.alert('Non annullata', String(e?.message || e)); }
+        ricarica(); aggiornaPromemoria();
+      },
+    });
   };
-  const registraSelezione = () => {
-    const scelte = aree.filter((a) => selezione.includes(a.id));
-    if (!scelte.length) return;
-    setReg({ multi: true, aree: scelte, nome: `${scelte.length} aree` });
-    setProdotto('');
-    setOperatore('');
-    setNote('');
+  const annullaFatta = async (a, fatta) => {
+    try {
+      await annullaSanificazione(fatta.id);
+      mostra(`${a.nome}: pulizia annullata`);
+    } catch (e) { Alert.alert('Non annullata', String(e?.message || e)); }
+    ricarica(); aggiornaPromemoria();
+  };
+  const toccaCerchio = (a, fatta, riga) => {
+    if (!fatta) return segna([a]);
+    if (riga.annullabile) return annullaFatta(a, fatta);
+    return mostra(`Già pulita oggi alle ${fmtDataOra(fatta.data_ora).split(' ').pop()}`, { testo: 'Registra ancora', onPress: () => segna([a]) });
   };
 
   const salvaCorrezione = async (cambi) => {
@@ -111,13 +130,17 @@ export default function SanificazioneScreen() {
   };
 
   const fattaOggi = (areaId) => oggi.find((o) => o.area_id === areaId);
+  const giorno = oggiLocale();
+  const righe = aree.map((a) => ({ a, fatta: fattaOggi(a.id) || null }))
+    .map((x) => ({ ...x, riga: rigaPulizia(x.a, x.fatta, giorno) }));
+  const daFare = righe.filter((x) => x.riga.stato === 'fare');
 
   return (
     <View style={S.screen}>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={S.content}>
-        <Text style={S.h1}>Sanificazione</Text>
+        <Text style={S.h1}>Pulizie di oggi</Text>
         <Text style={[S.muted, { marginBottom: 12 }]}>
-          Registra le pulizie delle tue aree. Tocca un'area per segnare la pulizia fatta.
+          {aree.length ? `${riepilogoPulizie(righe.map((x) => x.riga))} · tocca il cerchio quando è fatta` : 'Registra le pulizie delle tue aree.'}
         </Text>
 
         {aree.length === 0 && (
@@ -125,73 +148,52 @@ export default function SanificazioneScreen() {
             testo="Aggiungi le aree della cucina (piani di lavoro, frigoriferi, pavimenti…) col pulsante in basso." />
         )}
 
-        {aree.length > 1 && (
-          selezione ? (
-            <View style={[S.card, { backgroundColor: COLORS.azioneSoft || COLORS.primarySoft }]}>
-              <Text style={{ fontWeight: '800', fontSize: 16, color: COLORS.text }}>
-                Tocca le aree pulite ({selezione.length} scelte)
-              </Text>
-              <View style={[S.chipWrap, { marginTop: 8 }]}>
-                <TouchableOpacity style={S.chip}
-                  onPress={() => setSelezione(aree.filter((a) => a.daFare).map((a) => a.id))}>
-                  <Text style={S.chipText}>Tutte quelle da fare</Text>
-                </TouchableOpacity>
-              </View>
-              <Bottone testo={`Registra ${selezione.length} pulizie`} icona="check-all" onPress={registraSelezione} />
-              <Bottone testo="Annulla selezione" ghost onPress={() => setSelezione(null)} />
-            </View>
-          ) : (
-            <Bottone testo="Registra più aree insieme" icona="checkbox-multiple-marked-outline" ghost
-              onPress={() => setSelezione([])} />
-          )
-        )}
-
-        {aree.map((a) => {
-          const fatta = fattaOggi(a.id);
-          const quando = a.giorniFa === null ? 'mai registrata' : a.giorniFa === 0 ? 'oggi' : a.giorniFa === 1 ? 'ieri' : `${a.giorniFa} giorni fa`;
-          return (
-            <TouchableOpacity key={a.id} style={[S.card, !a.daFare && {
-              borderWidth: 1.5, borderColor: COLORS.ok,
-            }, selezione && selezione.includes(a.id) && {
-              borderWidth: 2, borderColor: COLORS.azione,
-            }]} onPress={() => toccaArea(a)} onLongPress={() => !selezione && setFormArea({ ...a })}
-              accessibilityRole="button"
-              accessibilityLabel={`${a.nome}, ${a.daFare ? 'da fare' : 'a posto'}. Tocca per registrare la pulizia`}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                {!!selezione && (
-                  <Icona nome={selezione.includes(a.id) ? 'checkbox-marked' : 'checkbox-blank-outline'}
-                    colore={COLORS.azione} size={26} style={{ marginRight: 10 }} />
-                )}
-                <Text style={{ fontSize: 16, fontWeight: '700', flex: 1, color: COLORS.text }}>{a.nome}</Text>
-                {!selezione && (
+        {aree.length > 0 && (
+          <View style={[S.card, { padding: 0, overflow: 'hidden' }]}>
+            {righe.map(({ a, fatta, riga }, n) => {
+              const fatto = riga.stato === 'fatta';
+              const fare = riga.stato === 'fare';
+              return (
+                <View key={a.id} style={{
+                  flexDirection: 'row', alignItems: 'center', gap: 12, paddingLeft: 12, paddingRight: 4, paddingVertical: 10, minHeight: 72,
+                  borderTopWidth: n ? 1 : 0, borderTopColor: COLORS.border, backgroundColor: fare ? COLORS.warningSoft : COLORS.card,
+                }}>
+                  <TouchableOpacity onPress={() => toccaCerchio(a, fatta, riga)} activeOpacity={0.7}
+                    accessibilityRole="checkbox" accessibilityState={{ checked: fatto }}
+                    accessibilityLabel={fatto ? `${a.nome}: fatta${riga.annullabile ? '. Tocca per annullare' : ''}` : `Segna fatta: ${a.nome}`}
+                    style={{ width: 52, height: 52, alignItems: 'center', justifyContent: 'center' }}>
+                    <View style={{
+                      width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center',
+                      backgroundColor: fatto ? COLORS.azione : COLORS.card,
+                      borderWidth: fatto ? 0 : 2, borderStyle: fare || fatto ? 'solid' : 'dashed',
+                      borderColor: fare ? COLORS.terra : COLORS.bordoCampo,
+                    }}>
+                      {fatto && <Icona nome="check-bold" size={22} colore={COLORS.suAzione} />}
+                    </View>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => apriReg(a)} activeOpacity={0.7} style={{ flex: 1, minHeight: 48, justifyContent: 'center' }}
+                    accessibilityRole="button" accessibilityLabel={`${a.nome}. ${riga.testo}. Tocca per aggiungere prodotto, operatore o note`}>
+                    <Text style={{ fontSize: 16, fontWeight: '600', color: riga.stato === 'aposto' ? COLORS.muted : COLORS.text }}>{a.nome}</Text>
+                    <Text style={{ fontSize: 13, fontWeight: fare ? '600' : '400', color: fare ? COLORS.warning : COLORS.muted }}>{riga.testo}</Text>
+                  </TouchableOpacity>
                   <TouchableOpacity onPress={() => setFormArea({ ...a })} accessibilityRole="button"
                     accessibilityLabel={`Modifica l'area ${a.nome}`}
-                    style={{ minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center', marginRight: -8, marginTop: -8 }}>
-                    <Icona nome="pencil-outline" colore={COLORS.azione} />
+                    style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
+                    <Icona nome="pencil-outline" colore={COLORS.muted} size={20} />
                   </TouchableOpacity>
-                )}
-              </View>
-              <Text style={S.muted}>Frequenza: {a.frequenza}{a.prodotto_previsto ? ` · ${a.prodotto_previsto}` : ''}</Text>
-              {fatta ? (
-                <Text style={{ color: COLORS.ok, fontWeight: '600', marginTop: 4 }}>
-                  Pulita oggi alle {fmtDataOra(fatta.data_ora).split(' ').pop()}
-                </Text>
-              ) : a.daFare ? (
-                <Text style={{ color: COLORS.warning, fontWeight: '700', marginTop: 4 }}>
-                  Da fare (ultima: {quando}) — tocca per registrare
-                </Text>
-              ) : (
-                <Text style={{ color: COLORS.ok, fontWeight: '600', marginTop: 4 }}>
-                  A posto: ultima pulizia {quando}, prossima fra {Math.max(1, a.intervallo - a.giorniFa)} {a.intervallo - a.giorniFa === 1 ? 'giorno' : 'giorni'}
-                </Text>
-              )}
-            </TouchableOpacity>
-          );
-        })}
+                </View>
+              );
+            })}
+          </View>
+        )}
+
+        {daFare.length > 1 && (
+          <Bottone testo={`Segna fatte tutte le ${daFare.length} da fare`} icona="check-all" ghost onPress={() => segna(daFare.map((x) => x.a))} />
+        )}
 
         {aree.length > 0 && (
-          <Text style={[S.muted, { textAlign: 'center', marginTop: 4 }]}>
-            Tocca un'area per registrare la pulizia · tocca un'ultima registrazione per correggerla
+          <Text style={[S.muted, { fontSize: 13, textAlign: 'center', marginTop: 10 }]}>
+            Tocca il nome per aggiungere prodotto, operatore o note · tocca un'ultima registrazione per correggerla
           </Text>
         )}
 
@@ -258,12 +260,9 @@ export default function SanificazioneScreen() {
         {reg && (
           <VistaModale>
             <Text style={S.h1}>Registra pulizia</Text>
-            <Text style={[S.muted, { marginBottom: 12 }]}>
-              {reg.multi ? reg.aree.map((a) => a.nome).join(', ') : reg.nome}
-            </Text>
+            <Text style={[S.muted, { marginBottom: 12 }]}>{reg.nome}</Text>
             <View style={S.card}>
-              <Campo label="Prodotto utilizzato" value={prodotto} onChange={setProdotto}
-                placeholder={reg.multi ? 'se vuoto: quello previsto per ogni area' : undefined} />
+              <Campo label="Prodotto utilizzato" value={prodotto} onChange={setProdotto} />
               <Campo label="Operatore" value={operatore} onChange={setOperatore} />
               <Campo label="Note" value={note} onChange={setNote} multiline />
               <Bottone testo="Conferma pulizia" onPress={salvaReg} />
