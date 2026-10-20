@@ -157,7 +157,7 @@ export default function PrincipaleScreen({ navigation, route }) {
           </Riparo>
         )}
         {sezione === 'gestione' && parte === GESTIONE[1] && <IncassiScreen navigation={naviga} route={route} />}
-        {sezione === 'altro' && <AltroScreen navigation={naviga} route={route} />}
+        {sezione === 'altro' && <AltroScreen navigation={naviga} route={route} suSezione={vai} />}
       </View>
 
       {barra && (

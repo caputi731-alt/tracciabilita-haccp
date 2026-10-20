@@ -112,6 +112,11 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
   La barra (e le linguette di Gestione) si nascondono con la tastiera aperta e nelle schermate interne del Menù. Non esistono le
   rotte `Menu` e `SezioneMagazzino`: le sezioni ricevono una `navigation` in cui `navigate('Menu')` porta a Gestione → Menù e
   `navigate('SezioneMagazzino')` apre la schermata `Magazzino`.
+- Altro (scelta di Luca del 20/10/2026, "trovare subito le sezioni"): elenco di tutte le sezioni in `sezioni.js` (puro,
+  `test/sezioni.test.mjs`), con id fissi (chiave dei preferiti: non cambiarli). In cima la ricerca (`cercaSezioni`: senza accenti,
+  anche per sinonimi in `parole`) e le "Preferite" scelte con la stellina (preferenza locale `sezioni_preferite`, non va nel backup).
+  Le voci con `sezione` (Cucina, Sala, Menù, Incassi) si aprono con `suSezione` = `vai` di PrincipaleScreen. Una schermata nuova
+  va aggiunta anche in `SEZIONI_SUITE`, o non si troverà con la ricerca.
 - `HomeScreen.js`: riquadro dei controlli di oggi (anello disegnato con due mezzi cerchi, senza librerie grafiche),
   stato di temperature/pulizie/scadenze, cose da sistemare, prossimo menù (`prossimoMenu` in menuPonte.js) e pulsante "Registra".
 - Carattere Manrope: `caratteri.js` aggancia `Text` e `TextInput` e sceglie il file in base a `fontWeight` (500/700/800).
