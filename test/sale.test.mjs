@@ -269,3 +269,28 @@ test('database: disposizione di un giorno e di un servizio, modelli con un nome'
   await importaTutto(vecchio);
   assert.equal((await modelliSale()).length, 1);
 });
+
+test('Fase 4: bambini, neonati e telefono sono campi della tavolata (le note vecchie si convertono)', async () => {
+  const { conCampi, linkTelefono, bambiniScritti, pianoPulito, SALE, nuovaTavolata } = await import('../sale.js');
+  const vecchia = nuovaTavolata({ nome: 'Marini', persone: '6', note: '5 adulti, 1 bambino (8 anni) · Acconto ricevuto · Tel 347 000 1112 · torta' });
+  const c = conCampi(vecchia);
+  assert.deepEqual([c.bambini, c.neonati, c.tel, c.note], ['1', '', '347 000 1112', 'bambini di 8 anni · Acconto ricevuto · torta']);
+  assert.deepEqual([conCampi(nuovaTavolata({ note: '9 adulti, 2 bambini, 1 neonato' }))].map((t) => [t.bambini, t.neonati, t.note]), [['2', '1', '']]);
+  // senza niente da ricavare, o con i campi già scritti, resta com'è
+  const solo = nuovaTavolata({ note: 'Seggiolone' });
+  assert.equal(conCampi(solo), solo);
+  const nuova = nuovaTavolata({ bambini: '2', note: 'Tel 333 1234567' });
+  assert.equal(conCampi(nuova), nuova);
+  assert.equal(conCampi(nuovaTavolata({ note: 'da 13 a 16 persone' })).note, 'da 13 a 16 persone');
+  // il piano salvato tiene i campi nuovi
+  const p = pianoPulito(SALE.stalla, { file: [[{ id: 'a', nome: 'X', persone: '5', bambini: '2', neonati: 'x', tel: '333' }]] });
+  assert.deepEqual([p.file[0][0].bambini, p.file[0][0].neonati, p.file[0][0].tel], ['2', '', '333']);
+  assert.equal(bambiniScritti({ bambini: '2', neonati: '1' }), '2 bambini, 1 neonato');
+  assert.equal(bambiniScritti({ bambini: '1' }), '1 bambino');
+  assert.equal(bambiniScritti({}), '');
+  assert.deepEqual(linkTelefono('347 000 1112'), { chiama: 'tel:3470001112', whatsapp: 'https://wa.me/393470001112' });
+  assert.deepEqual(linkTelefono('+41 79 123 45 67'), { chiama: 'tel:+41791234567', whatsapp: 'https://wa.me/41791234567' });
+  assert.deepEqual(linkTelefono('0041 79 123 45 67'), { chiama: 'tel:+41791234567', whatsapp: 'https://wa.me/41791234567' });
+  assert.equal(linkTelefono('12'), null);
+  assert.equal(linkTelefono(''), null);
+});

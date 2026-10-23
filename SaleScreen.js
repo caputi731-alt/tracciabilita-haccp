@@ -13,7 +13,7 @@
  * La Sala si apre sempre su Pranzo (il ristorante lavora a pranzo; la cena si sceglie a mano).
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Modal, BackHandler, useWindowDimensions } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Modal, BackHandler, Linking, useWindowDimensions } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, TEMA_SCURO, aNumero, oggiLocale, fmtData } from './theme';
 import { Icona, Bottone, Campo, CampoData, Segmenti, Sezione, VistaModale, conferma, useAvviso, useErrori } from './UI';
@@ -24,6 +24,7 @@ import {
 import {
   SALE, ID_SALE, SERVIZI, LUNGA_MIN, LUNGA_MAX, posti, lunghezza, lunghezzaPer, restoFila, entra, pianoVuoto, sistemaPiano, senzaPrenotazioni,
   nuovaTavolata, disponi, sigle, totali, datiScenaSala, datiScenaSale, metri, metti, togli, trova, filaVicina, postoMigliore,
+  conCampi, linkTelefono, bambiniScritti,
 } from './sale';
 import { htmlDisposizioneSale } from './report';
 import { condividiPdf } from './condividi';
@@ -74,10 +75,16 @@ function moduloSala() {
 
 /** Una prenotazione e la sua tavolata: dalle persone la lunghezza, che si può correggere a mano. */
 function SchedaTavolata({ sala, piano, fila, tavolata, sigla, nuova, massimaNuova = 0, destinazioni = [], onSalva, onSposta, onElimina, onDisdici, onChiudi }) {
-  const [t, setT] = useState(tavolata);
+  // le prenotazioni salvate prima avevano bambini, neonati e telefono nelle note: qui diventano campi
+  const [t, setT] = useState(() => conCampi(tavolata));
   const { errori, segnala, azzera, riepilogo } = useErrori();
-  useEffect(() => { setT(tavolata); azzera(); }, [tavolata.id, azzera])
+  useEffect(() => { setT(conCampi(tavolata)); azzera(); }, [tavolata.id, azzera])
   const persone = aNumero(t.persone);
+  const quanti = (x) => (String(x || '').trim() ? aNumero(x) : 0);
+  const bambini = quanti(t.bambini), neonati = quanti(t.neonati);
+  const adulti = persone !== null && bambini !== null && neonati !== null ? persone - bambini - neonati : null;
+  const link = linkTelefono(t.tel);
+  const apri = (url) => Linking.openURL(url).catch(() => {});
   const prenotataPrima = !nuova && !!(String(tavolata.nome || '').trim() || aNumero(tavolata.persone));
   const len = lunghezza(t);
   const p = posti(len);
@@ -96,8 +103,15 @@ function SchedaTavolata({ sala, piano, fila, tavolata, sigla, nuova, massimaNuov
   const salva = () => {
     azzera();
     if (String(t.persone).trim() && (persone === null || persone < 0 || !Number.isInteger(persone))) return segnala('persone', 'Scrivi il numero di persone, per esempio 8');
+    for (const [campo, x] of [['bambini', bambini], ['neonati', neonati]]) {
+      if (x === null || x < 0 || !Number.isInteger(x)) return segnala(campo, 'Scrivi un numero intero');
+    }
+    if (bambini + neonati > (persone || 0)) return segnala('bambini', `Bambini e neonati sono più delle persone (${persone || 0}): correggi il totale`);
     if (nonEntra) return segnala('len', massima > 0 ? `${nuova ? 'Adesso' : 'In questa fila'} entra al massimo una tavolata di ${metri(massima)}` : 'Non c\'è più posto');
-    return onSalva({ ...t, nome: t.nome.trim(), persone: persone ? String(persone) : '', ora: t.ora.trim(), note: t.note.trim() });
+    return onSalva({
+      ...t, nome: t.nome.trim(), persone: persone ? String(persone) : '', bambini: bambini ? String(bambini) : '', neonati: neonati ? String(neonati) : '',
+      tel: String(t.tel || '').trim(), ora: t.ora.trim(), note: t.note.trim(),
+    });
   };
 
   return (
@@ -122,6 +136,26 @@ function SchedaTavolata({ sala, piano, fila, tavolata, sigla, nuova, massimaNuov
               <Campo label="Ora" value={t.ora} onChange={(v) => setT((x) => ({ ...x, ora: v }))} placeholder="13:00" keyboardType="numbers-and-punctuation" />
             </View>
           </View>
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <View style={{ flex: 1 }}>
+              <Campo label="Di cui bambini" value={t.bambini} errore={errori.bambini} keyboardType="number-pad" placeholder="0"
+                onChange={(v) => setT((x) => ({ ...x, bambini: v }))} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Campo label="Di cui neonati" value={t.neonati} errore={errori.neonati} keyboardType="number-pad" placeholder="0"
+                onChange={(v) => setT((x) => ({ ...x, neonati: v }))} />
+            </View>
+          </View>
+          {!!persone && (bambini > 0 || neonati > 0) && adulti !== null && adulti >= 0 && (
+            <Text style={[S.muted, { marginTop: 4, marginBottom: 6, marginLeft: 4 }]}>Adulti: {adulti}</Text>
+          )}
+          <Campo label="Telefono" value={t.tel} onChange={(v) => setT((x) => ({ ...x, tel: v }))} placeholder="Per esempio: 333 1234567" keyboardType="phone-pad" />
+          {!!link && (
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 6 }}>
+              <View style={{ flex: 1 }}><Bottone testo="Chiama" icona="phone" ghost onPress={() => apri(link.chiama)} /></View>
+              <View style={{ flex: 1 }}><Bottone testo="WhatsApp" icona="whatsapp" ghost onPress={() => apri(link.whatsapp)} /></View>
+            </View>
+          )}
           <Campo label="Note" value={t.note} onChange={(v) => setT((x) => ({ ...x, note: v }))} placeholder="Seggiolone, intolleranze, torta…" />
         </View>
 
@@ -425,7 +459,7 @@ export default function SaleScreen({ suTuttoSchermo, apri, suAperta }) {
             {t.nome || 'Senza nome'} · {persone || '?'} pers.
           </Text>
           <Text numberOfLines={1} style={{ fontSize: 13, color: colore }}>
-            {[sig, t.ora, SALE[idS].file[f] ? SALE[idS].file[f].nome : null, troppi ? `${nPosti} posti: tavolata corta` : metri(len)].filter(Boolean).join(' · ')}
+            {[sig, t.ora, bambiniScritti(t), SALE[idS].file[f] ? SALE[idS].file[f].nome : null, troppi ? `${nPosti} posti: tavolata corta` : metri(len)].filter(Boolean).join(' · ')}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={() => disdici(t.id)} accessibilityRole="button" accessibilityLabel={`Disdici ${t.nome || `il tavolo ${sig}`}`}

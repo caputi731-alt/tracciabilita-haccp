@@ -111,10 +111,56 @@ export function lunghezza(t) {
 
 let contatore = 0;
 /** Nuova tavolata; l'id serve solo a riconoscerla sullo schermo. `len` null = calcolata dalle persone;
- *  `p` = dove comincia lungo la sua fila (metri, null finché non ha un posto). */
+ *  `p` = dove comincia lungo la sua fila (metri, null finché non ha un posto).
+ *  `persone` è il totale; `bambini` e `neonati` (Fase 4 del controllo UX, 24/10/2026) dicono quanti di loro lo sono, gli adulti
+ *  sono il resto; `tel` è il telefono di chi ha prenotato. Tutti testo, '' se non si sa. */
 export const nuovaTavolata = (dati = {}) => ({
-  id: `t${Date.now().toString(36)}${(contatore++).toString(36)}`, nome: '', persone: '', ora: '', note: '', len: null, p: null, ...dati,
+  id: `t${Date.now().toString(36)}${(contatore++).toString(36)}`, nome: '', persone: '', bambini: '', neonati: '', tel: '', ora: '', note: '',
+  len: null, p: null, ...dati,
 });
+
+const numeroTesto = (n) => (intero(n) ? String(intero(n)) : '');
+
+/**
+ * Le prenotazioni salvate prima della Fase 4 avevano composizione e telefono dentro le note ("5 adulti, 1 bambino (8 anni) ·
+ * Acconto ricevuto · Tel 3470001112 · torta"): se i campi sono vuoti li ricava da lì e li toglie dalle note (l'età dei bambini resta).
+ * Le tavolate che hanno già i campi restano come sono.
+ */
+export function conCampi(t) {
+  if (!t || t.bambini || t.neonati || t.tel) return t;
+  let bambini = '', neonati = '', tel = '';
+  const resto = [];
+  for (const parte of String(t.note || '').split(' · ')) {
+    const p = parte.trim();
+    const comp = /^\d+ adult[oi](?:, (\d+) bambin[oi](?: \(([^)]*)\))?)?(?:, (\d+) neonat[oi])?$/.exec(p);
+    const tl = /^Tel\.? ?([+\d][\d ./-]{4,})$/i.exec(p);
+    if (comp && (comp[1] || comp[3])) {
+      bambini = numeroTesto(comp[1]); neonati = numeroTesto(comp[3]);
+      if (comp[2]) resto.push(`bambini di ${comp[2]}`);
+    } else if (tl && !tel) {
+      tel = tl[1].trim();
+    } else if (p) {
+      resto.push(p);
+    }
+  }
+  if (!bambini && !neonati && !tel) return t;
+  return { ...t, bambini, neonati, tel, note: resto.join(' · ') };
+}
+
+/** Indirizzi per chiamare e per aprire WhatsApp dal telefono scritto (numeri italiani senza prefisso: +39). → null se non è un numero. */
+export function linkTelefono(tel) {
+  const cifre = String(tel || '').replace(/[^\d+]/g, '').replace(/(?!^)\+/g, '');
+  const solo = cifre.replace(/^\+/, '').replace(/^00/, '');
+  if (solo.length < 6) return null;
+  const internazionale = cifre.startsWith('+') || cifre.startsWith('00') ? solo : `39${solo}`;
+  return { chiama: `tel:${cifre.startsWith('00') ? `+${solo}` : cifre}`, whatsapp: `https://wa.me/${internazionale}` };
+}
+
+/** "2 bambini, 1 neonato" della tavolata ('' se non ci sono). */
+export function bambiniScritti(t) {
+  const b = intero(t && t.bambini), n = intero(t && t.neonati);
+  return [b ? `${b} ${b === 1 ? 'bambino' : 'bambini'}` : '', n ? `${n} ${n === 1 ? 'neonato' : 'neonati'}` : ''].filter(Boolean).join(', ');
+}
 
 export const pianoVuoto = (sala) => ({ file: sala.file.map(() => []) });
 
@@ -129,6 +175,7 @@ export function pianoPulito(sala, p) {
     const len = Number(t.len) > 0 ? decimo(Number(t.len)) : vecchia > 0 ? decimo(vecchia) : null;
     return {
       id: String(t.id || nuovaTavolata().id), nome: String(t.nome || ''), persone: intero(t.persone) ? String(intero(t.persone)) : '',
+      bambini: numeroTesto(t.bambini), neonati: numeroTesto(t.neonati), tel: String(t.tel || ''),
       ora: String(t.ora || ''), note: String(t.note || ''), len, p: Number.isFinite(Number(t.p)) && t.p !== null && t.p !== '' ? decimo(Number(t.p)) : null,
     };
   }));

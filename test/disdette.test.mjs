@@ -173,3 +173,17 @@ test('calendario del Menù: le prenotazioni portano id e uid, e "Disdici" con qu
   assert.equal((await db.prenotazioniPerCalendario(giorno(8), giorno(8))).length, 0);
   assert.equal((await db.disdetteDelGiorno(giorno(8), 'Pranzo')).length, 2);
 });
+
+test('Fase 4: la conferma da Family Wall mette bambini, neonati e telefono nei campi; calendario e stima li usano', async () => {
+  await db.initDatabase();
+  const t = nuovaTavolata({ nome: 'Gialli', persone: '12', bambini: '2', neonati: '1', tel: '3470009991', note: 'Acconto ricevuto' });
+  await db.salvaLinkFamilyWall('https://api.familywall.com/ical/prova');
+  await aggiornaDaFamilyWall({ fetchFn: calendario([['UID:f4', dtstart(9), 'SUMMARY:Gialli 9+2+1 A.S. 3470009991']]) });
+  await db.confermaPrenotazioneEsterna('f4', { data: giorno(9), servizio: 'Pranzo', sala: 'stalla', tavolata: t });
+  const q = trova(SALE.stalla, (await db.disposizioneGiorno(giorno(9), 'Pranzo')).stalla, t.id);
+  assert.deepEqual([q.t.bambini, q.t.neonati, q.t.tel, q.t.note], ['2', '1', '3470009991', 'Acconto ricevuto']);
+  const [p] = await db.prenotazioniPerCalendario(giorno(9), giorno(9));
+  assert.deepEqual([p.persone, p.bambini, p.neonati], [12, 2, 1]);
+  const { composizione } = await import('../stima.js');
+  assert.deepEqual(composizione(p), { adulti: 9, bambini: 2, neonati: 1, persone: 12 });
+});

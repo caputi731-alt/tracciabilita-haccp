@@ -1,6 +1,6 @@
 import * as Print from 'expo-print';
 import { fmtData, fmtDataOra, ALLERGENI } from './theme';
-import { disponi, LARGO as LARGO_TAVOLO } from './sale';
+import { disponi, bambiniScritti, LARGO as LARGO_TAVOLO } from './sale';
 
 const esc = (v) => {
   if (v === null || v === undefined) return '';
@@ -254,7 +254,7 @@ export function htmlDisposizioneSale({ data, servizio, sale = [] }, imp = {}) {
     }).join('');
     const tot = d.tavolate.reduce((s, t) => ({ posti: s.posti + t.posti, persone: s.persone + t.numeroPersone, metri: s.metri + t.len }), { posti: 0, persone: 0, metri: 0 });
     const righe = d.tavolate.map((t) => `<tr><td><b>${esc(t.sigla)}</b></td><td>${esc(sala.file[t.fila].nome)}</td><td>${m(t.len)}</td>
-      <td>${t.posti}</td><td>${esc(t.nome)}</td><td${t.troppi ? ' class="nc"' : ''}>${t.numeroPersone || ''}</td><td>${esc(t.ora)}</td><td>${esc(t.note)}</td></tr>`).join('');
+      <td>${t.posti}</td><td>${esc(t.nome)}</td><td${t.troppi ? ' class="nc"' : ''}>${t.numeroPersone || ''}</td><td>${esc(t.ora)}</td><td>${esc([bambiniScritti(t), t.note].filter(Boolean).join(' · '))}</td></tr>`).join('');
     return `<div class="sala"><h2>${esc(sala.nome)}</h2>
       <div class="kv">${d.tavolate.length} tavolate · ${tot.persone} persone · ${tot.posti} posti · ${m(tot.metri)} di tavoli da preparare</div>
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="-8 -8 ${w * PX + 16} ${h * PX + 16}" style="width:${Math.min(100, Math.round(w / 16 * 100))}%;max-height:${w > h ? 95 : 120}mm;display:block;margin:6px auto 8px">

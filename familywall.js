@@ -437,7 +437,7 @@ export function prenotazioniCalendario(giorni = [], esterne = []) {
         for (const t of fila || []) {
           const persone = Math.max(0, parseInt(t && t.persone, 10) || 0);
           if (!t || (!String(t.nome || '').trim() && !persone)) continue;
-          out.push({ data: g.data, servizio: g.servizio, nome: String(t.nome || '').trim(), persone, min: persone, max: persone, sala: NOME_SALA(id), daConfermare: false, note: String(t.note || ''), id: String(t.id || '') });
+          out.push({ data: g.data, servizio: g.servizio, nome: String(t.nome || '').trim(), persone, min: persone, max: persone, sala: NOME_SALA(id), daConfermare: false, note: String(t.note || ''), bambini: parseInt(t.bambini, 10) || 0, neonati: parseInt(t.neonati, 10) || 0, id: String(t.id || '') });
         }
       }
     }

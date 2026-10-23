@@ -85,12 +85,17 @@ export function SchedaConferma({ riga, salaVista, onConfermata, onDisdici, onChi
     if (!ok) return;
     // l'intervallo "da 13 a 16" resta nelle note finché il numero è quello letto
     const restaIntervallo = intervallo && adulti === s.max && !bambini && !neonati;
+    // bambini, neonati e telefono vanno nei campi della tavolata (Fase 4); nelle note restano intervallo, età, acconto e il resto
+    const eta = bambini && s.eta && s.eta.length ? `bambini di ${s.eta.join(', ')}` : '';
     const tavolata = nuovaTavolata({
       nome: v.nome.trim(),
       persone: String(adulti + bambini + neonati),
+      bambini: bambini ? String(bambini) : '',
+      neonati: neonati ? String(neonati) : '',
+      tel: v.telefono.trim(),
       note: noteTavolata({
-        adulti, bambini, neonati, min: restaIntervallo ? s.min : null, max: restaIntervallo ? s.max : null,
-        eta: s.eta, telefono: v.telefono.trim(), acconto: v.acconto, note: v.note.trim(),
+        adulti, min: restaIntervallo ? s.min : null, max: restaIntervallo ? s.max : null,
+        acconto: v.acconto, note: [eta, v.note.trim()].filter(Boolean).join(' · '),
       }),
     });
     const esito = await confermaPrenotazioneEsterna(riga.uid, { data: riga.data, servizio: v.servizio, sala: v.sala, tavolata });

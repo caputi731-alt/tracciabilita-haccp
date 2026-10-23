@@ -322,6 +322,16 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
   restano solo le linguette in alto; "Oggi" è l'icona del calendario accanto al mese. Le caselle del calendario non escono dallo schermo
   con caratteri grandi (`.grid>*{min-width:0}`). Provato in `test/menu-suite.py`.
 
+## Bambini, neonati e telefono come campi (Fase 4 del controllo UX, 24/10/2026)
+- La tavolata ha `bambini`, `neonati` e `tel` (testo, '' se non si sa; `pianoPulito` li tiene). `persone` resta il totale, gli adulti sono
+  il resto. Scheda del tavolo: "Di cui bambini" / "Di cui neonati" (con "Adulti: N"), "Telefono" con "Chiama" e "WhatsApp"
+  (`linkTelefono`: numeri senza prefisso = Italia, +39).
+- Prenotazioni salvate prima: composizione e "Tel …" erano nelle note; `conCampi` (sale.js) li ricava quando si apre la scheda e al
+  salvataggio passano nei campi (l'età dei bambini resta nelle note come "bambini di 8 anni").
+- Conferma da Family Wall: bambini, neonati e telefono vanno nei campi; nelle note restano intervallo, età, acconto e il resto.
+- `prenotazioniCalendario` passa `bambini`/`neonati` delle tavolate: la stima (`composizione`) usa i campi, le note solo come ripiego.
+  PDF per i camerieri ed elenco della Sala mostrano "2 bambini, 1 neonato". Test in `test/sale.test.mjs` e `test/disdette.test.mjs`.
+
 ## Incassi e costi (Gestione → Incassi, scelte di Luca del 9/10/2026)
 - `conti.js` (puro, `test/conti.test.mjs`) + `IncassiScreen.js`. Incassi: una riga per giorno (tabella `incassi`), divisa per metodo
   (contanti, POS, altro), senza distinguere pranzo e cena, IVA INCLUSA; il netto si ricava togliendo l'IVA al 10% (`IVA_RISTORAZIONE`).
