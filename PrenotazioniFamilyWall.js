@@ -287,7 +287,7 @@ export function ModaleFamilyWall({ visibile, onChiudi, onAggiornato }) {
  * riscarica il calendario. `suMessa({ data, servizio, sala, nome })` dopo una conferma;
  * `suCambiato()` quando una tavolata è stata tolta (la Sala rilegge la disposizione).
  */
-export default function RiquadroFamilyWall({ data, servizio, salaVista, versione, suMessa, suCambiato, mostra }) {
+export default function RiquadroFamilyWall({ data, servizio, salaVista, versione, suMessa, suCambiato, mostra, suConteggio }) {
   const [righe, setRighe] = useState([]);
   const [stato, setStato] = useState(null);
   const [aperta, setAperta] = useState(null); // uid della scheda aperta
@@ -317,6 +317,12 @@ export default function RiquadroFamilyWall({ data, servizio, salaVista, versione
   const altriEventi = delGiorno.filter((r) => !r.scheda.prenotazione);
   const segnalate = righe.filter((r) => r.stato === 'confermata' && (r.cambiata || r.sparita));
   const rigaAperta = aperta && righe.find((r) => r.uid === aperta);
+  // quante prenotazioni da confermare e quante persone per questo servizio: la Sala le somma al totale del giorno (vista Elenco)
+  const delServizio = prenotazioni.filter((r) => r.scheda.servizio === servizio);
+  const personeDaConfermare = delServizio.reduce((n, r) => n + (aNumero(r.scheda.persone) || 0), 0);
+  useEffect(() => {
+    if (suConteggio) suConteggio({ prenotazioni: delServizio.length, persone: personeDaConfermare });
+  }, [suConteggio, delServizio.length, personeDaConfermare]);
 
   if (!stato) return null;
 
@@ -372,7 +378,8 @@ export default function RiquadroFamilyWall({ data, servizio, salaVista, versione
           style={{ flex: 1, flexDirection: 'row', alignItems: 'center', minHeight: 48 }}>
         <Icona nome="calendar-import" colore={COLORS.azione} style={{ marginRight: 8 }} />
         <View style={{ flex: 1 }}>
-          <Text style={[S.h2, { marginBottom: 0 }]}>Da Family Wall{chiuso && daFare ? ` · ${daFare} da confermare` : ''}</Text>
+          <Text style={[S.h2, { marginBottom: 0 }]}>Da Family Wall{chiuso && daFare ? ` · ${[prenotazioni.length ? `${prenotazioni.length} da confermare` : null,
+            segnalate.length ? plurale(segnalate.length, 'cambiata', 'cambiate') : null].filter(Boolean).join(', ')}` : ''}</Text>
           <Text style={{ fontSize: 13, color: stato.errore ? COLORS.warning : COLORS.muted }} numberOfLines={2}>
             {stato.errore ? stato.errore
               : stato.ultimo ? `Aggiornato ${stato.ultimo.slice(0, 10) === oggiLocale() ? 'oggi' : fmtData(stato.ultimo)} alle ${oraDi(stato.ultimo)}`
@@ -418,7 +425,7 @@ export default function RiquadroFamilyWall({ data, servizio, salaVista, versione
         const dubbi = s.incerti.length > 0 || !s.sala;
         return (
           <View key={r.uid} style={{ flexDirection: 'row', alignItems: 'center', minHeight: 64, borderRadius: 16, borderWidth: 1.5,
-            borderColor: dubbi ? COLORS.warning : COLORS.bordoCampo, marginTop: 8 }}>
+            borderColor: dubbi ? COLORS.warning : COLORS.terra, marginTop: 8 }}>
             <TouchableOpacity onPress={() => setAperta(r.uid)} activeOpacity={0.75} accessibilityRole="button"
               accessibilityLabel={`Da confermare: ${s.nome || 'senza nome'}, ${s.persone || '?'} persone. Apri per confermare`}
               style={{ flex: 1, flexDirection: 'row', alignItems: 'center', minHeight: 64, paddingLeft: 12, paddingVertical: 8 }}>

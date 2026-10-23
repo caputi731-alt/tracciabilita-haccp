@@ -7,6 +7,10 @@
  * prenotazioni e si spostano anche da una sala all'altra.
  * I modelli sono disposizioni con un nome, senza prenotazioni, da riusare.
  * In cima all'elenco le prenotazioni lette da Family Wall, da confermare (PrenotazioniFamilyWall.js).
+ * Vista "Piantina" / "Elenco" (Fase 2 del controllo UX, scelte di Luca del 23/10/2026; resta quella scelta su questo telefono,
+ * preferenza `sala_vista`): in Elenco la piantina sparisce e resta l'elenco unico del giorno, con le due sale insieme: in cima il
+ * totale dei coperti, poi le prenotazioni da confermare (bordo ambra), poi quelle a tavola per sala, ognuna con "Disdici".
+ * La Sala si apre sempre su Pranzo (il ristorante lavora a pranzo; la cena si sceglie a mano).
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Modal, BackHandler, useWindowDimensions } from 'react-native';
@@ -15,7 +19,7 @@ import { S, COLORS, TEMA_SCURO, aNumero, oggiLocale, fmtData } from './theme';
 import { Icona, Bottone, Campo, CampoData, Segmenti, Sezione, VistaModale, conferma, useAvviso, useErrori } from './UI';
 import {
   disposizioneGiorno, salvaDisposizioneGiorno, modelliSale, salvaModelloSale, eliminaModelloSale, getImpostazioni,
-  disdetteDelGiorno, disdiciTavolata, annullaDisdetta, MINUTI_ANNULLA,
+  disdetteDelGiorno, disdiciTavolata, annullaDisdetta, MINUTI_ANNULLA, leggiPreferenza, salvaPreferenza,
 } from './database';
 import {
   SALE, ID_SALE, SERVIZI, LUNGA_MIN, LUNGA_MAX, posti, lunghezza, lunghezzaPer, restoFila, entra, pianoVuoto, sistemaPiano, senzaPrenotazioni,
@@ -29,6 +33,16 @@ const NOMI_SALE = ID_SALE.map((id) => SALE[id].nome.replace('Sala ', '').replace
 const plurale = (n, uno, molti) => `${n} ${n === 1 ? uno : molti}`;
 const VUOTI = () => Object.fromEntries(ID_SALE.map((id) => [id, pianoVuoto(SALE[id])]));
 const COPPIE = (dati) => ID_SALE.map((id) => [SALE[id], dati[id]]);
+const VISTE = ['Piantina', 'Elenco'];
+
+/** Le prenotazioni a tavola di una sala, nell'ordine delle file e del posto lungo la fila. */
+function prenotateDi(idSala, piano) {
+  const out = [];
+  piano.file.forEach((fila, f) => fila.forEach((t) => {
+    if ((t.nome || '').trim() || aNumero(t.persone)) out.push({ t, f });
+  }));
+  return out;
+}
 
 /** Un problema della vista 3D resta chiuso qui: la disposizione si usa lo stesso dall'elenco. */
 class RiparoSala extends React.Component {
@@ -174,7 +188,9 @@ function giraSchermo(orizzontale) {
 
 export default function SaleScreen({ suTuttoSchermo, apri, suAperta }) {
   const [data, setData] = useState(oggiLocale());
-  const [servizio, setServizio] = useState(new Date().getHours() < 16 ? SERVIZI[0] : SERVIZI[1]);
+  const [servizio, setServizio] = useState(SERVIZI[0]); // sempre Pranzo (scelta di Luca del 23/10/2026)
+  const [vista, setVista] = useState(VISTE[0]);
+  const [daConfermare, setDaConfermare] = useState({ prenotazioni: 0, persone: 0 }); // dal riquadro di Family Wall
   const [quale, setQuale] = useState(0); // sala mostrata: posizione in ID_SALE
   const [dati, setDati] = useState(VUOTI);
   const [modelli, setModelli] = useState([]);
@@ -189,6 +205,9 @@ export default function SaleScreen({ suTuttoSchermo, apri, suAperta }) {
   const { avviso, mostra } = useAvviso();
   const schermo = useWindowDimensions();
   const chiave = useRef('');
+  useEffect(() => { leggiPreferenza('sala_vista').then((v) => { if (VISTE.includes(v)) setVista(v); }).catch(() => {}); }, []);
+  const cambiaVista = (v) => { setVista(v); salvaPreferenza('sala_vista', v).catch(() => {}); };
+  const elenco = vista === 'Elenco';
   const [versione, setVersione] = useState(0); // cresce a ogni ritorno sulla Sala: il riquadro di Family Wall si aggiorna
   // aperta dal calendario del Menù su un giorno e un servizio
   useEffect(() => {
@@ -272,6 +291,9 @@ export default function SaleScreen({ suTuttoSchermo, apri, suAperta }) {
   const nomi = useMemo(() => sigle(sala, piano), [sala, piano]);
   const tot = useMemo(() => totali([[sala, piano]]), [sala, piano]);
   const totTutte = useMemo(() => totali(COPPIE(piani)), [piani]);
+  // vista Elenco: le prenotazioni a tavola delle due sale e quello che c'è da sistemare in tutte e due
+  const aTavola = useMemo(() => ID_SALE.map((id) => ({ id, righe: prenotateDi(id, piani[id]), sigle: sigle(SALE[id], piani[id]), tot: totali([[SALE[id], piani[id]]]) })), [piani]);
+  const problemiTutte = useMemo(() => ID_SALE.flatMap((id) => disponi(SALE[id], piani[id]).problemi.map((x) => `${NOMI_SALE[ID_SALE.indexOf(id)]}: ${x}`)), [piani]);
   // in verticale la sala scelta, in orizzontale tutte e due una accanto all'altra
   const scenaDati = useMemo(() => (largo
     ? datiScenaSale(COPPIE(piani), { scuro: TEMA_SCURO, scelto: scelta })
@@ -384,6 +406,35 @@ export default function SaleScreen({ suTuttoSchermo, apri, suAperta }) {
     </>
   );
 
+  const coperti = totTutte.persone + daConfermare.persone;
+  /** Una prenotazione a tavola nella vista Elenco: il tocco apre la scheda, "Disdici" a destra. */
+  const rigaElenco = (idS, { t, f }, sig) => {
+    const len = lunghezza(t), persone = aNumero(t.persone) || 0, nPosti = posti(len).posti, troppi = persone > nPosti;
+    const colore = troppi ? COLORS.danger : COLORS.primaryDark;
+    return (
+      <View key={t.id} style={{
+        flexDirection: 'row', alignItems: 'center', minHeight: 64, marginTop: 8, borderRadius: 16, borderWidth: 1.5,
+        borderColor: troppi ? COLORS.danger : COLORS.ok, backgroundColor: troppi ? COLORS.card : COLORS.primarySoft,
+      }}>
+        <TouchableOpacity onPress={() => setScelta(t.id)} activeOpacity={0.75} accessibilityRole="button"
+          accessibilityLabel={`${t.nome || 'Senza nome'}, ${persone || 'numero da scrivere di'} persone, tavolo ${sig}${t.ora ? `, ore ${t.ora}` : ''}. Apri la scheda`}
+          style={{ flex: 1, paddingVertical: 8, paddingHorizontal: 12, minHeight: 64, justifyContent: 'center' }}>
+          <Text numberOfLines={1} style={{ fontSize: 16, fontWeight: '800', color: colore }}>
+            {t.nome || 'Senza nome'} · {persone || '?'} pers.
+          </Text>
+          <Text numberOfLines={1} style={{ fontSize: 13, color: colore }}>
+            {[sig, t.ora, SALE[idS].file[f] ? SALE[idS].file[f].nome : null, troppi ? `${nPosti} posti: tavolata corta` : metri(len)].filter(Boolean).join(' · ')}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => disdici(t.id)} accessibilityRole="button" accessibilityLabel={`Disdici ${t.nome || `il tavolo ${sig}`}`}
+          style={{ minHeight: 48, minWidth: 48, paddingHorizontal: 14, marginRight: 6, borderRadius: 24, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 4 }}>
+          <Icona nome="account-cancel-outline" size={20} colore={COLORS.danger} />
+          <Text style={{ fontSize: 14, fontWeight: '700', color: COLORS.danger }}>Disdici</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
   const giornoBreve = new Date(`${data}T12:00:00`).toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' });
 
   // "Due sale insieme": tutte e due a tutto schermo, in orizzontale, per aggiungere e spostare le prenotazioni anche da una sala all'altra
@@ -428,10 +479,11 @@ export default function SaleScreen({ suTuttoSchermo, apri, suAperta }) {
             <Segmenti opzioni={SERVIZI} valore={servizio} onChange={setServizio} />
           </View>
         </View>
-        <Segmenti opzioni={NOMI_SALE} valore={NOMI_SALE[quale]} onChange={(v) => { setScelta(null); setQuale(NOMI_SALE.indexOf(v)); }} />
+        <Segmenti opzioni={VISTE} valore={vista} onChange={cambiaVista} />
+        {!elenco && <Segmenti opzioni={NOMI_SALE} valore={NOMI_SALE[quale]} onChange={(v) => { setScelta(null); setQuale(NOMI_SALE.indexOf(v)); }} />}
       </View>
 
-      {!!Sala3D && (
+      {!!Sala3D && !elenco && (
         <View style={{ height: altoScena, marginTop: 10, backgroundColor: COLORS.contenitore }}>
           <RiparoSala suRotto={senza3d}>
             <Sala3D dati={scenaDati} suTavolata={suTavolata} suSposta={suSposta} suStato={setScena} />
@@ -446,8 +498,44 @@ export default function SaleScreen({ suTuttoSchermo, apri, suAperta }) {
       )}
 
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+        {elenco && (
+          <View style={[S.card, { paddingVertical: 14 }]} accessible accessibilityLabel={`${coperti} coperti per ${giornoBreve}, ${servizio}`}>
+            <Text style={{ fontSize: 24, fontWeight: '800', color: COLORS.text }}>{plurale(coperti, 'coperto', 'coperti')}</Text>
+            <Text style={[S.muted, { marginTop: 2 }]}>
+              {[plurale(totTutte.prenotate, 'prenotazione a tavola', 'prenotazioni a tavola'),
+                daConfermare.prenotazioni ? `${daConfermare.prenotazioni} da confermare (${plurale(daConfermare.persone, 'persona', 'persone')})` : null].filter(Boolean).join(' · ')}
+            </Text>
+            {totTutte.prenotate > 0 && (
+              <Text style={{ fontSize: 13, color: COLORS.muted, marginTop: 2 }}>
+                {aTavola.filter((x) => x.righe.length).map((x) => `${NOMI_SALE[ID_SALE.indexOf(x.id)]} ${x.tot.persone}`).join(' · ')} · {metri(totTutte.metri)} di tavoli
+              </Text>
+            )}
+          </View>
+        )}
         <RiquadroFamilyWall data={data} servizio={servizio} salaVista={idSala} versione={versione}
-          suMessa={suMessa} suCambiato={suCambiato} mostra={mostra} />
+          suMessa={suMessa} suCambiato={suCambiato} mostra={mostra} suConteggio={setDaConfermare} />
+        {elenco ? (<>
+          {problemiTutte.length > 0 && (
+            <View style={{ backgroundColor: COLORS.dangerSoft, borderRadius: 16, padding: 14, marginBottom: 12 }}>
+              <Text style={{ color: COLORS.danger, fontWeight: '700', fontSize: 15 }}>Da sistemare</Text>
+              {problemiTutte.map((x) => <Text key={x} style={{ color: COLORS.danger, fontSize: 15, marginTop: 2 }}>{x}</Text>)}
+            </View>
+          )}
+          <Bottone testo="Aggiungi una prenotazione" icona="plus" onPress={() => setNuova({ tavolata: nuovaTavolata() })} />
+          <View style={{ height: 4 }} />
+          {totTutte.prenotate === 0 && (
+            <Text style={[S.muted, { marginLeft: 4, marginTop: 8 }]}>Nessuna prenotazione a tavola per {giornoBreve}, {servizio.toLowerCase()}.</Text>
+          )}
+          {aTavola.filter((x) => x.righe.length).map((x) => (
+            <View key={x.id} style={S.card}>
+              <View style={S.row}>
+                <Text style={[S.h2, { marginBottom: 0 }]}>{SALE[x.id].nome}</Text>
+                <Text style={{ fontSize: 13, color: COLORS.muted }}>{plurale(x.righe.length, 'prenotazione', 'prenotazioni')} · {plurale(x.tot.persone, 'persona', 'persone')}</Text>
+              </View>
+              {x.righe.map((r) => rigaElenco(x.id, r, x.sigle[r.t.id]))}
+            </View>
+          ))}
+        </>) : (<>
         <Text style={{ fontSize: 15, fontWeight: '700', color: COLORS.text, marginLeft: 4 }}>
           {tot.tavolate === 0 ? 'Nessuna prenotazione in questa sala'
             : `${plurale(tot.tavolate, 'tavolata', 'tavolate')} · ${plurale(tot.persone, 'persona', 'persone')} · ${tot.posti} posti`}
@@ -509,6 +597,7 @@ export default function SaleScreen({ suTuttoSchermo, apri, suAperta }) {
             </View>
           );
         })}
+        </>)}
 
         {disdette.length > 0 && (
           <Sezione titolo="Disdette" icona="account-cancel-outline" memoria="sala_disdette"
@@ -544,15 +633,15 @@ export default function SaleScreen({ suTuttoSchermo, apri, suAperta }) {
           {pulsantino('share-variant-outline', 'Ai camerieri', () => invia().catch((e) => mostra(String(e && e.message || e))))}
           {pulsantino('bookmark-multiple-outline', 'Modelli', () => { azzera(); setFinestra('modelli'); })}
         </View>
-        {tot.tavolate > 0 && (
+        {!elenco && tot.tavolate > 0 && (
           <Bottone testo="Svuota questa sala" ghost colore={COLORS.danger}
             onPress={() => conferma('Svuotare la sala?', `Verranno tolte tutte le tavolate della ${sala.nome.toLowerCase()} per ${fmtData(data)} a ${servizio.toLowerCase()}${tot.prenotate ? `, con ${plurale(tot.prenotate, 'prenotazione', 'prenotazioni')}` : ''}.`, () => cambiaPiano(idSala, pianoVuoto(sala)))} />
         )}
-        <Text style={[S.muted, { marginTop: 12, marginLeft: 4 }]}>
+        {!elenco && <Text style={[S.muted, { marginTop: 12, marginLeft: 4 }]}>
           Per spostare una prenotazione tienila premuta sulla piantina e trascinala su un'altra fila. Con "Due sale insieme"
           le vedi tutte e due a tutto schermo e la sposti anche dall'una all'altra. Le sale sono disegnate dalle piante con misure stimate;
           davanti a ingresso, cucina e bagni resta sempre libero un metro e mezzo.
-        </Text>
+        </Text>}
       </ScrollView>
 
       {schede}

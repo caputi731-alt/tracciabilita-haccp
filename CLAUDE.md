@@ -301,6 +301,15 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
   resta `disdetta`; se sparisce (da oggi in poi) la riga si toglie. "Togli la tavolata (scritta per errore)" resta per gli errori.
 - Test in `test/disdette.test.mjs`.
 
+## Sala: Piantina / Elenco (Fase 2 del controllo UX, scelte di Luca del 23/10/2026)
+- In cima alla Sala `Segmenti` "Piantina" / "Elenco"; la scelta resta sul telefono (preferenza locale `sala_vista`, non va nel backup).
+  Piantina = come prima (scelta della sala, 3D, file). Elenco = niente 3D e niente scelta della sala: le due sale insieme, a tutto schermo.
+- Elenco unico del giorno e del servizio: in cima il totale dei coperti (a tavola + da confermare di Family Wall per quel servizio, che il
+  riquadro passa con `suConteggio`), poi il riquadro Family Wall (righe da confermare con bordo ambra `COLORS.terra`), poi le prenotazioni a
+  tavola per sala (`prenotateDi`: solo tavolate con nome o persone, nell'ordine delle file), ognuna con "Disdici"; il tocco apre la scheda del tavolo.
+  Le tavolate libere non compaiono nell'Elenco (si vedono in Piantina). Disdette, "Ai camerieri" e "Modelli" restano in tutte e due le viste.
+- La Sala si apre sempre su Pranzo, anche la sera (prima dopo le 16 si apriva su Cena), sul giorno di oggi.
+
 ## Incassi e costi (Gestione → Incassi, scelte di Luca del 9/10/2026)
 - `conti.js` (puro, `test/conti.test.mjs`) + `IncassiScreen.js`. Incassi: una riga per giorno (tabella `incassi`), divisa per metodo
   (contanti, POS, altro), senza distinguere pranzo e cena, IVA INCLUSA; il netto si ricava togliendo l'IVA al 10% (`IVA_RISTORAZIONE`).
