@@ -159,3 +159,28 @@ test('prenotazioni nel calendario: giorni, script, risposta e apertura della Sal
   assert.equal(aperturaSala({ tipo: 'apriSala', data: 'ieri' }), null);
   assert.equal(aperturaSala({ tipo: 'altro', data: '2026-10-25' }), null);
 });
+
+test('calendario del Menù: "Disdici" e "Annulla" arrivano alla suite, la Sala si apre sulla scheda di conferma', async () => {
+  const { aperturaSala, azionePrenotazione, rispondiAzionePrenotazione } = await import('../menuPonte.js');
+  assert.deepEqual(aperturaSala({ tipo: 'apriSala', data: '2026-10-25', uid: 'fw1' }), { data: '2026-10-25', servizio: 'Pranzo', uid: 'fw1' });
+  assert.deepEqual(azionePrenotazione({ tipo: 'disdiciPrenotazione', uid: 'fw1' }), { cosa: 'esterna', uid: 'fw1' });
+  assert.deepEqual(azionePrenotazione({ tipo: 'disdiciPrenotazione', data: '2026-10-25', servizio: 'Cena', tavolata: 't1' }),
+    { cosa: 'tavolata', data: '2026-10-25', servizio: 'Cena', tavolata: 't1' });
+  assert.equal(azionePrenotazione({ tipo: 'disdiciPrenotazione', data: 'ieri', tavolata: 't1' }), null);
+  assert.equal(azionePrenotazione({ tipo: 'disdiciPrenotazione', data: '2026-10-25' }), null);
+  assert.deepEqual(azionePrenotazione({ tipo: 'annullaDisdetta', disdetta: 4 }), { cosa: 'annulla', id: 4 });
+  assert.equal(azionePrenotazione({ tipo: 'annullaDisdetta', disdetta: 'x' }), null);
+  const fatti = [];
+  const fare = {
+    tavolata: async (...a) => { fatti.push(['tavolata', ...a]); return { id: 9, nome: 'Rossi' }; },
+    esterna: async (uid) => { fatti.push(['esterna', uid]); return { id: 10, nome: 'Sardo' }; },
+    annulla: async (id) => { fatti.push(['annulla', id]); return { sala: 'stalla' }; },
+    elenco: async () => [{ nome: 'Bianchi' }],
+  };
+  assert.equal(await rispondiAzionePrenotazione({ tipo: 'prenotazioni', id: 1 }, fare), null);
+  assert.match(await rispondiAzionePrenotazione({ tipo: 'disdiciPrenotazione', id: 2, data: '2026-10-25', tavolata: 't1' }, fare),
+    /__suiteRisposta\(2,true,\{"nome":"Rossi","disdetta":9,"sala":null,"elenco":\[\{"nome":"Bianchi"\}\]\}\)/);
+  assert.match(await rispondiAzionePrenotazione({ tipo: 'annullaDisdetta', id: 3, disdetta: 9 }, fare), /\(3,true,\{"nome":"","disdetta":null,"sala":"stalla"/);
+  assert.match(await rispondiAzionePrenotazione({ tipo: 'disdiciPrenotazione', id: 4 }, fare), /\(4,false,"Prenotazione non trovata"\)/);
+  assert.deepEqual(fatti, [['tavolata', '2026-10-25', 'Pranzo', 't1'], ['annulla', 9]]);
+});

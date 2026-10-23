@@ -424,7 +424,8 @@ const ORDINE_SERVIZIO = { Pranzo: 0, Cena: 1 };
  * - `giorni`: disposizioni salvate in Sala [{ data, servizio, piani }]: ogni tavolata con un nome o delle persone è confermata
  *   (comprese quelle aggiunte a mano in Sala);
  * - `esterne`: righe di `prenotazioni_esterne` ancora da confermare (stato 'nuova'): quelle senza numero di persone non compaiono.
- * → [{ data, servizio, nome, persone, min, max, sala (nome per esteso o ''), daConfermare }], in ordine di giorno e servizio.
+ * → [{ data, servizio, nome, persone, min, max, sala (nome per esteso o ''), daConfermare, id (tavolata) | uid (Family Wall) }],
+ *   in ordine di giorno e servizio. `id` e `uid` servono al calendario del Menù per disdire o aprire la prenotazione giusta.
  */
 export function prenotazioniCalendario(giorni = [], esterne = []) {
   const out = [];
@@ -436,7 +437,7 @@ export function prenotazioniCalendario(giorni = [], esterne = []) {
         for (const t of fila || []) {
           const persone = Math.max(0, parseInt(t && t.persone, 10) || 0);
           if (!t || (!String(t.nome || '').trim() && !persone)) continue;
-          out.push({ data: g.data, servizio: g.servizio, nome: String(t.nome || '').trim(), persone, min: persone, max: persone, sala: NOME_SALA(id), daConfermare: false, note: String(t.note || '') });
+          out.push({ data: g.data, servizio: g.servizio, nome: String(t.nome || '').trim(), persone, min: persone, max: persone, sala: NOME_SALA(id), daConfermare: false, note: String(t.note || ''), id: String(t.id || '') });
         }
       }
     }
@@ -446,7 +447,7 @@ export function prenotazioniCalendario(giorni = [], esterne = []) {
     const [titolo, ...desc] = String(r.testo || '').split('\n');
     const s = leggiTesto(titolo, desc.join('\n'), r.colore);
     if (!s.prenotazione) continue;
-    out.push({ data: r.data, servizio: s.servizio, nome: s.nome, persone: s.persone, min: s.min, max: s.max, sala: NOME_SALA(s.sala), daConfermare: true, bambini: s.bambini || 0, neonati: s.neonati || 0 });
+    out.push({ data: r.data, servizio: s.servizio, nome: s.nome, persone: s.persone, min: s.min, max: s.max, sala: NOME_SALA(s.sala), daConfermare: true, bambini: s.bambini || 0, neonati: s.neonati || 0, uid: r.uid });
   }
   return out.sort((a, b) => a.data.localeCompare(b.data) || (ORDINE_SERVIZIO[a.servizio] ?? 2) - (ORDINE_SERVIZIO[b.servizio] ?? 2)
     || Number(a.daConfermare) - Number(b.daConfermare) || a.nome.localeCompare(b.nome, 'it'));

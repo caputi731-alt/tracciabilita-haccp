@@ -92,10 +92,33 @@ html.suite .legend .cop{font:700 11px/1 Inter,sans-serif;color:var(--olive)}
 html.suite .pren-tot{margin:4px 2px 6px;font-size:14px;color:var(--muted)}
 html.suite .pren-tot b{color:var(--terra)}
 html.suite .pren-list{margin-bottom:12px}
-html.suite .prow{width:100%;display:flex;align-items:center;gap:10px;min-height:60px;padding:10px 12px 10px 16px;border:0;border-bottom:1px solid var(--line);background:transparent;text-align:left;color:var(--ink);font:inherit}
+html.suite .prow{display:flex;align-items:stretch;min-height:60px;border-bottom:1px solid var(--line)}
 html.suite .prow:last-child{border-bottom:0}
+html.suite .prow.da{background:color-mix(in srgb,var(--terra) 9%,transparent)}
+html.suite .prow .pr-apri{flex:1;min-width:0;display:flex;align-items:center;gap:8px;padding:10px 6px 10px 16px;border:0;background:transparent;text-align:left;color:var(--ink);font:inherit}
 html.suite .prow .pr-b{flex:1;display:flex;flex-direction:column;min-width:0}
 html.suite .prow .pr-t{font-weight:700;font-size:16px}
 html.suite .prow .pr-s{font-size:13px;color:var(--muted)}
-html.suite .prow svg{flex:none;width:20px;height:20px;color:var(--muted)}
+html.suite .prow .pr-az{flex:none;display:flex;align-items:center;font-size:14px;font-weight:700;color:var(--olive)}
+html.suite .prow .pr-az.pr-sala{color:var(--muted);font-weight:500}
+html.suite .prow .pr-az svg{width:18px;height:18px}
+html.suite .prow .pr-dis{flex:none;min-width:72px;min-height:48px;border:0;border-left:1px solid var(--line);background:transparent;color:var(--wine);font:700 14px/1 Inter,sans-serif;padding:0 12px}
 html.suite .pren-h{margin-top:22px}
+
+/* ---------- Calendario più pulito (Fase 3 del controllo UX, 23/10/2026) ----------
+   Nelle schermate principali il titolo "Menù" ripeteva la linguetta della suite: l'intestazione sparisce e restano solo le linguette
+   (i titoli interni, con "Indietro", restano). "Oggi" sta accanto al mese. Le caselle del calendario non escono più dallo schermo. */
+html.suite.con-nav .top{display:none}
+html.suite.con-nav .nav{top:0;padding-top:10px}
+html.suite.con-nav .main{padding-top:74px}
+html.suite .grid>*{min-width:0}
+html.suite .calh h2{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+html.suite .cal-oggi{border-radius:22px;background:var(--cont);color:var(--olive-2);margin-right:4px}
+html.suite .cal-oggi svg{width:20px;height:20px}
+html.suite .legend .leg-cop{display:block}
+html.suite .vuoto-riga{display:flex;align-items:center;gap:8px;padding:6px 6px 6px 16px;border-radius:16px;background:#fff;color:var(--muted);font-size:15px;min-height:56px}
+html.suite.scuro .vuoto-riga{background:var(--scheda)}
+html.suite .vuoto-riga span{flex:1}
+html.suite .lnk{display:flex;align-items:center;gap:4px;min-height:48px;padding:0 12px;border:0;border-radius:24px;background:transparent;color:var(--olive);font:700 14px/1 Inter,sans-serif}
+html.suite .lnk svg{width:18px;height:18px}
+html.suite .main{padding-bottom:130px}

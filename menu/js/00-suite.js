@@ -68,12 +68,16 @@
   window.__suiteRicette = imposta;
 
   // Prenotazioni della suite nel calendario (scelta di Luca del 18/10/2026): confermate in Sala e da confermare (Family Wall).
-  // ogni prenotazione: { data, servizio, nome, persone, min, max, sala, daConfermare }; toccandola si apre la Sala su quel giorno
+  // ogni prenotazione: { data, servizio, nome, persone, min, max, sala, daConfermare, id (tavolata) | uid (Family Wall) };
+  // toccandola si apre la Sala su quel giorno (quella da confermare con la sua scheda di conferma); "Disdici" la disdice da qui
   const impostaPrenotazioni = (elenco) => { window.SuitePrenotazioni.elenco = Array.isArray(elenco) ? elenco : []; ridisegna(); };
+  const conElenco = (r) => { impostaPrenotazioni(r && r.elenco); return r || {}; };
   window.SuitePrenotazioni = {
     elenco: [],
     carica: () => chiedi('prenotazioni').then(impostaPrenotazioni),
-    apri: (data, servizio) => invia('apriSala', { data, servizio }),
+    apri: (data, servizio, uid) => invia('apriSala', uid ? { data, servizio, uid } : { data, servizio }),
+    disdici: (p) => chiedi('disdiciPrenotazione', p.uid ? { uid: p.uid } : { data: p.data, servizio: p.servizio, tavolata: p.id }).then(conElenco),
+    annulla: (id) => chiedi('annullaDisdetta', { disdetta: id }).then(conElenco),
   };
   window.__suitePrenotazioni = impostaPrenotazioni;
 

@@ -36,13 +36,15 @@ const backupDue=()=>state.menus.length>=3&&(!state.settings.lastBackup||Date.now
 // Prenotazioni della suite (solo dentro la suite): per giorno i coperti totali, in terracotta se qualcuna è da confermare
 const PREN=()=>window.SuitePrenotazioni?window.SuitePrenotazioni.elenco:null;
 const coperti=L=>L.reduce((t,p)=>t+(Number(p.max||p.persone)||0),0);
+// Fase 3 del controllo UX (23/10/2026): ogni prenotazione ha "Disdici" (con "Annulla" nell'avviso); il tocco apre la Sala su quel
+// giorno, quella da confermare già con la sua scheda di conferma. Le prenotazioni stanno sopra i menù del giorno.
 function prenGiornoHTML(L,ds){
   if(!L.length)return'';
-  const per={};L.forEach(p=>{(per[p.servizio]=per[p.servizio]||[]).push(p)});
+  const per={},T=PREN()||[];L.forEach(p=>{(per[p.servizio]=per[p.servizio]||[]).push(p)});
   return`<h2 class="dh pren-h">Prenotazioni</h2>`+Object.keys(per).sort((a,b)=>(a==='Cena')-(b==='Cena')).map(sv=>{const P=per[sv],da=P.filter(p=>p.daConfermare).length;
     return`<p class="pren-tot">${esc(sv)} · ${coperti(P)} coperti${da?` · <b>${da} da confermare</b>`:''}</p><div class="list pren-list">${P.map(p=>{
-      const n=p.min&&p.max>p.min?`${p.min}–${p.max}`:(p.persone||'?');
-      return`<button class="prow" data-a="apriSala" data-d="${ds}" data-s="${esc(sv)}" aria-label="${esc(p.nome||'Senza nome')}, ${n} persone${p.daConfermare?', da confermare':''}: apri la Sala"><span class="pr-b"><span class="pr-t">${esc(p.nome||'Senza nome')} · ${n} pers.</span><span class="pr-s">${esc(p.sala||'sala da scegliere')}</span></span>${p.daConfermare?`<span class="pill" style="--c:#9C4524">da confermare</span>`:''}${I.right}</button>`}).join('')}</div>`}).join('')+`<p class="hint">Tocca una prenotazione per aprire la Sala su quel giorno: lì la confermi e la metti a tavola.</p>`;
+      const n=p.min&&p.max>p.min?`${p.min}–${p.max}`:(p.persone||'?'),nome=esc(p.nome||'Senza nome'),i=T.indexOf(p),puo=p.uid||p.id;
+      return`<div class="prow${p.daConfermare?' da':''}"><button class="pr-apri" data-a="apriSala" data-d="${ds}" data-s="${esc(sv)}"${p.uid?` data-u="${esc(p.uid)}"`:''} aria-label="${nome}, ${n} persone${p.daConfermare?', da confermare: apri per confermare':': apri in Sala'}"><span class="pr-b"><span class="pr-t">${nome} · ${n} pers.</span><span class="pr-s">${esc(p.sala||'sala da scegliere')}</span></span>${p.daConfermare?`<span class="pr-az">Conferma${I.right}</span>`:`<span class="pr-az pr-sala">${I.right}</span>`}</button>${puo?`<button class="pr-dis" data-a="disdiciPren" data-i="${i}" aria-label="Disdici ${nome}">Disdici</button>`:''}</div>`}).join('')}</div>`}).join('');
 }
 function vCal(){
   const{y,m}=ui.cal,title=cap(new Date(y,m,1).toLocaleDateString('it-IT',{month:'long',year:'numeric'}));
@@ -55,13 +57,18 @@ function vCal(){
     cells+=`<button class="day${ds===td?' today':''}${ds===ui.selDate?' sel':''}" data-a="selDay" data-d="${ds}" aria-label="${d}${L.length?', '+L.length+' proposte':''}${R.length?', '+cop+' coperti prenotati'+(da?', qualcuna da confermare':''):''}"><span class="dn">${d}</span><span class="dots">${L.slice(0,3).map(x=>`<i style="background:${(STATUS[x.status]||STATUS.bozza).c}"></i>`).join('')}${L.length>3?'<em>+</em>':''}</span>${P?`<span class="cop${da?' da':''}">${R.length?cop:''}</span>`:''}</button>`;
   }
   const sel=(by[ui.selDate]||[]).sort((a,b)=>(a.time||'').localeCompare(b.time||''));
+  // legenda dei coperti con i numeri veri del mese (prima un 12 di esempio che sembrava un totale)
+  const mese=`${y}-${pad(m+1)}-`,PM=P?P.filter(p=>p.data&&p.data.startsWith(mese)):[],copM=coperti(PM),copDa=coperti(PM.filter(p=>p.daConfermare));
+  const prenSel=P?prenGiornoHTML(pr[ui.selDate]||[],ui.selDate):'';
+  // dentro la suite il titolo sta già nella barra della suite: "Oggi" va accanto al mese
+  const oggiBtn=window.NELLA_SUITE?`<button class="ib cal-oggi" data-a="calToday" aria-label="Torna a oggi">${I.cal}</button>`:'';
   return topbar(`<h1>Calendario</h1><button class="tb" data-a="calToday">Oggi</button>`)+
-  `<main class="main">${backupDue()?`<div class="card" style="margin-bottom:14px;display:flex;gap:10px;align-items:center"><span style="flex:1;font-size:14px">${state.settings.lastBackup?'È passato più di un mese dall\'ultimo backup.':'Non hai ancora fatto un backup.'} I dati sono solo su questo telefono.</span><button class="btn" data-a="export">${I.dl}Backup</button></div>`:''}<div class="calh"><h2>${title}</h2><button class="ib" data-a="calMove" data-d="-1" aria-label="Mese precedente">${I.left}</button><button class="ib" data-a="calMove" data-d="1" aria-label="Mese successivo">${I.right}</button></div>
+  `<main class="main">${backupDue()?`<div class="card" style="margin-bottom:14px;display:flex;gap:10px;align-items:center"><span style="flex:1;font-size:14px">${state.settings.lastBackup?'È passato più di un mese dall\'ultimo backup.':'Non hai ancora fatto un backup.'} I dati sono solo su questo telefono.</span><button class="btn" data-a="export">${I.dl}Backup</button></div>`:''}<div class="calh"><h2>${title}</h2>${oggiBtn}<button class="ib" data-a="calMove" data-d="-1" aria-label="Mese precedente">${I.left}</button><button class="ib" data-a="calMove" data-d="1" aria-label="Mese successivo">${I.right}</button></div>
   <div class="wk">${['L','M','M','G','V','S','D'].map(x=>`<span>${x}</span>`).join('')}</div><div class="grid">${cells}</div>
-  <div class="legend">${Object.values(STATUS).map(s=>`<span><i style="background:${s.c}"></i>${s.l}</span>`).join('')}${P?`<span><b class="cop">12</b>coperti prenotati</span><span><b class="cop da">12</b>con prenotazioni da confermare</span>`:''}</div>
+  <div class="legend">${Object.values(STATUS).map(s=>`<span><i style="background:${s.c}"></i>${s.l}</span>`).join('')}${P?`<span class="leg-cop"><b class="cop">${copM}</b> coperti nel mese${copDa?`, di cui <b class="cop da">${copDa}</b> da confermare`:''}</span>`:''}</div>
   <h2 class="dh">${fmtLong(ui.selDate)}</h2>
-  ${sel.length?sel.map(x=>menuCard(x,false)).join(''):`<div class="card empty">Nessun menù in questa data.<br><br><button class="btn pri" data-a="new">${I.plus}Crea menù</button></div>`}
-  ${P?prenGiornoHTML(pr[ui.selDate]||[],ui.selDate):''}
+  ${prenSel}${prenSel?'<h2 class="dh pren-h">Menù</h2>':''}
+  ${sel.length?sel.map(x=>menuCard(x,false)).join(''):P?`<div class="vuoto-riga"><span>Nessun menù in questa data</span><button class="lnk" data-a="new">${I.plus}Crea menù</button></div>`:`<div class="card empty">Nessun menù in questa data.<br><br><button class="btn pri" data-a="new">${I.plus}Crea menù</button></div>`}
   </main>`+fab('new','Nuovo menù')+navbar();
 }
 function listHTML(){

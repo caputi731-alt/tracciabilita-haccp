@@ -119,8 +119,8 @@ export default function PrincipaleScreen({ navigation, route }) {
   }, [richiesta]);
 
   const esciDalMenu = useCallback(() => vai('oggi'), [vai]);
-  const apriSala = useCallback((data, servizio) => {
-    setAperturaSala({ data, servizio });
+  const apriSala = useCallback((data, servizio, uid) => {
+    setAperturaSala({ data, servizio, uid: uid || null });
     vai('sale');
   }, [vai]);
   const azzeraApertura = useCallback(() => setAperturaSala(null), []);

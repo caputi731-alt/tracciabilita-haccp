@@ -155,3 +155,21 @@ test('backup: le disdette ci sono', async () => {
   const dump = await db.esportaTutto();
   assert.ok(Array.isArray(dump.tabelle.disdette));
 });
+
+test('calendario del Menù: le prenotazioni portano id e uid, e "Disdici" con quelli funziona', async () => {
+  await db.initDatabase();
+  await db.salvaLinkFamilyWall('https://api.familywall.com/ical/prova');
+  await aggiornaDaFamilyWall({ fetchFn: calendario([['UID:c1', dtstart(8), 'SUMMARY:Ferri 6 A.S.']]) });
+  const piani = vuoti();
+  const neri = nuovaTavolata({ nome: 'Neri', persone: '4' });
+  piani.stalla = metti(SALE.stalla, piani.stalla, 0, neri);
+  await db.salvaDisposizioneGiorno(giorno(8), 'Pranzo', piani);
+  const el = await db.prenotazioniPerCalendario(giorno(8), giorno(8));
+  const aTavola = el.find((p) => p.nome === 'Neri'), daConf = el.find((p) => p.nome === 'Ferri');
+  assert.equal(aTavola.id, neri.id);
+  assert.equal(daConf.uid, 'c1');
+  await db.disdiciTavolata(aTavola.data, aTavola.servizio, aTavola.id);
+  await db.disdiciPrenotazioneEsterna(daConf.uid);
+  assert.equal((await db.prenotazioniPerCalendario(giorno(8), giorno(8))).length, 0);
+  assert.equal((await db.disdetteDelGiorno(giorno(8), 'Pranzo')).length, 2);
+});

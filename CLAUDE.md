@@ -310,6 +310,18 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
   Le tavolate libere non compaiono nell'Elenco (si vedono in Piantina). Disdette, "Ai camerieri" e "Modelli" restano in tutte e due le viste.
 - La Sala si apre sempre su Pranzo, anche la sera (prima dopo le 16 si apriva su Cena), sul giorno di oggi.
 
+## Calendario del Menù più pulito e con azioni (Fase 3 del controllo UX, 23/10/2026)
+- Ogni prenotazione del calendario porta `id` (tavolata della Sala) o `uid` (riga di Family Wall da confermare) da `prenotazioniCalendario`.
+- Riga della prenotazione (`prenGiornoHTML` in menu/js/04-viste.js): il tocco apre la Sala su quel giorno; quella da confermare manda anche
+  `uid` (`aperturaSala` lo passa, PrincipaleScreen → SaleScreen `apri.uid` → `RiquadroFamilyWall apriUid`) e si apre già con la scheda di
+  conferma. "Disdici" a destra: messaggio `disdiciPrenotazione` ({ uid } oppure { data, servizio, tavolata }) e "Annulla" nell'avviso
+  (`annullaDisdetta` { disdetta }); risponde `rispondiAzionePrenotazione` (menuPonte.js) con { nome, disdetta, sala, elenco aggiornato }.
+- Giorno scelto: prima le prenotazioni, poi "Menù"; senza menù una riga sola "Nessun menù in questa data · Crea menù". Legenda dei coperti
+  con i numeri veri del mese (prima c'era un 12 di esempio). Spazio in fondo per il pulsante "+".
+- Nelle schermate principali del Menù (con le linguette) l'intestazione "Menù" non si vede più (`html.suite.con-nav .top{display:none}`):
+  restano solo le linguette in alto; "Oggi" è l'icona del calendario accanto al mese. Le caselle del calendario non escono dallo schermo
+  con caratteri grandi (`.grid>*{min-width:0}`). Provato in `test/menu-suite.py`.
+
 ## Incassi e costi (Gestione → Incassi, scelte di Luca del 9/10/2026)
 - `conti.js` (puro, `test/conti.test.mjs`) + `IncassiScreen.js`. Incassi: una riga per giorno (tabella `incassi`), divisa per metodo
   (contanti, POS, altro), senza distinguere pranzo e cena, IVA INCLUSA; il netto si ricava togliendo l'IVA al 10% (`IVA_RISTORAZIONE`).

@@ -15,15 +15,20 @@ import { WebView } from 'react-native-webview';
 import { COLORS, S, TEMA_SCURO, oggiLocale } from './theme';
 import { Vuoto } from './UI';
 import { BUILD } from './build';
-import { menuLeggi, menuChiavi, menuScrivi, ricettePerMenu, creaRicettaDaPortata, prenotazioniPerCalendario } from './database';
+import {
+  menuLeggi, menuChiavi, menuScrivi, ricettePerMenu, creaRicettaDaPortata, prenotazioniPerCalendario,
+  disdiciTavolata, disdiciPrenotazioneEsterna, annullaDisdetta,
+} from './database';
 import {
   PAGINA_MENU, leggiMessaggio, rispondiArchivio, rispondiRicette, scriptRicette, destinazione, scriptAvviso, scriptSalvato,
-  finestraCalendario, scriptPrenotazioni, rispondiPrenotazioni, aperturaSala,
+  finestraCalendario, scriptPrenotazioni, rispondiPrenotazioni, aperturaSala, rispondiAzionePrenotazione,
 } from './menuPonte';
 
 const ARCHIVIO = { leggi: menuLeggi, chiavi: menuChiavi, scrivi: menuScrivi };
 const RICETTE = { elenco: ricettePerMenu, crea: creaRicettaDaPortata };
 const prenotazioni = () => prenotazioniPerCalendario(...finestraCalendario(oggiLocale()));
+// "Disdici" e "Annulla" dal calendario del Menù
+const AZIONI_PRENOTAZIONI = { tavolata: disdiciTavolata, esterna: disdiciPrenotazioneEsterna, annulla: annullaDisdetta, elenco: prenotazioni };
 // le librerie di condivisione si caricano solo quando servono: un loro problema non blocca il resto dell'app
 const invio = () => require('./menuInvio');
 
@@ -74,7 +79,8 @@ export default function MenuScreen({ attiva = true, aggiorna = 0, comandi, suEsc
   const messaggio = useCallback(async (evento) => {
     const m = leggiMessaggio(evento.nativeEvent.data);
     if (!m) return;
-    const risposta = (await rispondiArchivio(m, ARCHIVIO)) || (await rispondiRicette(m, RICETTE)) || (await rispondiPrenotazioni(m, prenotazioni));
+    const risposta = (await rispondiArchivio(m, ARCHIVIO)) || (await rispondiRicette(m, RICETTE)) || (await rispondiPrenotazioni(m, prenotazioni))
+      || (await rispondiAzionePrenotazione(m, AZIONI_PRENOTAZIONI));
     if (risposta) { esegui(risposta); return; }
     try {
       if (m.tipo === 'indietro') {
@@ -85,7 +91,7 @@ export default function MenuScreen({ attiva = true, aggiorna = 0, comandi, suEsc
         if (suApri) suApri('Anagrafiche', { scheda: 'Ricette', ricetta: Number(m.ricetta) || null });
       } else if (m.tipo === 'apriSala') {
         const dove = aperturaSala(m);
-        if (dove && suSala) suSala(dove.data, dove.servizio);
+        if (dove && suSala) suSala(dove.data, dove.servizio, dove.uid);
       } else if (m.tipo === 'apriEvento') {
         if (suApri) suApri('Eventi', { evento: String(m.evento || '') });
       } else if (m.tipo === 'vista') {

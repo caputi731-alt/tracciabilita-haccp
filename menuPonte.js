@@ -98,10 +98,49 @@ export async function rispondiPrenotazioni(m, elenco) {
   }
 }
 
-/** Messaggio apriSala della pagina → { data, servizio } validi, oppure null. */
+/** Messaggio apriSala della pagina → { data, servizio } validi (più `uid` se è una prenotazione di Family Wall da confermare:
+ *  la Sala apre la sua scheda di conferma), oppure null. */
 export function aperturaSala(m) {
   if (!m || m.tipo !== 'apriSala' || !/^\d{4}-\d{2}-\d{2}$/.test(String(m.data || ''))) return null;
-  return { data: m.data, servizio: m.servizio === 'Cena' ? 'Cena' : 'Pranzo' };
+  const out = { data: m.data, servizio: m.servizio === 'Cena' ? 'Cena' : 'Pranzo' };
+  if (typeof m.uid === 'string' && m.uid) out.uid = m.uid;
+  return out;
+}
+
+/* Disdette dal calendario del Menù (Fase 3 del controllo UX, 23/10/2026): "Disdici" su ogni prenotazione e "Annulla" nell'avviso. */
+
+/** Messaggio disdiciPrenotazione / annullaDisdetta della pagina → cosa fare, oppure null se non è valido. */
+export function azionePrenotazione(m) {
+  if (!m) return null;
+  if (m.tipo === 'disdiciPrenotazione') {
+    if (typeof m.uid === 'string' && m.uid) return { cosa: 'esterna', uid: m.uid };
+    const t = m.tavolata;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(String(m.data || '')) && typeof t === 'string' && t) {
+      return { cosa: 'tavolata', data: m.data, servizio: m.servizio === 'Cena' ? 'Cena' : 'Pranzo', tavolata: t };
+    }
+    return null;
+  }
+  if (m.tipo === 'annullaDisdetta' && Number.isInteger(m.disdetta) && m.disdetta > 0) return { cosa: 'annulla', id: m.disdetta };
+  return null;
+}
+
+/**
+ * Risponde a disdiciPrenotazione / annullaDisdetta: `fare` = { tavolata(data, servizio, id), esterna(uid), annulla(id), elenco() }.
+ * La pagina riceve { nome, disdetta (id per "Annulla"), sala, elenco (prenotazioni aggiornate) }; null se il messaggio non la riguarda.
+ */
+export async function rispondiAzionePrenotazione(m, fare) {
+  if (!m || (m.tipo !== 'disdiciPrenotazione' && m.tipo !== 'annullaDisdetta')) return null;
+  try {
+    const a = azionePrenotazione(m);
+    if (!a) throw new Error('Prenotazione non trovata');
+    const e = a.cosa === 'tavolata' ? await fare.tavolata(a.data, a.servizio, a.tavolata)
+      : a.cosa === 'esterna' ? await fare.esterna(a.uid) : await fare.annulla(a.id);
+    return scriptRisposta(m.id, true, {
+      nome: (e && e.nome) || '', disdetta: (e && a.cosa !== 'annulla' && e.id) || null, sala: (e && e.sala) || null, elenco: await fare.elenco(),
+    });
+  } catch (e) {
+    return scriptRisposta(m.id, false, String((e && e.message) || e));
+  }
 }
 
 /** Dove va un indirizzo chiesto dalla pagina: 'pagina' (resta nella WebView), 'fuori' (altra app) o 'niente'. */

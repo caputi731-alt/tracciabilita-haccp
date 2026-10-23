@@ -191,6 +191,7 @@ export default function SaleScreen({ suTuttoSchermo, apri, suAperta }) {
   const [servizio, setServizio] = useState(SERVIZI[0]); // sempre Pranzo (scelta di Luca del 23/10/2026)
   const [vista, setVista] = useState(VISTE[0]);
   const [daConfermare, setDaConfermare] = useState({ prenotazioni: 0, persone: 0 }); // dal riquadro di Family Wall
+  const [apriUid, setApriUid] = useState(null); // prenotazione di Family Wall da aprire per la conferma (dal calendario del Menù)
   const [quale, setQuale] = useState(0); // sala mostrata: posizione in ID_SALE
   const [dati, setDati] = useState(VUOTI);
   const [modelli, setModelli] = useState([]);
@@ -214,6 +215,7 @@ export default function SaleScreen({ suTuttoSchermo, apri, suAperta }) {
     if (!apri || !apri.data) return;
     setScelta(null); setInsieme(false); setData(apri.data);
     if (SERVIZI.includes(apri.servizio)) setServizio(apri.servizio);
+    setApriUid(apri.uid || null);
     if (suAperta) suAperta(); // usata una volta: tornando in Sala dalla barra si riparte da oggi
   }, [apri, suAperta]);
 
@@ -513,7 +515,8 @@ export default function SaleScreen({ suTuttoSchermo, apri, suAperta }) {
           </View>
         )}
         <RiquadroFamilyWall data={data} servizio={servizio} salaVista={idSala} versione={versione}
-          suMessa={suMessa} suCambiato={suCambiato} mostra={mostra} suConteggio={setDaConfermare} />
+          suMessa={suMessa} suCambiato={suCambiato} mostra={mostra} suConteggio={setDaConfermare}
+          apriUid={apriUid} suApertoUid={() => setApriUid(null)} />
         {elenco ? (<>
           {problemiTutte.length > 0 && (
             <View style={{ backgroundColor: COLORS.dangerSoft, borderRadius: 16, padding: 14, marginBottom: 12 }}>

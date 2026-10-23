@@ -25,8 +25,9 @@ FINTA = """(()=>{
     {id:3,nome:'Con farina da fattura',categoria:'',ingredienti:2,allergeni:[1],daVerificare:['Farina 00']}];
   // prenotazioni della suite per il calendario: oggi una confermata e una da confermare (nomi inventati)
   window.__prenotazioni=(()=>{const d=new Date(),p=n=>String(n).padStart(2,'0'),t=`${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
-    return[{data:t,servizio:'Pranzo',nome:'Rossi',persone:8,min:8,max:8,sala:'Antica stalla',daConfermare:false},
-      {data:t,servizio:'Pranzo',nome:'Sardo',persone:16,min:13,max:16,sala:'Panoramica',daConfermare:true}]})();
+    return[{data:t,servizio:'Pranzo',nome:'Rossi',persone:8,min:8,max:8,sala:'Antica stalla',daConfermare:false,id:'t-rossi'},
+      {data:t,servizio:'Pranzo',nome:'Sardo',persone:16,min:13,max:16,sala:'Panoramica',daConfermare:true,uid:'fw-sardo'}]})();
+  window.__disdette=[];
   window.ReactNativeWebView={
     injectedObjectJson:()=>JSON.stringify({build:'prova-123',fontScale:1.3}),
     postMessage:(s)=>{const m=JSON.parse(s),a=leggi();let v=null;
@@ -35,6 +36,9 @@ FINTA = """(()=>{
       else if(m.tipo==='kvSetMany'){m.pairs.forEach(([k,x])=>{if(x===null)delete a[k];else a[k]=x});scrivi(a)}
       else if(m.tipo==='ricette')v=window.__ricette;
       else if(m.tipo==='prenotazioni')v=window.__prenotazioni;
+      else if(m.tipo==='disdiciPrenotazione'){window.__ricevuti.push(m);const i=window.__prenotazioni.findIndex(p=>(m.uid&&p.uid===m.uid)||(m.tavolata&&p.id===m.tavolata));
+        const p=window.__prenotazioni.splice(i,1)[0];window.__disdette.push(p);v={nome:p.nome,disdetta:window.__disdette.length,sala:null,elenco:window.__prenotazioni}}
+      else if(m.tipo==='annullaDisdetta'){window.__ricevuti.push(m);const p=window.__disdette[m.disdetta-1];window.__prenotazioni.push(p);v={nome:p.nome,disdetta:null,sala:p.uid?null:'stalla',elenco:window.__prenotazioni}}
       else if(m.tipo==='creaRicetta'){const id=100+window.__ricette.length;window.__ricette.push({id,nome:m.nome,categoria:'',ingredienti:0,allergeni:[],daVerificare:[]});window.__ricevuti.push(m);v=id}
       else{window.__ricevuti.push(m);return}
       setTimeout(()=>window.__suiteRisposta(m.id,true,v),0)}};
@@ -167,9 +171,10 @@ with sync_playwright() as p:
     pg.evaluate("ui.view='cal';render()")
     asp = pg.evaluate("""()=>{const n=document.querySelector('.nav').getBoundingClientRect(),c=getComputedStyle(document.body);
       return{suite:document.documentElement.classList.contains('suite'),alto:n.top,basso:innerHeight-n.bottom,carattere:c.fontFamily,
-        titolo:document.querySelector('.top h1').textContent,voci:[...document.querySelectorAll('.nav button')].map(b=>b.textContent)}}""")
-    ok(asp['suite'] and asp['carattere'].startswith('Inter') and asp['titolo'] == 'Menù', 'dentro la suite: carattere e titolo come le altre sezioni')
-    ok(asp['alto'] < 80 and asp['basso'] > 300 and asp['voci'] == ['Calendario', 'Proposte', 'Stampe', 'Didattica', 'Impostazioni'],
+        titolo:getComputedStyle(document.querySelector('.top')).display,voci:[...document.querySelectorAll('.nav button')].map(b=>b.textContent)}}""")
+    ok(asp['suite'] and asp['carattere'].startswith('Inter') and asp['titolo'] == 'none',
+       'dentro la suite: carattere della suite, e nelle schermate principali niente titolo "Menù" doppio (restano le linguette)')
+    ok(asp['alto'] < 10 and asp['basso'] > 300 and asp['voci'] == ['Calendario', 'Proposte', 'Stampe', 'Didattica', 'Impostazioni'],
        'le sezioni del Menù sono linguette in alto (in basso resta solo la barra della suite)')
     pg.evaluate("window.__ricevuti.length=0;openEditor('m1')")
     dentro = pg.evaluate("window.__ricevuti.filter(m=>m.tipo==='vista').map(m=>m.profonda)")
@@ -241,12 +246,34 @@ with sync_playwright() as p:
       testo:[...document.querySelectorAll('.prow')].map(r=>r.textContent)}}""")
     ok(cal['cop'] == '24' and cal['da'], f"calendario: coperti del giorno (16 contati per 13/16) in terracotta se qualcuna è da confermare ({cal['cop']})")
     ok(cal['righe'] == 2 and 'Pranzo · 24 coperti' in cal['tot'] and '1 da confermare' in cal['tot']
-       and 'Rossi · 8 pers.' in cal['testo'][0] and 'Sardo · 13–16 pers.' in cal['testo'][1] and 'da confermare' in cal['testo'][1],
-       'giorno scelto: elenco delle prenotazioni con persone, sala e stato')
+       and 'Rossi · 8 pers.' in cal['testo'][0] and 'Sardo · 13–16 pers.' in cal['testo'][1]
+       and 'Conferma' in cal['testo'][1] and all('Disdici' in t for t in cal['testo']),
+       'giorno scelto: elenco delle prenotazioni con persone, sala, "Conferma" per quelle da confermare e "Disdici"')
+    ordine = pg.evaluate("[...document.querySelectorAll('.main .dh')].map(h=>h.textContent)")
+    leg = pg.evaluate("document.querySelector('.leg-cop').textContent")
+    ok(ordine[1:] == ['Prenotazioni', 'Menù'] and pg.evaluate("!!document.querySelector('.vuoto-riga')") and leg == '24 coperti nel mese, di cui 16 da confermare',
+       f'prenotazioni sopra i menù, giorno senza menù in una riga, legenda con i numeri veri del mese ({leg})')
     ricevuti.clear()
-    pg.click('.prow >> nth=1')
+    pg.click('.prow >> nth=0 >> .pr-apri')
+    pg.click('.prow >> nth=1 >> .pr-apri')
     pg.wait_for_timeout(200)
-    ok(any(m == {'tipo': 'apriSala', 'data': pg.evaluate('today()'), 'servizio': 'Pranzo'} for m in ricevuti), 'tocco su una prenotazione: la suite apre la Sala su quel giorno')
+    oggi = pg.evaluate('today()')
+    ok(any(m == {'tipo': 'apriSala', 'data': oggi, 'servizio': 'Pranzo'} for m in ricevuti)
+       and any(m == {'tipo': 'apriSala', 'data': oggi, 'servizio': 'Pranzo', 'uid': 'fw-sardo'} for m in ricevuti),
+       'tocco su una prenotazione: la Sala si apre su quel giorno, quella da confermare con la sua scheda di conferma')
+    ricevuti.clear()
+    pg.click('.prow >> nth=0 >> .pr-dis')
+    pg.wait_for_timeout(300)
+    dis = pg.evaluate("[document.querySelectorAll('.prow').length,(document.querySelector('.toast')||{}).textContent||'']")
+    ok(any(m.get('tipo') == 'disdiciPrenotazione' and m.get('tavolata') == 't-rossi' and m.get('data') == oggi for m in ricevuti)
+       and dis[0] == 1 and dis[1].startswith('Rossi disdetta') and 'Annulla' in dis[1], f'"Disdici" dal calendario: la suite la disdice e il calendario si aggiorna, con "Annulla" ({dis})')
+    pg.click('.toast [data-toast]')
+    pg.wait_for_timeout(300)
+    ok(any(m.get('tipo') == 'annullaDisdetta' and m.get('disdetta') == 1 for m in ricevuti) and pg.evaluate("document.querySelectorAll('.prow').length") == 2,
+       '"Annulla" nell\'avviso: la prenotazione torna')
+    pg.click('.prow.da .pr-dis')
+    pg.wait_for_timeout(300)
+    ok(any(m.get('tipo') == 'disdiciPrenotazione' and m.get('uid') == 'fw-sardo' for m in ricevuti), '"Disdici" su una da confermare: la suite riceve la riga di Family Wall')
     pg.evaluate("window.__suitePrenotazioni([])")
     pg.wait_for_timeout(300)
     ok(pg.evaluate("document.querySelectorAll('.prow').length") == 0 and pg.evaluate("document.querySelector('.day.today .cop').textContent") == '',

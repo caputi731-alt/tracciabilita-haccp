@@ -287,7 +287,7 @@ export function ModaleFamilyWall({ visibile, onChiudi, onAggiornato }) {
  * riscarica il calendario. `suMessa({ data, servizio, sala, nome })` dopo una conferma;
  * `suCambiato()` quando una tavolata è stata tolta (la Sala rilegge la disposizione).
  */
-export default function RiquadroFamilyWall({ data, servizio, salaVista, versione, suMessa, suCambiato, mostra, suConteggio }) {
+export default function RiquadroFamilyWall({ data, servizio, salaVista, versione, suMessa, suCambiato, mostra, suConteggio, apriUid, suApertoUid }) {
   const [righe, setRighe] = useState([]);
   const [stato, setStato] = useState(null);
   const [aperta, setAperta] = useState(null); // uid della scheda aperta
@@ -317,6 +317,12 @@ export default function RiquadroFamilyWall({ data, servizio, salaVista, versione
   const altriEventi = delGiorno.filter((r) => !r.scheda.prenotazione);
   const segnalate = righe.filter((r) => r.stato === 'confermata' && (r.cambiata || r.sparita));
   const rigaAperta = aperta && righe.find((r) => r.uid === aperta);
+  // dal calendario del Menù: la prenotazione toccata si apre già pronta per la conferma
+  useEffect(() => {
+    if (!apriUid || !righe.some((r) => r.uid === apriUid && r.stato === 'nuova')) return;
+    setAperta(apriUid);
+    if (suApertoUid) suApertoUid();
+  }, [apriUid, righe, suApertoUid]);
   // quante prenotazioni da confermare e quante persone per questo servizio: la Sala le somma al totale del giorno (vista Elenco)
   const delServizio = prenotazioni.filter((r) => r.scheda.servizio === servizio);
   const personeDaConfermare = delServizio.reduce((n, r) => n + (aNumero(r.scheda.persone) || 0), 0);
