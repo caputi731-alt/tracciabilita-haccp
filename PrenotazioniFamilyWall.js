@@ -1,7 +1,8 @@
 /**
  * Prenotazioni da Family Wall nella sezione Sala (Fase 1, piano approvato da Luca il 18/10/2026).
  * - `RiquadroFamilyWall`: per il giorno scelto le prenotazioni lette dal calendario e ancora da confermare, gli eventi che non
- *   sembrano prenotazioni, le segnalazioni (cambiate o sparite in Family Wall dopo la conferma) e quante ce ne sono negli altri giorni.
+ *   sembrano prenotazioni, le segnalazioni (cambiate o sparite in Family Wall dopo la conferma). Gli altri giorni non si annunciano qui (scelta di Luca
+ *   del 21/10/2026: occupava spazio): le loro prenotazioni compaiono quando si apre quel giorno.
  * - `SchedaConferma`: la scheda proposta dal testo, con i campi incerti evidenziati; "Conferma e metti a tavola" la mette nel
  *   posto migliore della sala scelta (o dell'altra, se lì non entra).
  * - `ModaleFamilyWall`: collegamento del calendario (link iCal) protetto dal PIN del titolare, aggiornamento a mano, stato.
@@ -281,10 +282,10 @@ export function ModaleFamilyWall({ visibile, onChiudi, onAggiornato }) {
 
 /**
  * `versione` cambia ogni volta che la Sala torna visibile: il riquadro rilegge le prenotazioni e, se è passato abbastanza tempo,
- * riscarica il calendario. `suMessa({ data, servizio, sala, nome })` dopo una conferma; `suVaiAlGiorno(data, servizio)`;
+ * riscarica il calendario. `suMessa({ data, servizio, sala, nome })` dopo una conferma;
  * `suCambiato()` quando una tavolata è stata tolta (la Sala rilegge la disposizione).
  */
-export default function RiquadroFamilyWall({ data, servizio, salaVista, versione, suMessa, suVaiAlGiorno, suCambiato, mostra }) {
+export default function RiquadroFamilyWall({ data, servizio, salaVista, versione, suMessa, suCambiato, mostra }) {
   const [righe, setRighe] = useState([]);
   const [stato, setStato] = useState(null);
   const [aperta, setAperta] = useState(null); // uid della scheda aperta
@@ -310,8 +311,6 @@ export default function RiquadroFamilyWall({ data, servizio, salaVista, versione
   const prenotazioni = delGiorno.filter((r) => r.scheda.prenotazione);
   const altriEventi = delGiorno.filter((r) => !r.scheda.prenotazione);
   const segnalate = righe.filter((r) => r.stato === 'confermata' && (r.cambiata || r.sparita));
-  const altriGiorni = daConfermare.filter((r) => r.data !== data && r.data >= oggiLocale() && r.scheda.prenotazione);
-  const prossimo = altriGiorni.find((r) => r.data > data) || altriGiorni[0];
   const rigaAperta = aperta && righe.find((r) => r.uid === aperta);
 
   if (!stato) return null;
@@ -429,12 +428,6 @@ export default function RiquadroFamilyWall({ data, servizio, salaVista, versione
             </View>
           ))}
         </View>
-      )}
-
-      {!!prossimo && (
-        <Bottone ghost icona="calendar-arrow-right"
-          testo={`Da confermare anche: ${altriGiorni.length} in altri giorni · vai a ${giornoBreve(prossimo.data)}`}
-          onPress={() => suVaiAlGiorno(prossimo.data, prossimo.scheda.servizio)} />
       )}
 
       {!!rigaAperta && (

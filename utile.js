@@ -89,3 +89,19 @@ export const ALLERGENI = [
   'Glutine', 'Crostacei', 'Uova', 'Pesce', 'Arachidi', 'Soia', 'Latte',
   'Frutta a guscio', 'Sedano', 'Senape', 'Sesamo', 'Solfiti', 'Lupini', 'Molluschi',
 ];
+
+/**
+ * Messaggio del backup automatico per chi usa l'app. Se l'errore dice che la cartella scelta non si può più usare
+ * (permesso perso, cartella spostata o cancellata) `cartella` è true: serve sceglierla di nuovo.
+ */
+export function spiegaErroreBackup(messaggio) {
+  const m = String(messaggio || '');
+  if (!m) return null;
+  const cartella = /isn.t writable|not writable|rejected|permission|securityexception|no such|not found|doesn.t exist|does not exist|isn.t readable/i.test(m);
+  return {
+    cartella,
+    testo: cartella
+      ? 'La cartella dei backup non è più accessibile: forse è stata spostata o cancellata, oppure il telefono ha tolto il permesso. Scegli di nuovo la cartella.'
+      : `Backup non riuscito: ${m}`,
+  };
+}

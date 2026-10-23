@@ -231,7 +231,6 @@ export default function SaleScreen({ suTuttoSchermo, apri, suAperta }) {
       mostra(`${nome} a tavola ${fmtData(giorno)}, ${serv.toLowerCase()}, in ${dove} ✓`);
     }
   }, [data, servizio, carica, mostra]);
-  const suVaiAlGiorno = useCallback((giorno, serv) => { setScelta(null); setData(giorno); if (SERVIZI.includes(serv)) setServizio(serv); }, []);
   const suCambiato = useCallback(() => { carica().catch(() => {}); }, [carica]);
 
   /** Ogni modifica si salva subito per questo giorno e questo servizio. */
@@ -419,7 +418,7 @@ export default function SaleScreen({ suTuttoSchermo, apri, suAperta }) {
 
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
         <RiquadroFamilyWall data={data} servizio={servizio} salaVista={idSala} versione={versione}
-          suMessa={suMessa} suVaiAlGiorno={suVaiAlGiorno} suCambiato={suCambiato} mostra={mostra} />
+          suMessa={suMessa} suCambiato={suCambiato} mostra={mostra} />
         <Text style={{ fontSize: 15, fontWeight: '700', color: COLORS.text, marginLeft: 4 }}>
           {tot.tavolate === 0 ? 'Nessuna prenotazione in questa sala'
             : `${plurale(tot.tavolate, 'tavolata', 'tavolate')} · ${plurale(tot.persone, 'persona', 'persone')} · ${tot.posti} posti`}

@@ -4,6 +4,7 @@ import { View, Text, ScrollView, Alert } from 'react-native';
 import * as FileSystem from 'expo-file-system';
 import * as DocumentPicker from 'expo-document-picker';
 import { S, COLORS } from './theme';
+import { spiegaErroreBackup } from './utile';
 import { Bottone, conferma, useAvviso } from './UI';
 import {
   statoBackup, scegliCartellaBackup, eseguiBackup, recuperaFotoMancanti, GIORNI_COPIE,
@@ -216,6 +217,8 @@ export default function BackupScreen() {
 
   const giorniEsterno = esterno ? Math.floor((Date.now() - new Date(esterno).getTime()) / 86400000) : null;
 
+  const spiegato = stato ? spiegaErroreBackup(stato.errore) : null;
+
   return (
     <View style={S.screen}>
     <ScrollView style={S.screen} contentContainerStyle={S.content}>
@@ -236,12 +239,18 @@ export default function BackupScreen() {
             <Text style={{ fontSize: 15, color: COLORS.text }}>Attivo · ultimo backup {quando(stato)}</Text>
             <Text style={S.muted}>Cartella: {stato.nomeCartella}</Text>
             <Text style={S.muted}>Un backup al giorno, alla prima apertura dell'app. Sul telefono restano le copie degli ultimi {GIORNI_COPIE} giorni: la più nuova prende il posto della più vecchia.</Text>
-            {!!stato.errore && (
-              <Text style={{ color: COLORS.danger, marginTop: 6 }}>Ultimo tentativo fallito: {stato.errore}</Text>
+            {!!spiegato && (
+              <View style={{ marginTop: 10, padding: 12, borderRadius: 12, backgroundColor: COLORS.dangerSoft }}>
+                <Text style={{ color: COLORS.danger, fontWeight: '600', fontSize: 15 }}>{spiegato.testo}</Text>
+                {spiegato.cartella && (
+                  <Text style={{ color: COLORS.muted, fontSize: 12, marginTop: 6 }}>Dettaglio tecnico: {stato.errore}</Text>
+                )}
+              </View>
             )}
-            <Bottone testo="Fai un backup adesso" onPress={oraSubito} disabilitato={occupato} />
+            {spiegato && spiegato.cartella && <Bottone testo="Scegli di nuovo la cartella" icona="folder-outline" onPress={attiva} />}
+            <Bottone testo="Fai un backup adesso" ghost={!!(spiegato && spiegato.cartella)} onPress={oraSubito} disabilitato={occupato} />
             <Bottone testo="Recupera foto mancanti dalla cartella" ghost onPress={recuperaFoto} />
-            <Bottone testo="Cambia cartella" ghost onPress={attiva} />
+            {!(spiegato && spiegato.cartella) && <Bottone testo="Cambia cartella" ghost onPress={attiva} />}
           </>
         ) : (
           <>

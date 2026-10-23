@@ -8,7 +8,7 @@ import React, { useState, useCallback, useMemo } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Modal, Pressable } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, TEMA_SCURO, giorniAllaScadenza, oggiLocale, piuGiorni } from './theme';
-import { daIsoLocale } from './utile';
+import { daIsoLocale, spiegaErroreBackup } from './utile';
 import { Icona, PulsanteCerca } from './UI';
 import {
   lottiInScadenza, temperatureDiOggi, listaPuntiControllo, nonConformitaAperte,
@@ -69,12 +69,16 @@ function Riquadro({ icona, valore, etichetta, tono, onPress }) {
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.75} accessibilityRole="button"
       accessibilityLabel={`${etichetta}: ${valore}`}
-      style={{ flex: 1, backgroundColor: COLORS.card, borderRadius: 20, padding: 14, minHeight: 112, justifyContent: 'space-between' }}>
-      <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: fondo, alignItems: 'center', justifyContent: 'center' }}>
-        <Icona nome={icona} size={20} colore={tinta} />
+      style={{
+        flex: 1, backgroundColor: COLORS.card, borderRadius: 18, borderWidth: 1, borderColor: COLORS.border,
+        padding: 12, minHeight: 124, justifyContent: 'space-between', gap: 10,
+      }}>
+      <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: fondo, alignItems: 'center', justifyContent: 'center' }}>
+        <Icona nome={icona} size={24} colore={tinta} />
       </View>
+      {/* niente rimpicciolimento automatico: su Android riduceva il numero fino a renderlo illeggibile */}
       <View>
-        <Text numberOfLines={1} adjustsFontSizeToFit style={{ fontSize: 20, fontWeight: '700', color: COLORS.text }}>{valore}</Text>
+        <Text numberOfLines={2} style={{ fontSize: 17, fontWeight: '700', color: COLORS.text, lineHeight: 21 }}>{valore}</Text>
         <Text numberOfLines={1} style={{ fontSize: 13, color: COLORS.muted }}>{etichetta}</Text>
       </View>
     </TouchableOpacity>
@@ -252,6 +256,7 @@ export default function HomeScreen({ navigation }) {
 
   const apri = (rotta, parametri) => { setRegistra(false); setPannello(false); navigation.navigate(rotta, parametri); };
 
+  const cartellaPersa = !!(backup && backup.errore && (spiegaErroreBackup(backup.errore) || {}).cartella);
   const avvisi = [];
   if (bloccati > 0) {
     avvisi.push({ grave: true, breve: `${bloccati} lott${bloccati > 1 ? 'i bloccati' : 'o bloccato'}`,
@@ -265,9 +270,10 @@ export default function HomeScreen({ navigation }) {
   }
   if (backup && !backupOk) {
     avvisi.push({ grave: !backup.cartella || !!backup.errore,
-      breve: !backup.cartella ? 'Backup non attivo' : backup.errore ? 'Backup non riuscito' : 'Backup vecchio',
+      breve: !backup.cartella ? 'Backup non attivo' : cartellaPersa ? 'Riscegli la cartella del backup' : backup.errore ? 'Backup non riuscito' : 'Backup vecchio',
       titolo: !backup.cartella ? 'Backup automatico non attivo' : backup.errore ? 'Backup non riuscito' : 'Backup vecchio',
       testo: !backup.cartella ? 'Attivalo: se il telefono si rompe perdi tutti i registri'
+        : cartellaPersa ? 'La cartella dei backup non è più accessibile: sceglila di nuovo'
         : backup.errore ? 'Controlla la cartella dei backup'
         : backup.giorni === null ? 'Nessun backup ancora eseguito' : `Ultimo backup ${backup.giorni} giorni fa`,
       vai: () => apri('Documenti', { scheda: 'Backup e dati' }) });

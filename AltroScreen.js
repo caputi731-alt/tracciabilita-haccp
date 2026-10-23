@@ -5,8 +5,8 @@
  */
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
-import { S, COLORS } from './theme';
-import { Icona } from './UI';
+import { S, COLORS, applicaTema } from './theme';
+import { Icona, Segmenti } from './UI';
 import { BUILD } from './build';
 import { leggiPreferenza, salvaPreferenza } from './database';
 import {
@@ -15,6 +15,9 @@ import {
 import { ricordaSezione } from './CercaScreen';
 
 const CHIAVE_PREFERITI = 'sezioni_preferite';
+// Aspetto: la scelta resta su questo telefono (preferenza locale `tema`, non va nel backup)
+const TEMI_SCELTA = { Automatico: 'telefono', Chiaro: 'chiaro', Scuro: 'scuro' };
+const NOME_TEMA = Object.fromEntries(Object.entries(TEMI_SCELTA).map(([k, v]) => [v, k]));
 
 function Riga({ voce, prima, preferita, onApri, onStella }) {
   return (
@@ -61,10 +64,20 @@ function Blocco({ titolo, voci, preferiti, onApri, onStella }) {
 
 export default function AltroScreen({ navigation, suSezione }) {
   const [preferiti, setPreferiti] = useState([]);
+  const [tema, setTema] = useState('telefono');
 
   useEffect(() => {
     leggiPreferenza(CHIAVE_PREFERITI).then((t) => setPreferiti(leggiPreferiti(t))).catch(() => {});
+    leggiPreferenza('tema').then((t) => setTema(t || 'telefono')).catch(() => {});
   }, []);
+
+  const scegliTema = async (nome) => {
+    const scelta = TEMI_SCELTA[nome] || 'telefono';
+    if (scelta === tema) return;
+    setTema(scelta);
+    try { await salvaPreferenza('tema', scelta); } catch (e) { /* vale almeno finché l'app è aperta */ }
+    applicaTema(scelta, true); // l'app si ridisegna e riparte da qui
+  };
 
   const apri = useCallback((voce) => {
     ricordaSezione(voce.id);
@@ -106,6 +119,14 @@ export default function AltroScreen({ navigation, suSezione }) {
       {GRUPPI_SEZIONI.map((g) => (
         <Blocco key={g} titolo={g} voci={vociDelGruppo(g)} preferiti={preferiti} onApri={apri} onStella={stella} />
       ))}
+      <Text style={S.sectionTitle}>Aspetto</Text>
+      <View style={[S.card, { paddingTop: 6 }]}>
+        <Segmenti opzioni={Object.keys(TEMI_SCELTA)} valore={NOME_TEMA[tema] || 'Automatico'} onChange={scegliTema} />
+        <Text style={[S.muted, { fontSize: 13, marginTop: 8 }]}>
+          Automatico segue il tema del telefono. Vale solo per questo telefono; stampe, etichette e pagine dei menù restano sempre chiare.
+        </Text>
+      </View>
+
       <Text style={{ textAlign: 'center', marginTop: 16, fontSize: 13, color: COLORS.muted }}>Versione: build {BUILD}</Text>
     </ScrollView>
   );

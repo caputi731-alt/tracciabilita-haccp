@@ -91,9 +91,19 @@ const SCURO = {
   avvisoAzione: '#14513A',
 };
 
-/** Il tema segue quello del telefono e si decide all'avvio: cambiando tema nelle impostazioni, l'app lo prende alla riapertura. */
-export const TEMA_SCURO = Appearance.getColorScheme() === 'dark';
-export const COLORS = TEMA_SCURO ? SCURO : CHIARO;
+/**
+ * Tema: 'telefono' (segue Android, all'avvio), 'chiaro' o 'scuro' (scelta in Altro → Aspetto, preferenza locale `tema`).
+ * COLORS e S sono oggetti che `applicaTema` aggiorna sul posto: chi li legge mentre disegna prende sempre i colori giusti.
+ * Dopo un cambio App.js ridisegna tutte le schermate (vedi `suCambioTema`). Mai copiare un colore in una costante di modulo.
+ */
+export const TEMI = ['telefono', 'chiaro', 'scuro'];
+const scuroPer = (scelta) => (scelta === 'scuro' ? true : scelta === 'chiaro' ? false : Appearance.getColorScheme() === 'dark');
+export let TEMA_SCURO = scuroPer('telefono');
+export const COLORS = { ...(TEMA_SCURO ? SCURO : CHIARO) };
+let ascoltatoreTema = null;
+
+/** Registra chi deve ridisegnare l'app dopo un cambio di tema (App.js). */
+export function suCambioTema(funzione) { ascoltatoreTema = funzione; }
 
 export const CATEGORIE_PRODOTTO = [
   'Carne', 'Pesce', 'Ortofrutta', 'Latticini', 'Salumi', 'Secco/Dispensa',
@@ -140,7 +150,7 @@ export const giorniAllaScadenza = (iso) => {
   return Math.round((scad - daIsoLocale(oggiLocale())) / 86400000);
 };
 
-export const S = StyleSheet.create({
+const stili = () => StyleSheet.create({
   screen: { flex: 1, backgroundColor: COLORS.bg },
   content: { padding: 16, paddingBottom: 44 },
 
@@ -212,3 +222,21 @@ export const S = StyleSheet.create({
   tileDesc: { fontSize: 14, color: COLORS.muted, marginTop: 2 },
   chevron: { fontSize: 22, color: COLORS.muted, marginLeft: 8 },
 });
+
+export const S = { ...stili() };
+
+/**
+ * Applica una scelta di tema ('telefono' | 'chiaro' | 'scuro'): aggiorna COLORS, S e TEMA_SCURO e lo dice ad Android
+ * (così anche le finestre di sistema seguono la scelta). `avvisa` = ridisegna subito l'app. Restituisce true se è scuro.
+ */
+export function applicaTema(scelta, avvisa = false) {
+  const valida = TEMI.includes(scelta) ? scelta : 'telefono';
+  try {
+    if (Appearance.setColorScheme) Appearance.setColorScheme(valida === 'telefono' ? null : valida === 'scuro' ? 'dark' : 'light');
+  } catch (e) { /* versioni senza questa funzione: resta solo il tema dell'app */ }
+  TEMA_SCURO = scuroPer(valida);
+  Object.assign(COLORS, TEMA_SCURO ? SCURO : CHIARO);
+  Object.assign(S, stili());
+  if (avvisa && ascoltatoreTema) ascoltatoreTema(valida);
+  return TEMA_SCURO;
+}

@@ -3,9 +3,9 @@ import { View, Text, ActivityIndicator, StatusBar, AppState } from 'react-native
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
-import { initDatabase } from './database';
+import { initDatabase, leggiPreferenza } from './database';
 import { backupAutomaticoSeServe, mettiAlSicuroFoto, pulisciFotoInutili } from './backupAutomatico';
-import { COLORS, S, TEMA_SCURO } from './theme';
+import { COLORS, S, TEMA_SCURO, applicaTema, suCambioTema } from './theme';
 import { aggiornaPromemoria, ascoltaToccoNotifica } from './notifiche';
 import { useFonts } from 'expo-font';
 import { CARATTERI, usaCaratteri } from './caratteri';
@@ -45,14 +45,18 @@ function apriDaNotifica(rotta) {
 export default function App() {
   const [pronto, setPronto] = useState(false);
   const [errore, setErrore] = useState(null);
+  const [giroTema, setGiroTema] = useState(0); // cresce a ogni cambio di tema: tutte le schermate si ridisegnano
   // carattere della suite: se i file non si caricano si prosegue con quello di sistema
   const [caratteriPronti, erroreCaratteri] = useFonts(CARATTERI);
   if (caratteriPronti) usaCaratteri();
 
   useEffect(() => {
     let scollega = () => {};
+    suCambioTema(() => setGiroTema((n) => n + 1));
     initDatabase()
       .then(async () => {
+        // il tema scelto in Altro → Aspetto, prima di disegnare le schermate
+        try { applicaTema((await leggiPreferenza('tema')) || 'telefono'); } catch (e) { /* resta quello del telefono */ }
         setPronto(true);
         scollega = ascoltaToccoNotifica(apriDaNotifica); // dopo l'avvio del database: usa le preferenze
         aggiornaPromemoria();
@@ -86,7 +90,7 @@ export default function App() {
   }
 
   return (
-    <NavigationContainer ref={navigazione}
+    <NavigationContainer key={`tema-${giroTema}`} ref={navigazione}
       onReady={() => { if (rottaInAttesa) { const r = rottaInAttesa; rottaInAttesa = null; apriDaNotifica(r); } }}>
       <StatusBar barStyle={TEMA_SCURO ? 'light-content' : 'dark-content'} backgroundColor={COLORS.bg} />
       <Stack.Navigator
@@ -98,7 +102,9 @@ export default function App() {
           contentStyle: { backgroundColor: COLORS.bg },
         }}
       >
-        <Stack.Screen name="Home" component={PrincipaleScreen} options={{ headerShown: false }} />
+        {/* dopo un cambio di tema si riparte da Altro, dove si è fatta la scelta */}
+        <Stack.Screen name="Home" component={PrincipaleScreen} options={{ headerShown: false }}
+          initialParams={giroTema ? { sezione: 'altro', t: giroTema } : undefined} />
         <Stack.Screen name="CaricoMerce" component={CaricoMerceScreen} options={{ title: 'Carico merce' }} />
         <Stack.Screen name="Ricevimento" component={RicevimentoScreen} options={{ title: 'Carico a mano' }} />
         <Stack.Screen name="ImportaFattura" component={ImportaFatturaScreen} options={{ title: 'Importa fattura PDF' }} />

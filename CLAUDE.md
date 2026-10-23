@@ -90,6 +90,9 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
 - `npm test` (Node 22): test in `test/*.test.mjs`, eseguiti da GitHub Actions prima della build; se falliscono l'APK non viene creato.
   I moduli dell'app girano in Node grazie a `test/hooks.mjs` (expo-sqlite sostituito da node:sqlite). Ogni nuova logica di database va coperta da un test.
 - Nel repository (pubblico) mai dati reali: la fattura di test `test/fattura-esempio.pdf` ha dati inventati.
+- Errori del backup per chi usa l'app: `spiegaErroreBackup` (utile.js). Se la cartella scelta non è più scrivibile (permesso perso,
+  cartella spostata o cancellata: successo sul telefono di Luca a metà ottobre) la schermata Backup lo dice in italiano e mostra
+  "Scegli di nuovo la cartella"; in Cucina il promemoria diventa "Riscegli la cartella del backup".
 - Backup automatico: `backupAutomatico.js` (cartella scelta via Storage Access Framework, 1 al giorno alla prima apertura dell'app; a rotazione
   resta un file per ognuno degli ultimi 3 giorni con un backup, scelta di Luca: `backupDaEliminare` in utile.js). La tabella `preferenze` è locale e non va nel backup.
 - Firma APK: la build firma con la chiave dei Secrets ANDROID_KEYSTORE_BASE64, ANDROID_STORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD.
@@ -165,8 +168,11 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
 - Anteprima nel browser per controllare l'aspetto senza telefono: `test/anteprima/vedi.py` (istruzioni nel file; PIN di prova 123456,
   con un finto motore di cifratura `test/anteprima/aes.js` che vale solo lì).
   `metro.config.js` serve solo a quello (piattaforma "web") e non cambia l'APK. Usarla prima di ogni modifica visibile.
-- Tema scuro: segue il telefono e si decide all'avvio (`TEMA_SCURO` e le due tavolozze `CHIARO`/`SCURO` in `theme.js`, stesse chiavi;
-  `COLORS` resta fisso finché l'app è aperta). Mai colori scritti a mano nelle schermate: sopra un fondo `azione` il testo è
+- Tema (scelta di Luca del 21/10/2026): Altro → Aspetto, "Automatico" (segue il telefono) / "Chiaro" / "Scuro", preferenza locale
+  `tema` (non va nel backup). `applicaTema(scelta, avvisa)` in theme.js aggiorna sul posto `COLORS`, `S` e `TEMA_SCURO` (export let) e
+  chiama `Appearance.setColorScheme` (anche le finestre di Android seguono); App.js la legge all'avvio prima di disegnare e, con
+  `suCambioTema`, rimonta il NavigationContainer ripartendo da Altro. Mai copiare un colore in una costante di modulo: va letto
+  mentre si disegna. Test in `test/tema.test.mjs`. Le due tavolozze `CHIARO`/`SCURO` hanno le stesse chiavi. Mai colori scritti a mano nelle schermate: sopra un fondo `azione` il testo è
   `COLORS.suAzione`, sopra `terra` è `suTerra`, i campi hanno fondo `campo`; le chiavi `eroe…` non sono più usate dalla Home (restano nella tavolozza).
   `caratteri.js` dà `COLORS.text` ai testi senza colore (non a quelli dentro un altro testo). PDF, etichette e pagine dei menù restano chiari.
   Il Menù riceve `scuro` dalla suite e usa la parte "Tema scuro" di `menu/css/suite.css`. Controllare sempre entrambi i temi:
@@ -265,6 +271,7 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
   da nascondere, segnalazioni, "vai al prossimo giorno"), `SchedaConferma` (campi incerti evidenziati; la tavolata va nel posto
   migliore della sala scelta o dell'altra; composizione, acconto e telefono finiscono nelle note della tavolata) e
   `ModaleFamilyWall` (collegamento e "Aggiorna adesso").
+  Le prenotazioni da confermare degli altri giorni non si annunciano nel riquadro (tolto il 21/10/2026, occupava spazio).
 - Da verificare sul telefono: se Family Wall mette il colore dell'evento nel link (altrimenti l'acconto si sceglie a mano).
 - Prenotazioni nel calendario del Menù (scelta di Luca del 18/10/2026: "tutte", confermate e da confermare): `prenotazioniCalendario`
   (familywall.js) + `prenotazioniPerCalendario(da, a)` (database.js) prendono le tavolate con nome o persone dalle disposizioni della Sala
