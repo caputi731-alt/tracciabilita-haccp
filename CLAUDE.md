@@ -290,6 +290,14 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
   si contano a parte e non si stimano; è la merce caricata, non quella consumata); personale e altre spese si scrivono a mano
   (tabella `spese`, `CATEGORIE_SPESA`). Risultato del mese = incassi netti − costi. Tutte e due le tabelle sono nel backup (`TABELLE_NUOVE`).
 - Si vede solo dopo il PIN del titolare (`costiSbloccati` / `sbloccaCosti`, 10 minuti); senza PIN impostato la schermata chiede di impostarlo.
+- Stima del mese (scelte di Luca del 23/10/2026): `stima.js` (puro, `test/stima.test.mjs`) + riquadro "Stima del mese" e sezione
+  "Stima giorno per giorno" in IncassiScreen. Coperti da `prenotazioniPerCalendario` (tavolate della Sala + Family Wall da confermare,
+  contate a parte; `prenotazioniCalendario` dà anche `note` delle tavolate e `bambini`/`neonati` di Family Wall). Bambini e neonati
+  dalle note ("2 bambini", "1 neonato"), il resto adulti (`composizione`). Prezzi a persona IVA inclusa 50/25/0 (`PREZZI_BASE`), gli
+  eventi come gli altri; si cambiano in generale ("Cambia prezzi e merce") e per un giorno toccandolo. Tabella `stima_prezzi` (nel
+  backup, `TABELLE_NUOVE`): riga `base` = prezzi di sempre + `merce` (%), le altre righe = prezzi di un giorno. I giorni con un incasso
+  registrato contano l'incasso vero. Margine stimato = senza IVA − merce al % scelto (30% di partenza); accanto la % calcolata sui 3
+  mesi prima (`merceCalcolata`). Personale e spese non entrano. In Incassi si va avanti fino a 12 mesi (`MESI_AVANTI`).
 - PUK (`pin.js`, `RiquadroPin.js`): dieci cifre create dal telefono insieme al primo PIN (o dal pulsante "Crea il codice PUK" per chi
   aveva già il PIN) e mostrate una volta sola. Da quando esiste, "Ho dimenticato il PIN" lo chiede (`pinDimenticato`); dopo l'uso se ne
   crea uno nuovo. Finché non esiste, il PIN si cambia ancora liberamente e il riquadro del PIN lo segnala. Il PUK non apre i backup.

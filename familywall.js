@@ -412,7 +412,7 @@ export function prenotazioniCalendario(giorni = [], esterne = []) {
         for (const t of fila || []) {
           const persone = Math.max(0, parseInt(t && t.persone, 10) || 0);
           if (!t || (!String(t.nome || '').trim() && !persone)) continue;
-          out.push({ data: g.data, servizio: g.servizio, nome: String(t.nome || '').trim(), persone, min: persone, max: persone, sala: NOME_SALA(id), daConfermare: false });
+          out.push({ data: g.data, servizio: g.servizio, nome: String(t.nome || '').trim(), persone, min: persone, max: persone, sala: NOME_SALA(id), daConfermare: false, note: String(t.note || '') });
         }
       }
     }
@@ -422,7 +422,7 @@ export function prenotazioniCalendario(giorni = [], esterne = []) {
     const [titolo, ...desc] = String(r.testo || '').split('\n');
     const s = leggiTesto(titolo, desc.join('\n'), r.colore);
     if (!s.prenotazione) continue;
-    out.push({ data: r.data, servizio: s.servizio, nome: s.nome, persone: s.persone, min: s.min, max: s.max, sala: NOME_SALA(s.sala), daConfermare: true });
+    out.push({ data: r.data, servizio: s.servizio, nome: s.nome, persone: s.persone, min: s.min, max: s.max, sala: NOME_SALA(s.sala), daConfermare: true, bambini: s.bambini || 0, neonati: s.neonati || 0 });
   }
   return out.sort((a, b) => a.data.localeCompare(b.data) || (ORDINE_SERVIZIO[a.servizio] ?? 2) - (ORDINE_SERVIZIO[b.servizio] ?? 2)
     || Number(a.daConfermare) - Number(b.daConfermare) || a.nome.localeCompare(b.nome, 'it'));

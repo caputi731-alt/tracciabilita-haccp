@@ -267,6 +267,15 @@ async function preparaSchema() {
       creato_il TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS stima_prezzi (
+      giorno TEXT PRIMARY KEY,
+      adulto REAL,
+      bambino REAL,
+      neonato REAL,
+      merce REAL,
+      aggiornato TEXT
+    );
+
     CREATE TABLE IF NOT EXISTS registro_modifiche (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       tabella TEXT NOT NULL,
@@ -753,7 +762,7 @@ async function elencoTabelle() {
 const TABELLE_LOCALI = ['preferenze'];
 
 /** Tabelle aggiunte dopo i primi backup: se il backup da ripristinare non le contiene, non vengono svuotate. */
-const TABELLE_NUOVE = ['menu_dati', 'cucina_posti', 'disposizioni', 'incassi', 'spese', 'prenotazioni_esterne'];
+const TABELLE_NUOVE = ['menu_dati', 'cucina_posti', 'disposizioni', 'incassi', 'spese', 'prenotazioni_esterne', 'stima_prezzi'];
 
 export async function esportaTutto() {
   const tabelle = (await elencoTabelle()).filter((t) => !TABELLE_LOCALI.includes(t));
@@ -1072,6 +1081,45 @@ export async function salvaSpesa({ id, giorno, categoria, descrizione, importo: 
 }
 
 export const eliminaSpesa = (id) => exec('DELETE FROM spese WHERE id = ?', [id]);
+
+/* ---------- stima dei guadagni (stima.js) ----------
+   Tabella stima_prezzi: la riga 'base' tiene i prezzi a persona di sempre e la percentuale della merce;
+   le altre righe (giorno ISO) i prezzi cambiati per quel giorno. */
+
+/** { base: { adulto, bambino, neonato } | null, merce: numero | null, giorni: { '2026-10-25': { adulto, bambino, neonato } } } */
+export async function prezziStima() {
+  const righe = await query('SELECT * FROM stima_prezzi');
+  const out = { base: null, merce: null, giorni: {} };
+  for (const r of righe) {
+    const p = { adulto: r.adulto, bambino: r.bambino, neonato: r.neonato };
+    if (r.giorno === 'base') { out.base = p; out.merce = r.merce; } else out.giorni[r.giorno] = p;
+  }
+  return out;
+}
+
+const prezzo = (v, nome) => {
+  const n = Number(v);
+  if (v === null || v === undefined || v === '' || !Number.isFinite(n) || n < 0 || n > 100000) throw new Error(`Prezzo non valido: ${nome}`);
+  return Math.round(n * 100) / 100;
+};
+
+/** Salva i prezzi a persona: giorno = 'base' (di sempre, con la percentuale della merce) oppure un giorno ISO. */
+export async function salvaPrezziStima({ giorno, adulto, bambino, neonato, merce = null }) {
+  if (giorno !== 'base' && !GIORNO.test(String(giorno))) throw new Error('Data non valida');
+  let m = null;
+  if (giorno === 'base') {
+    m = Number(merce);
+    if (merce === null || merce === '' || !Number.isFinite(m) || m < 0 || m > 100) throw new Error('La merce va da 0 a 100%');
+  }
+  return exec(
+    `INSERT INTO stima_prezzi (giorno, adulto, bambino, neonato, merce, aggiornato) VALUES (?,?,?,?,?,?)
+     ON CONFLICT(giorno) DO UPDATE SET adulto = excluded.adulto, bambino = excluded.bambino, neonato = excluded.neonato,
+       merce = excluded.merce, aggiornato = excluded.aggiornato`,
+    [giorno, prezzo(adulto, 'adulto'), prezzo(bambino, 'bambino'), prezzo(neonato, 'neonato'), m, new Date().toISOString()]);
+}
+
+/** Il giorno torna ai prezzi di sempre. */
+export const togliPrezziGiorno = (giorno) => exec("DELETE FROM stima_prezzi WHERE giorno = ? AND giorno <> 'base'", [giorno]);
 
 /**
  * La merce caricata nel periodo: { valore (IVA esclusa), carichi, senzaPrezzo }.

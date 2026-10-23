@@ -6,14 +6,19 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Modal } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { S, COLORS, aNumero, numeroPerCampo, oggiLocale, fmtData } from './theme';
+import { S, COLORS, aNumero, numeroPerCampo, oggiLocale, fmtData, piuGiorni } from './theme';
 import { Icona, Bottone, Campo, CampoData, Chips, VistaModale, Vuoto, conferma, useAvviso, useErrori, Sezione } from './UI';
-import { incassiTra, salvaIncasso, speseTra, salvaSpesa, eliminaSpesa, merceTra } from './database';
+import {
+  incassiTra, salvaIncasso, speseTra, salvaSpesa, eliminaSpesa, merceTra, prenotazioniPerCalendario, prezziStima, salvaPrezziStima, togliPrezziGiorno,
+} from './database';
 import { METODI, CATEGORIE_SPESA, limitiMese, altroMese, nomeMese, totaleIncasso, riepilogoConti, euro } from './conti';
 import { pinImpostato, costiSbloccati, sbloccaCosti, bloccaCosti } from './pin';
 import { ModalePin } from './RiquadroPin';
+import { PREZZI_BASE, MERCE_BASE, prezziPuliti, mercePulita, stimaMese, merceCalcolata, copertiScritti } from './stima';
 
 const maiuscola = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+const percento = (n) => `${String(n).replace('.', ',')}%`;
+const MESI_AVANTI = 12; // fin dove si guarda avanti per la stima
 const giornoScritto = (iso) => maiuscola(new Date(`${iso}T12:00:00`).toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' }));
 
 function Riga({ titolo, sotto, destra, prima, forte, colore }) {
@@ -115,6 +120,98 @@ function SchedaSpesa({ spesa, giorno, onSalva, onElimina, onChiudi }) {
   );
 }
 
+/** Tre prezzi a persona (IVA inclusa) in un modulo; restano testo fino al salvataggio. */
+function usaPrezzi(iniziali) {
+  const [v, setV] = useState(() => Object.fromEntries(Object.keys(PREZZI_BASE).map((k) => [k, numeroPerCampo(iniziali[k])])));
+  const numeri = Object.fromEntries(Object.keys(PREZZI_BASE).map((k) => [k, aNumero(v[k])]));
+  const campi = (errori) => [['adulto', 'Adulto'], ['bambino', 'Bambino'], ['neonato', 'Neonato']].map(([k, nome]) => (
+    <Campo key={k} label={`${nome} (€ a persona)`} value={v[k]} errore={errori[k]} keyboardType="decimal-pad"
+      onChange={(t) => setV((x) => ({ ...x, [k]: t }))} />
+  ));
+  const controlla = (segnala) => {
+    let ok = true;
+    Object.keys(PREZZI_BASE).forEach((k) => { if (numeri[k] === null || numeri[k] < 0) ok = segnala(k, 'Scrivi il prezzo in numeri, per esempio 50'); });
+    return ok;
+  };
+  return { numeri, campi, controlla };
+}
+
+/** Prezzi di sempre e percentuale della merce. */
+function SchedaPrezzi({ prezzi, merce, calcolata, onSalva, onChiudi }) {
+  const p = usaPrezzi(prezzi);
+  const [m, setM] = useState(numeroPerCampo(merce));
+  const { errori, segnala, azzera, riepilogo } = useErrori();
+  const salva = async () => {
+    azzera();
+    let ok = p.controlla(segnala);
+    const n = aNumero(m);
+    if (n === null || n < 0 || n > 100) ok = segnala('merce', 'Scrivi una percentuale da 0 a 100');
+    if (!ok) return;
+    await onSalva({ giorno: 'base', ...p.numeri, merce: n });
+  };
+  return (
+    <Modal visible animationType="slide" onRequestClose={onChiudi}>
+      <VistaModale>
+        <Text style={S.h1}>Prezzi della stima</Text>
+        <Text style={[S.muted, { marginBottom: 8 }]}>
+          Quanto incassi in media a persona, IVA inclusa. Valgono per tutti i giorni, anche per gli eventi; un giorno diverso si cambia toccandolo nell'elenco.
+        </Text>
+        <View style={S.card}>
+          {p.campi(errori)}
+          <Campo label="Merce (% dell'incasso senza IVA)" value={m} errore={errori.merce} keyboardType="decimal-pad" onChange={setM} />
+          {!!calcolata && (
+            <TouchableOpacity onPress={() => setM(numeroPerCampo(calcolata.percentuale))} accessibilityRole="button"
+              style={{ minHeight: 48, justifyContent: 'center', marginTop: 4 }}>
+              <Text style={{ fontSize: 15, fontWeight: '700', color: COLORS.azione }}>
+                Usa {percento(calcolata.percentuale)}, calcolata {calcolata.mesi === 1 ? 'sul mese prima' : `sui ${calcolata.mesi} mesi prima`}
+              </Text>
+            </TouchableOpacity>
+          )}
+          {riepilogo}
+          <Bottone testo="Salva" onPress={salva} />
+          <Bottone testo="Annulla" ghost onPress={onChiudi} />
+        </View>
+      </VistaModale>
+    </Modal>
+  );
+}
+
+/** Un giorno della stima: le prenotazioni contate e i prezzi solo per quel giorno. */
+function SchedaGiornoStima({ g, onSalva, onTogli, onChiudi }) {
+  const p = usaPrezzi(g.prezzi);
+  const { errori, segnala, azzera, riepilogo } = useErrori();
+  const salva = async () => { azzera(); if (p.controlla(segnala)) await onSalva({ giorno: g.giorno, ...p.numeri }); };
+  return (
+    <Modal visible animationType="slide" onRequestClose={onChiudi}>
+      <VistaModale>
+        <Text style={S.h1}>{giornoScritto(g.giorno)}</Text>
+        <Text style={[S.muted, { marginBottom: 8 }]}>
+          {g.reale !== null ? `Incassato ${euro(g.reale)}: per questo giorno conta l'incasso vero, non la stima.` : 'Stima dalle prenotazioni del giorno.'}
+        </Text>
+        <View style={S.card}>
+          <Text style={S.h2}>Prenotazioni</Text>
+          {g.prenotazioni.length === 0 && <Text style={S.muted}>Nessuna prenotazione con persone.</Text>}
+          {g.prenotazioni.map((r, i) => (
+            <Riga key={i} prima={i === 0} titolo={`${r.nome || 'Senza nome'}${r.daConfermare ? ' · da confermare' : ''}`}
+              sotto={`${r.servizio || ''}${r.sala ? ` · ${r.sala}` : ''} · ${copertiScritti(r)}`} destra={euro(r.valore)}
+              colore={r.daConfermare ? COLORS.warning : null} />
+          ))}
+          <Riga forte titolo="Stima del giorno" destra={euro(g.stima)} sotto="IVA inclusa" />
+        </View>
+        <View style={S.card}>
+          <Text style={S.h2}>Prezzi solo per questo giorno</Text>
+          <Text style={[S.muted, { marginBottom: 4 }]}>Per esempio per un evento con un menù diverso.</Text>
+          {p.campi(errori)}
+          {riepilogo}
+          <Bottone testo="Salva per questo giorno" onPress={salva} />
+          {g.prezziDelGiorno && <Bottone testo="Torna ai prezzi di sempre" ghost onPress={onTogli} />}
+          <Bottone testo="Chiudi" ghost onPress={onChiudi} />
+        </View>
+      </VistaModale>
+    </Modal>
+  );
+}
+
 export default function IncassiScreen({ navigation }) {
   const [mese, setMese] = useState(oggiLocale().slice(0, 7));
   const [dati, setDati] = useState(null);
@@ -123,19 +220,42 @@ export default function IncassiScreen({ navigation }) {
   const [chiedi, setChiedi] = useState(false);
   const [incasso, setIncasso] = useState(null);   // { giorno, riga } aperto
   const [spesa, setSpesa] = useState(null);       // { spesa } aperta
+  const [schedaPrezzi, setSchedaPrezzi] = useState(false);
+  const [giornoStima, setGiornoStima] = useState(null); // giorno ISO aperto nella stima
   const { avviso, mostra } = useAvviso();
 
   const carica = useCallback(async () => {
     const [da, a] = limitiMese(mese);
     const [incassi, spese, merce, conPin] = [await incassiTra(da, a), await speseTra(da, a), await merceTra(da, a), await pinImpostato()];
-    setDati({ incassi, spese, merce }); setPin(conPin); setSbloccato(costiSbloccati());
+    const prenotazioni = await prenotazioniPerCalendario(da, a);
+    const prezzi = await prezziStima();
+    // la merce dei tre mesi prima, per proporre una percentuale calcolata
+    const mesiPrima = [];
+    for (let n = 1; n <= 3; n++) {
+      const [d1, d2] = limitiMese(altroMese(mese, -n));
+      const [inc, mer] = [await incassiTra(d1, d2), await merceTra(d1, d2)];
+      mesiPrima.push({ incassato: inc.reduce((s2, r) => s2 + totaleIncasso(r), 0), merce: mer.valore });
+    }
+    setDati({ incassi, spese, merce, prenotazioni, prezzi, calcolata: merceCalcolata(mesiPrima) }); setPin(conPin); setSbloccato(costiSbloccati());
   }, [mese]);
   useFocusEffect(useCallback(() => { carica().catch(() => {}); }, [carica]));
 
   const r = useMemo(() => (dati ? riepilogoConti(dati) : null), [dati]);
+  const st = useMemo(() => {
+    if (!dati) return null;
+    const [da, a] = limitiMese(mese);
+    const giorni = [];
+    for (let g = da; g <= a; g = piuGiorni(g, 1)) giorni.push(g);
+    return stimaMese({
+      giorni, prenotazioni: dati.prenotazioni, incassi: dati.incassi,
+      prezzi: { base: dati.prezzi.base, giorni: dati.prezzi.giorni }, merce: dati.prezzi.merce ?? MERCE_BASE,
+    });
+  }, [dati, mese]);
   const oggi = oggiLocale();
   const meseDiOggi = mese === oggi.slice(0, 7);
-  const giornoNuovo = meseDiOggi ? oggi : limitiMese(mese)[1];
+  const futuro = mese > oggi.slice(0, 7);
+  const ultimoMese = mese >= altroMese(oggi.slice(0, 7), MESI_AVANTI);
+  const giornoNuovo = meseDiOggi || futuro ? oggi : limitiMese(mese)[1];
 
   if (pin === null || !dati) return <View style={S.screen} />;
 
@@ -171,8 +291,8 @@ export default function IncassiScreen({ navigation }) {
             <Icona nome="chevron-left" size={26} colore={COLORS.text} />
           </TouchableOpacity>
           <Text accessibilityRole="header" style={{ flex: 1, textAlign: 'center', fontSize: 20, fontWeight: '700', color: COLORS.text }}>{maiuscola(nomeMese(mese))}</Text>
-          <TouchableOpacity onPress={() => setMese(altroMese(mese, 1))} disabled={meseDiOggi} accessibilityRole="button" accessibilityLabel="Mese successivo"
-            style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: COLORS.contenitore, alignItems: 'center', justifyContent: 'center', opacity: meseDiOggi ? 0.35 : 1 }}>
+          <TouchableOpacity onPress={() => setMese(altroMese(mese, 1))} disabled={ultimoMese} accessibilityRole="button" accessibilityLabel="Mese successivo"
+            style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: COLORS.contenitore, alignItems: 'center', justifyContent: 'center', opacity: ultimoMese ? 0.35 : 1 }}>
             <Icona nome="chevron-right" size={26} colore={COLORS.text} />
           </TouchableOpacity>
         </View>
@@ -182,9 +302,59 @@ export default function IncassiScreen({ navigation }) {
           <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.suEroeTenue }}>Incassato nel mese, IVA inclusa</Text>
           <Text style={{ fontSize: 34, fontWeight: '800', color: COLORS.suEroe, letterSpacing: -0.8 }}>{euro(r.incassato)}</Text>
           <Text style={{ fontSize: 15, color: COLORS.suEroeTenue }}>
-            {r.giorni ? `${r.giorni} ${r.giorni === 1 ? 'giorno' : 'giorni'} con incasso · in media ${euro(r.mediaGiorno)} al giorno` : 'Nessun incasso registrato in questo mese'}
+            {r.giorni ? `${r.giorni} ${r.giorni === 1 ? 'giorno' : 'giorni'} con incasso · in media ${euro(r.mediaGiorno)} al giorno`
+              : futuro ? 'Mese che deve ancora venire: qui sotto la stima dalle prenotazioni' : 'Nessun incasso registrato in questo mese'}
           </Text>
         </View>
+
+        {/* stima dalle prenotazioni */}
+        <View style={[S.card, { borderWidth: 1.5, borderColor: COLORS.terra, borderStyle: 'dashed' }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={[S.h2, { flex: 1 }]}>Stima del mese</Text>
+            <View style={{ backgroundColor: COLORS.terraSoft, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 4 }}>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.terraScuro }}>STIMA</Text>
+            </View>
+          </View>
+          <Text style={[S.muted, { marginBottom: 4 }]}>
+            {st.coperti.persone
+              ? `${st.coperti.persone} coperti prenotati${st.daConfermare.persone ? `, di cui ${st.daConfermare.persone} da confermare` : ''} · ${copertiScritti(st.coperti)}`
+              : 'Nessuna prenotazione con persone in questo mese.'}
+          </Text>
+          <Riga prima titolo="Incasso previsto" destra={euro(st.lordo)}
+            sotto={[st.giorniReali ? `${euro(st.reale)} già incassati` : null, st.stimato ? `${euro(st.stimato)} stimati dalle prenotazioni` : null,
+              st.lordoDaConfermare ? `di cui ${euro(st.lordoDaConfermare)} da confermare` : null].filter(Boolean).join(' · ') || 'IVA inclusa'} />
+          <Riga titolo="Senza IVA" destra={euro(st.netto)} sotto={`Tolta l'IVA al ${st.iva}%`} />
+          <Riga titolo={`Merce al ${percento(st.merce)}`} destra={`− ${euro(st.costoMerce)}`}
+            sotto={dati.calcolata ? `Nei mesi prima è stata il ${percento(dati.calcolata.percentuale)}` : 'Percentuale scelta da te'} />
+          <Riga forte titolo="Margine stimato" destra={euro(st.margine)} colore={st.margine >= 0 ? COLORS.ok : COLORS.danger}
+            sotto="Prima di personale e altre spese" />
+          <Text style={[S.muted, { marginTop: 8 }]}>
+            Prezzi a persona: adulto {euro(st.prezzi.adulto)}, bambino {euro(st.prezzi.bambino)}, neonato {euro(st.prezzi.neonato)}. Nei giorni con un incasso registrato conta l'incasso vero.
+          </Text>
+          <Bottone testo="Cambia prezzi e merce" icona="pencil-outline" ghost onPress={() => setSchedaPrezzi(true)} />
+        </View>
+
+        <Sezione titolo="Stima giorno per giorno" icona="calendar-clock-outline" memoria="incassi_stima"
+          riassunto={st.giorni.length ? `${st.giorni.length} ${st.giorni.length === 1 ? 'giorno' : 'giorni'} con prenotazioni o incassi` : 'Niente in questo mese'}>
+          {st.giorni.length === 0 && <Text style={S.muted}>Nessuna prenotazione o incasso in questo mese.</Text>}
+          {st.giorni.map((g, i) => (
+            <TouchableOpacity key={g.giorno} onPress={() => setGiornoStima(g.giorno)} activeOpacity={0.7} accessibilityRole="button"
+              accessibilityLabel={`${giornoScritto(g.giorno)}, ${euro(g.conta)}. Apri`}
+              style={{ flexDirection: 'row', alignItems: 'center', minHeight: 60, paddingVertical: 8, borderTopWidth: i ? 1 : 0, borderTopColor: COLORS.border }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.text }}>{giornoScritto(g.giorno)}</Text>
+                <Text numberOfLines={2} style={{ fontSize: 13, color: COLORS.muted }}>
+                  {[g.coperti.persone ? `${g.coperti.persone} coperti` : null,
+                    g.daConfermare.persone ? `${g.daConfermare.persone} da confermare` : null,
+                    g.reale !== null ? 'incasso vero' : 'stima',
+                    g.prezziDelGiorno ? 'prezzi del giorno' : null].filter(Boolean).join(' · ')}
+                </Text>
+              </View>
+              <Text style={{ fontSize: 16, fontWeight: '700', color: g.reale !== null ? COLORS.text : COLORS.terra }}>{euro(g.conta)}</Text>
+              <Icona nome="chevron-right" colore={COLORS.muted} />
+            </TouchableOpacity>
+          ))}
+        </Sezione>
 
         <View style={S.card}>
           <Text style={S.h2}>Come è stato pagato</Text>
@@ -275,6 +445,16 @@ export default function IncassiScreen({ navigation }) {
           onSalva={async (x) => { await salvaSpesa(x); setSpesa(null); await carica(); mostra('Salvato ✓'); }}
           onElimina={() => conferma('Eliminare la spesa?', `${spesa.spesa.descrizione || spesa.spesa.categoria}: ${euro(spesa.spesa.importo)}`,
             async () => { await eliminaSpesa(spesa.spesa.id); setSpesa(null); await carica(); })} />
+      )}
+      {schedaPrezzi && (
+        <SchedaPrezzi prezzi={prezziPuliti(dati.prezzi.base)} merce={mercePulita(dati.prezzi.merce ?? MERCE_BASE)} calcolata={dati.calcolata}
+          onChiudi={() => setSchedaPrezzi(false)}
+          onSalva={async (x) => { await salvaPrezziStima(x); setSchedaPrezzi(false); await carica(); mostra('Salvato ✓'); }} />
+      )}
+      {!!giornoStima && st.giorni.find((g) => g.giorno === giornoStima) && (
+        <SchedaGiornoStima g={st.giorni.find((g) => g.giorno === giornoStima)} onChiudi={() => setGiornoStima(null)}
+          onSalva={async (x) => { await salvaPrezziStima(x); setGiornoStima(null); await carica(); mostra('Salvato ✓'); }}
+          onTogli={async () => { await togliPrezziGiorno(giornoStima); setGiornoStima(null); await carica(); mostra('Prezzi di sempre ✓'); }} />
       )}
       {avviso}
     </View>
