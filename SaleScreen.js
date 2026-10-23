@@ -15,6 +15,7 @@ import { S, COLORS, TEMA_SCURO, aNumero, oggiLocale, fmtData } from './theme';
 import { Icona, Bottone, Campo, CampoData, Segmenti, Sezione, VistaModale, conferma, useAvviso, useErrori } from './UI';
 import {
   disposizioneGiorno, salvaDisposizioneGiorno, modelliSale, salvaModelloSale, eliminaModelloSale, getImpostazioni,
+  disdetteDelGiorno, disdiciTavolata, annullaDisdetta, MINUTI_ANNULLA,
 } from './database';
 import {
   SALE, ID_SALE, SERVIZI, LUNGA_MIN, LUNGA_MAX, posti, lunghezza, lunghezzaPer, restoFila, entra, pianoVuoto, sistemaPiano, senzaPrenotazioni,
@@ -58,11 +59,12 @@ function moduloSala() {
 }
 
 /** Una prenotazione e la sua tavolata: dalle persone la lunghezza, che si può correggere a mano. */
-function SchedaTavolata({ sala, piano, fila, tavolata, sigla, nuova, massimaNuova = 0, destinazioni = [], onSalva, onSposta, onElimina, onChiudi }) {
+function SchedaTavolata({ sala, piano, fila, tavolata, sigla, nuova, massimaNuova = 0, destinazioni = [], onSalva, onSposta, onElimina, onDisdici, onChiudi }) {
   const [t, setT] = useState(tavolata);
   const { errori, segnala, azzera, riepilogo } = useErrori();
   useEffect(() => { setT(tavolata); azzera(); }, [tavolata.id, azzera])
   const persone = aNumero(t.persone);
+  const prenotataPrima = !nuova && !!(String(tavolata.nome || '').trim() || aNumero(tavolata.persone));
   const len = lunghezza(t);
   const p = posti(len);
   const troppi = persone !== null && persone > p.posti;
@@ -91,6 +93,9 @@ function SchedaTavolata({ sala, piano, fila, tavolata, sigla, nuova, massimaNuov
           {nuova ? 'LA METTO NEL POSTO MIGLIORE: POI LA SPOSTI TRASCINANDOLA' : `${sala.nome.toUpperCase()} · ${sala.file[fila].nome.toUpperCase()}`}
         </Text>
         <Text style={S.h1}>{nuova ? 'Nuova prenotazione' : `Tavolo ${sigla}`}</Text>
+        {prenotataPrima && (
+          <Bottone testo={`Disdici ${tavolata.nome || 'la prenotazione'}`} icona="account-cancel-outline" ghost colore={COLORS.danger} onPress={onDisdici} />
+        )}
 
         <View style={S.card}>
           <Campo label="Nome" value={t.nome} onChange={(v) => setT((x) => ({ ...x, nome: v }))} placeholder="Per esempio: Rossi" />
@@ -147,7 +152,7 @@ function SchedaTavolata({ sala, piano, fila, tavolata, sigla, nuova, massimaNuov
             ))}
           </Sezione>
         )}
-        {!nuova && <Bottone testo="Togli la tavolata" ghost colore={COLORS.danger} onPress={onElimina} />}
+        {!nuova && <Bottone testo={prenotataPrima ? 'Togli la tavolata (scritta per errore)' : 'Togli la tavolata'} ghost colore={COLORS.danger} onPress={onElimina} />}
         <Bottone testo={nuova ? 'Annulla' : 'Chiudi senza salvare'} ghost onPress={onChiudi} />
       </VistaModale>
     </Modal>
@@ -173,6 +178,7 @@ export default function SaleScreen({ suTuttoSchermo, apri, suAperta }) {
   const [quale, setQuale] = useState(0); // sala mostrata: posizione in ID_SALE
   const [dati, setDati] = useState(VUOTI);
   const [modelli, setModelli] = useState([]);
+  const [disdette, setDisdette] = useState([]);
   const [scena, setScena] = useState('attesa');
   const [scelta, setScelta] = useState(null); // id della tavolata aperta
   const [nuova, setNuova] = useState(null);   // { tavolata } mentre si scrive una prenotazione nuova
@@ -213,9 +219,9 @@ export default function SaleScreen({ suTuttoSchermo, apri, suAperta }) {
   const carica = useCallback(async () => {
     const k = `${data}|${servizio}`;
     chiave.current = k;
-    const [d, mod] = [await disposizioneGiorno(data, servizio), await modelliSale()];
+    const [d, mod, dis] = [await disposizioneGiorno(data, servizio), await modelliSale(), await disdetteDelGiorno(data, servizio)];
     if (chiave.current !== k) return; // nel frattempo è stato scelto un altro giorno
-    setDati(d || VUOTI()); setModelli(mod);
+    setDati(d || VUOTI()); setModelli(mod); setDisdette(dis);
   }, [data, servizio]);
   useFocusEffect(useCallback(() => { carica().catch(() => {}); }, [carica]));
   useFocusEffect(useCallback(() => { setVersione((n) => n + 1); }, []));
@@ -239,6 +245,28 @@ export default function SaleScreen({ suTuttoSchermo, apri, suAperta }) {
     salvaDisposizioneGiorno(data, servizio, nuovi).catch((e) => mostra(`Non salvato: ${String(e && e.message || e)}`));
   }, [data, servizio, mostra]);
   const cambiaPiano = (id, nuovo) => cambia({ ...piani, [id]: nuovo });
+
+  /** "Annulla" di una disdetta (entro MINUTI_ANNULLA minuti): torna a tavola com'era. */
+  const annullaDis = useCallback(async (id) => {
+    try {
+      const e = await annullaDisdetta(id);
+      await carica();
+      mostra(e && e.sala ? 'Di nuovo a tavola ✓' : 'Di nuovo da confermare ✓');
+    } catch (e) {
+      mostra(String((e && e.message) || e));
+    }
+  }, [carica, mostra]);
+  /** Disdice una prenotazione: libera il posto e resta fra le disdette, con "Annulla" per 10 minuti. */
+  const disdici = useCallback(async (id) => {
+    try {
+      const e = await disdiciTavolata(data, servizio, id);
+      setScelta(null);
+      await carica();
+      mostra(`${e.nome || 'Prenotazione'} disdetta`, { testo: 'Annulla', onPress: () => annullaDis(e.id) });
+    } catch (e) {
+      mostra(String((e && e.message) || e));
+    }
+  }, [data, servizio, carica, mostra, annullaDis]);
 
   const disposta = useMemo(() => disponi(sala, piano), [sala, piano]);
   const nomi = useMemo(() => sigle(sala, piano), [sala, piano]);
@@ -346,7 +374,8 @@ export default function SaleScreen({ suTuttoSchermo, apri, suAperta }) {
             cambiaPiano(aperta.sala, nuovo); setScelta(null); mostra('Salvato ✓');
           }}
           onSposta={(aSala, f) => { if (sposta(scelta, aSala, f)) { setScelta(null); mostra('Spostata ✓'); } }}
-          onElimina={() => { cambiaPiano(aperta.sala, togli(SALE[aperta.sala], piani[aperta.sala], scelta)); setScelta(null); }} />
+          onElimina={() => { cambiaPiano(aperta.sala, togli(SALE[aperta.sala], piani[aperta.sala], scelta)); setScelta(null); }}
+          onDisdici={() => disdici(scelta)} />
       )}
       {!!nuova && (
         <SchedaTavolata nuova sala={sala} piano={piano} fila={0} tavolata={nuova.tavolata} massimaNuova={massimaNuova}
@@ -448,27 +477,67 @@ export default function SaleScreen({ suTuttoSchermo, apri, suAperta }) {
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                 {piano.file[i].map((t) => {
                   const len = lunghezza(t), p = posti(len), persone = aNumero(t.persone) || 0, prenotata = !!(t.nome || persone), troppi = persone > p.posti;
+                  const colore = troppi ? COLORS.danger : prenotata ? COLORS.primaryDark : COLORS.text;
                   return (
-                    <TouchableOpacity key={t.id} onPress={() => setScelta(t.id)} activeOpacity={0.75} accessibilityRole="button"
-                      accessibilityLabel={`Tavolo ${nomi[t.id]}, ${prenotata ? `${t.nome || 'prenotato'}, ${persone} persone` : 'libero'}, tavolata di ${metri(len)}, ${p.posti} posti`}
-                      style={{
-                        minHeight: 64, minWidth: 104, borderRadius: 16, paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1.5,
-                        borderColor: troppi ? COLORS.danger : prenotata ? COLORS.ok : COLORS.bordoCampo,
-                        backgroundColor: prenotata && !troppi ? COLORS.primarySoft : COLORS.card,
-                      }}>
-                      <Text style={{ fontSize: 16, fontWeight: '800', color: troppi ? COLORS.danger : prenotata ? COLORS.primaryDark : COLORS.text }}>
-                        {nomi[t.id]}{t.nome ? ` · ${t.nome}` : ''}
-                      </Text>
-                      <Text style={{ fontSize: 13, color: troppi ? COLORS.danger : prenotata ? COLORS.primaryDark : COLORS.muted }}>
-                        {prenotata ? `${persone || '?'} pers.` : 'libera'} · {metri(len)}{t.ora ? ` · ${t.ora}` : ''}
-                      </Text>
-                    </TouchableOpacity>
+                    // una prenotazione occupa la riga intera, con "Disdici" a destra; una tavolata libera resta un riquadro piccolo
+                    <View key={t.id} style={{
+                      flexDirection: 'row', alignItems: 'center', minHeight: 64, minWidth: 104, width: prenotata ? '100%' : undefined,
+                      borderRadius: 16, borderWidth: 1.5, borderColor: troppi ? COLORS.danger : prenotata ? COLORS.ok : COLORS.bordoCampo,
+                      backgroundColor: prenotata && !troppi ? COLORS.primarySoft : COLORS.card,
+                    }}>
+                      <TouchableOpacity onPress={() => setScelta(t.id)} activeOpacity={0.75} accessibilityRole="button"
+                        accessibilityLabel={`Tavolo ${nomi[t.id]}, ${prenotata ? `${t.nome || 'prenotato'}, ${persone} persone` : 'libero'}, tavolata di ${metri(len)}, ${p.posti} posti`}
+                        style={{ flex: prenotata ? 1 : undefined, paddingVertical: 8, paddingHorizontal: 12, minHeight: 64, justifyContent: 'center' }}>
+                        <Text numberOfLines={1} style={{ fontSize: 16, fontWeight: '800', color: colore }}>
+                          {nomi[t.id]}{t.nome ? ` · ${t.nome}` : ''}
+                        </Text>
+                        <Text numberOfLines={1} style={{ fontSize: 13, color: troppi ? COLORS.danger : prenotata ? COLORS.primaryDark : COLORS.muted }}>
+                          {prenotata ? `${persone || '?'} pers.` : 'libera'} · {metri(len)}{t.ora ? ` · ${t.ora}` : ''}
+                        </Text>
+                      </TouchableOpacity>
+                      {prenotata && (
+                        <TouchableOpacity onPress={() => disdici(t.id)} accessibilityRole="button" accessibilityLabel={`Disdici ${t.nome || `il tavolo ${nomi[t.id]}`}`}
+                          style={{ minHeight: 48, minWidth: 48, paddingHorizontal: 14, marginRight: 6, borderRadius: 24, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 4 }}>
+                          <Icona nome="account-cancel-outline" size={20} colore={COLORS.danger} />
+                          <Text style={{ fontSize: 14, fontWeight: '700', color: COLORS.danger }}>Disdici</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
                   );
                 })}
               </View>
             </View>
           );
         })}
+
+        {disdette.length > 0 && (
+          <Sezione titolo="Disdette" icona="account-cancel-outline" memoria="sala_disdette"
+            riassunto={`${plurale(disdette.length, 'prenotazione disdetta', 'prenotazioni disdette')} · non contano nei coperti`}>
+            {disdette.map((x, i) => {
+              const recente = Date.now() - new Date(x.creato_il).getTime() <= MINUTI_ANNULLA * 60000;
+              const n = aNumero(x.tavolata.persone);
+              return (
+                <View key={x.id} style={{ flexDirection: 'row', alignItems: 'center', minHeight: 52, borderTopWidth: i ? 1 : 0, borderTopColor: COLORS.border }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 16, color: COLORS.muted, textDecorationLine: 'line-through' }} numberOfLines={1}>
+                      {x.tavolata.nome || 'Senza nome'}{n ? ` · ${n} pers.` : ''}
+                    </Text>
+                    <Text style={{ fontSize: 13, color: COLORS.muted }}>
+                      {[SALE[x.sala] ? NOMI_SALE[ID_SALE.indexOf(x.sala)] : null, x.uid ? 'da Family Wall' : null,
+                        `disdetta ${fmtData(x.creato_il)}`].filter(Boolean).join(' · ')}
+                    </Text>
+                  </View>
+                  {recente && (
+                    <TouchableOpacity onPress={() => annullaDis(x.id)} accessibilityRole="button" accessibilityLabel={`Annulla la disdetta di ${x.tavolata.nome || 'questa prenotazione'}`}
+                      style={{ minHeight: 48, paddingHorizontal: 12, justifyContent: 'center' }}>
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: COLORS.azione }}>Annulla</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              );
+            })}
+          </Sezione>
+        )}
 
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
           {!!Sala3D && pulsantino('phone-rotate-landscape', 'Due sale', () => { setScelta(null); setInsieme(true); })}

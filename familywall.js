@@ -125,6 +125,22 @@ const SIGLE_SALA = [
 const PAROLE_INUTILI = new RegExp(`(^|[^${L}])(cop(?:erti)?|pax|pers(?:one)?|cell?|cellulare|tel(?:efono)?|nr?|num)\\.?(?![${L}])`, 'gi');
 const SERA = new RegExp(`(^|[^${L}])(cena|sera)(?![${L}])`, 'i');
 const ACCONTO = new RegExp(`(^|[^${L}])acc(?:onto)?\\.?(?![${L}])`, 'i');
+// orari scritti nel testo ("ore 17", "h 13", "alle 13", "13:30", "13.30"): non sono persone (6/10/2026: "Ore 17" letto come 17 persone)
+const ORARIO = new RegExp(`(^|[^${L}\\d+\\-/])((?:ore|h|alle)\\.?\\s*(?:[01]?\\d|2[0-3])(?:[:.][0-5]\\d)?|(?:[01]?\\d|2[0-3])[:.][0-5]\\d)(?![\\d/])`, 'gi');
+
+/** Il testo con gli orari sostituiti da spazi (le posizioni del resto non cambiano) e gli orari trovati. */
+export function senzaOrari(s) {
+  const orari = [];
+  let testo = String(s || '');
+  ORARIO.lastIndex = 0;
+  let m;
+  while ((m = ORARIO.exec(testo))) {
+    const da = m.index + m[1].length;
+    orari.push(m[2].trim());
+    testo = sbianca(testo, da, da + m[2].length);
+  }
+  return { testo, orari };
+}
 
 /** Coperti nel testo: intervallo "13/16", composizione "9+2+1" / "5-1(8anni)", oppure un numero da solo. */
 function trovaCoperti(s) {
@@ -213,6 +229,11 @@ export function leggiTesto(titolo, descrizione = '', colore = '') {
 
   const acconto = eVerde(colore) || ACCONTO.test(s) || ACCONTO.test(d);
 
+  // gli orari non sono coperti: nel titolo si tolgono (restano nelle note), nella descrizione si saltano solo nella ricerca
+  const orariTitolo = senzaOrari(s);
+  s = orariTitolo.testo;
+  const dSenzaOrari = senzaOrari(d).testo;
+
   // coperti: nel titolo, altrimenti nella descrizione
   let c = trovaCoperti(s);
   let nome = '';
@@ -221,7 +242,7 @@ export function leggiTesto(titolo, descrizione = '', colore = '') {
     nome = s.slice(0, c.da);
     resto = s.slice(c.a);
   } else {
-    const c2 = trovaCoperti(d);
+    const c2 = trovaCoperti(dSenzaOrari);
     if (c2) { c = c2; d = d.slice(0, c2.da) + d.slice(c2.a); }
     nome = s;
   }
@@ -237,7 +258,7 @@ export function leggiTesto(titolo, descrizione = '', colore = '') {
   if (!nome || nome.split(' ').length > 4) incerti.push('nome');
   if (!c || c.dubbio) incerti.push('persone');
 
-  const note = [pulisci(resto), pulisci(d.replace(PAROLE_INUTILI, '$1 '))].filter(Boolean).join(' · ');
+  const note = [orariTitolo.orari.join(', '), pulisci(resto), pulisci(d.replace(PAROLE_INUTILI, '$1 '))].filter(Boolean).join(' · ');
   return {
     nome,
     adulti: c ? c.adulti : null,
@@ -288,9 +309,9 @@ export const testoEvento = (e) => [e.titolo, e.descrizione].filter(Boolean).join
  * passate restano anche se non sono state confermate, così il calendario del Menù le mostra ancora.
  * Da oggi in poi:
  * - evento nuovo → riga 'nuova' (da confermare);
- * - evento cambiato: se era da confermare si aggiorna; se era scartato torna da confermare; se era confermato si aggiorna
+ * - evento cambiato: se era da confermare si aggiorna; se era scartato o disdetto torna da confermare; se era confermato si aggiorna
  *   e viene segnalato (`cambiata`), la tavolata resta dov'è;
- * - evento sparito: se era da confermare o scartato la riga si toglie; se era confermato viene segnalato (`sparita`).
+ * - evento sparito: se era da confermare, scartato o disdetto la riga si toglie; se era confermato viene segnalato (`sparita`).
  * Giorni passati (fino a `GIORNI_INDIETRO`): un evento che manca si aggiunge (così tornano anche quelle cancellate prima di
  * questa scelta) e uno cambiato si aggiorna se non era confermato; nessuna segnalazione e nessuna cancellazione.
  * → { inserisci: [riga], aggiorna: [{ uid, ...campi }], elimina: [uid] }
@@ -315,7 +336,10 @@ export function confronta(righe, eventi, oggi = oggiLocale()) {
       if (cambiato) out.aggiorna.push({ uid: r.uid, ...nuovo, cambiata: 1, sparita: 0 });
       else if (r.sparita) out.aggiorna.push({ uid: r.uid, sparita: 0 });
     } else if (cambiato) {
-      out.aggiorna.push({ uid: r.uid, ...nuovo, stato: r.stato === 'scartata' && passato ? 'scartata' : 'nuova' });
+      // scartata o disdetta: nei giorni passati resta com'è; da oggi in poi torna da confermare (così si vede che è cambiata)
+      const resta = passato && (r.stato === 'scartata' || r.stato === 'disdetta');
+      out.aggiorna.push({ uid: r.uid, ...nuovo, stato: resta ? r.stato : 'nuova',
+        ...(r.stato === 'disdetta' && !resta ? { tavolata_id: null, posto_data: null, posto_servizio: null } : {}) });
     }
   }
 

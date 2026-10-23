@@ -257,12 +257,16 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
   = 5 adulti e 1 bambino di 8 anni ("-" vale "+"), "13/16" = da 13 a 16 (tavoli per 16), "A.S." = antica stalla, "S.P." =
   panoramica, evento verde = acconto ricevuto, orari degli eventi da ignorare, solo pranzo salvo "cena"/"sera" nel testo.
   Nel repository solo nomi e telefoni inventati. Le espressioni regolari non usano `\p{L}` (lettere scritte per esteso, costante `L`).
+  Orari nel testo (`senzaOrari`: "ore 17", "h 13", "alle 13", "13:30", "13.30") non sono persone: nel titolo si tolgono e finiscono nelle
+  note, nella descrizione si saltano solo nella ricerca dei coperti (6/10/2026: un appuntamento "Ore 17" era letto come 17 persone).
 - Tabella `prenotazioni_esterne` (nel backup, in `TABELLE_NUOVE`): una riga per evento, stato `nuova` (da confermare) / `confermata` /
-  `scartata`; per le confermate `tavolata_id`, `posto_data`, `posto_servizio`; `cambiata` / `sparita` = cambiata o sparita in Family Wall
+  `scartata` / `disdetta`; per le confermate `tavolata_id`, `posto_data`, `posto_servizio`; `cambiata` / `sparita` = cambiata o sparita in Family Wall
   dopo la conferma. Nulla di confermato si cancella da solo: decide chi guarda ("Rifai la scheda", "Lascia com'è", "Togli la tavolata").
   Si guardano i giorni da tre mesi fa (`GIORNI_INDIETRO`) a 400 giorni avanti. Giorni passati (scelta di Luca del 19/10/2026): nessuna
   riga si cancella, anche se non confermata, così il calendario del Menù le mostra ancora; gli eventi passati mancanti si aggiungono
   (senza annunciarli come "nuove") e quelli cambiati si aggiornano se non confermati; niente segnalazioni `cambiata` / `sparita`.
+- Una confermata la cui tavolata non c'è più nella disposizione (tolta, sala svuotata, modello applicato) torna `nuova` (o si toglie se
+  era `sparita`): lo fa `salvaDisposizioneGiorno` (`sistemaConfermateSenzaTavolata`), così non restano righe confermate senza tavolata.
 - Il link sta nelle preferenze locali (`familywall_link`, mai nel backup, mai mostrato) insieme a `familywall_ultimo` e
   `familywall_errore`; si collega, cambia o scollega solo dopo il PIN del titolare (`costiSbloccati` / `sbloccaCosti`).
 - `familywallAggiorna.js`: `aggiornaDaFamilyWall` (scarica e applica) e `aggiornaSeServe` (all'apertura della Sala, al massimo ogni
@@ -282,6 +286,20 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
   "Prenotazioni" per servizio. Il tocco manda `apriSala { data, servizio }` (`aperturaSala`): PrincipaleScreen apre la Sala su quel
   giorno (`apri` / `suAperta` di SaleScreen). Fuori dalla suite (SuitePrenotazioni assente) il calendario resta com'era.
   Stili in `menu/css/suite.css`; provato in `test/menu-suite.py`.
+
+## Disdette (Fase 1 del controllo UX, scelte di Luca del 23/10/2026)
+- Una prenotazione disdetta NON si cancella: libera il posto e resta visibile barrata nel blocco "Disdette" della Sala (giorno e
+  servizio scelti), senza contare nei coperti, nel calendario del Menù né nella stima degli incassi. Tabella `disdette` (nel backup, in
+  `TABELLE_NUOVE`): data, servizio, sala, fila, `tavolata` (JSON della tavolata com'era), `uid` della riga di Family Wall, `stato_prima`,
+  `creato_il`. `disdetteDelGiorno` le legge (quelle di Family Wall solo finché la riga è ancora `disdetta`).
+- `disdiciTavolata(data, servizio, id)`: dalla Sala (pulsante "Disdici" su ogni prenotazione dell'elenco e in cima alla scheda del tavolo);
+  se la tavolata viene da Family Wall anche la riga diventa `disdetta`. `disdiciPrenotazioneEsterna(uid)`: per le da confermare (riga del
+  riquadro Family Wall e "Disdetta dal cliente" nella scheda di conferma; "Non è una prenotazione" resta per gli appuntamenti).
+- `annullaDisdetta(id)`: entro `MINUTI_ANNULLA` (controllo `ancoraAnnullabile` su `creato_il`), dall'avviso o dal blocco "Disdette";
+  la tavolata torna nella sua fila vicino a dov'era, altrimenti nel posto migliore (`mettiATavola`), e la riga di Family Wall torna com'era.
+- Family Wall: una `disdetta` non torna con un aggiornamento uguale; se l'evento cambia (da oggi in poi) torna `nuova`, nei giorni passati
+  resta `disdetta`; se sparisce (da oggi in poi) la riga si toglie. "Togli la tavolata (scritta per errore)" resta per gli errori.
+- Test in `test/disdette.test.mjs`.
 
 ## Incassi e costi (Gestione → Incassi, scelte di Luca del 9/10/2026)
 - `conti.js` (puro, `test/conti.test.mjs`) + `IncassiScreen.js`. Incassi: una riga per giorno (tabella `incassi`), divisa per metodo

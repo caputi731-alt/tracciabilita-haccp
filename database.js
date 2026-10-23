@@ -1,8 +1,8 @@
 import * as SQLite from 'expo-sqlite';
 import { oggiLocale, piuGiorni, limitiGiorni, giornoDi, daIsoLocale, arrotonda, ALLERGENI } from './utile';
-import { SALE, ID_SALE, SERVIZI, pianoPulito, senzaPrenotazioni, totali as totaliSale } from './sale';
+import { SALE, ID_SALE, SERVIZI, pianoPulito, senzaPrenotazioni, totali as totaliSale, metti, lunghezza, pianoVuoto } from './sale';
 import { CATEGORIE_SPESA } from './conti';
-import { confronta, mettiATavola, togliTavolata, linkValido, prenotazioniCalendario } from './familywall';
+import { confronta, mettiATavola, togliTavolata, linkValido, prenotazioniCalendario, leggiTesto } from './familywall';
 
 let apertura = null;
 
@@ -247,6 +247,18 @@ async function preparaSchema() {
       cambiata INTEGER NOT NULL DEFAULT 0,
       sparita INTEGER NOT NULL DEFAULT 0,
       aggiornato TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS disdette (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      data TEXT NOT NULL,
+      servizio TEXT NOT NULL,
+      sala TEXT,
+      fila INTEGER,
+      tavolata TEXT NOT NULL,
+      uid TEXT,
+      stato_prima TEXT,
+      creato_il TEXT NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS incassi (
@@ -762,7 +774,7 @@ async function elencoTabelle() {
 const TABELLE_LOCALI = ['preferenze'];
 
 /** Tabelle aggiunte dopo i primi backup: se il backup da ripristinare non le contiene, non vengono svuotate. */
-const TABELLE_NUOVE = ['menu_dati', 'cucina_posti', 'disposizioni', 'incassi', 'spese', 'prenotazioni_esterne', 'stima_prezzi'];
+const TABELLE_NUOVE = ['menu_dati', 'cucina_posti', 'disposizioni', 'incassi', 'spese', 'prenotazioni_esterne', 'stima_prezzi', 'disdette'];
 
 export async function esportaTutto() {
   const tabelle = (await elencoTabelle()).filter((t) => !TABELLE_LOCALI.includes(t));
@@ -867,13 +879,33 @@ export async function disposizioneGiorno(data, servizio) {
 export async function salvaDisposizioneGiorno(data, servizio, dati) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(data))) throw new Error('Data non valida');
   if (!SERVIZI.includes(servizio)) throw new Error('Servizio non valido');
-  const testo = JSON.stringify(pianiPuliti(dati, pianoPulito));
+  const puliti = pianiPuliti(dati, pianoPulito);
+  const testo = JSON.stringify(puliti);
   const d = await getDb();
   await d.withTransactionAsync(async () => {
     const r = await queryOne("SELECT id FROM disposizioni WHERE tipo = 'giorno' AND data = ? AND servizio = ?", [data, servizio]);
     if (r) await exec('UPDATE disposizioni SET dati = ?, aggiornato = ? WHERE id = ?', [testo, new Date().toISOString(), r.id]);
     else await exec("INSERT INTO disposizioni (tipo, data, servizio, dati, aggiornato) VALUES ('giorno', ?, ?, ?, ?)", [data, servizio, testo, new Date().toISOString()]);
+    await sistemaConfermateSenzaTavolata(data, servizio, puliti);
   });
+}
+
+/**
+ * Una prenotazione di Family Wall confermata la cui tavolata non c'è più nella disposizione (tolta a mano, sala svuotata,
+ * modello applicato) torna da confermare; se nel frattempo era sparita da Family Wall, si toglie. Dentro una transazione.
+ */
+async function sistemaConfermateSenzaTavolata(data, servizio, piani) {
+  const presenti = new Set(ID_SALE.flatMap((id) => ((piani[id] && piani[id].file) || []).flat().map((t) => t.id)));
+  const righe = await query("SELECT uid, tavolata_id, sparita FROM prenotazioni_esterne WHERE stato = 'confermata' AND posto_data = ? AND posto_servizio = ?",
+    [data, servizio]);
+  for (const r of righe) {
+    if (presenti.has(r.tavolata_id)) continue;
+    if (r.sparita) await exec('DELETE FROM prenotazioni_esterne WHERE uid = ?', [r.uid]);
+    else {
+      await exec(`UPDATE prenotazioni_esterne SET stato = 'nuova', tavolata_id = NULL, posto_data = NULL, posto_servizio = NULL,
+        cambiata = 0, aggiornato = ? WHERE uid = ?`, [new Date().toISOString(), r.uid]);
+    }
+  }
 }
 
 /** I giorni (da una data in poi) che hanno una disposizione con almeno una prenotazione: [{ data, servizio, persone, prenotate }]. */
@@ -1039,6 +1071,104 @@ export async function lasciaPrenotazioneEsterna(uid) {
   const r = await rigaEsterna(uid);
   if (r.sparita) return exec('DELETE FROM prenotazioni_esterne WHERE uid = ?', [uid]);
   return exec('UPDATE prenotazioni_esterne SET cambiata = 0, aggiornato = ? WHERE uid = ?', [new Date().toISOString(), uid]);
+}
+
+/* ---------- disdette (scelta di Luca del 23/10/2026) ----------
+   Una prenotazione disdetta non si cancella: libera il posto in sala e resta visibile come "disdetta" (tabella `disdette`, nel
+   backup), senza contare nei coperti, nel calendario del Menù né nella stima degli incassi. Vale per le tavolate della Sala (anche
+   quelle confermate da Family Wall, la cui riga passa allo stato 'disdetta') e per le prenotazioni di Family Wall ancora da
+   confermare. "Annulla" entro MINUTI_ANNULLA minuti la rimette com'era. */
+
+const tavolataDi = (r) => leggiJson(r.tavolata, {});
+
+/** Le disdette di un giorno e di un servizio, la più recente per prima: [{ id, sala, tavolata, uid, creato_il, ... }]. */
+export async function disdetteDelGiorno(data, servizio) {
+  const righe = await query(`SELECT d.* FROM disdette d LEFT JOIN prenotazioni_esterne e ON e.uid = d.uid
+    WHERE d.data = ? AND d.servizio = ? AND (d.uid IS NULL OR e.uid IS NULL OR e.stato = 'disdetta') ORDER BY d.creato_il DESC, d.id DESC`,
+  [data, servizio]);
+  return righe.map((r) => ({ ...r, tavolata: tavolataDi(r) }));
+}
+
+/** Disdice una tavolata della Sala: esce dalla disposizione del giorno e resta fra le disdette. → { id, nome } */
+export async function disdiciTavolata(data, servizio, tavolataId) {
+  if (!SERVIZI.includes(servizio)) throw new Error('Servizio non valido');
+  const d = await getDb();
+  let esito = null;
+  await d.withTransactionAsync(async () => {
+    const piani = await pianiDelGiorno(data, servizio);
+    let trovata = null;
+    for (const id of ID_SALE) {
+      const f = piani ? piani[id].file.findIndex((lista) => lista.some((t) => t.id === tavolataId)) : -1;
+      if (f >= 0) { trovata = { sala: id, f, t: piani[id].file[f].find((t) => t.id === tavolataId) }; break; }
+    }
+    if (!trovata) throw new Error('Prenotazione non trovata: forse è già stata tolta');
+    await scriviPianiDelGiorno(data, servizio, togliTavolata(piani, tavolataId));
+    const esterna = await queryOne(`SELECT uid FROM prenotazioni_esterne WHERE stato = 'confermata' AND tavolata_id = ?
+      AND posto_data = ? AND posto_servizio = ?`, [tavolataId, data, servizio]);
+    const ora = new Date().toISOString();
+    if (esterna) await exec("UPDATE prenotazioni_esterne SET stato = 'disdetta', aggiornato = ? WHERE uid = ?", [ora, esterna.uid]);
+    const r = await exec(`INSERT INTO disdette (data, servizio, sala, fila, tavolata, uid, stato_prima, creato_il)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [data, servizio, trovata.sala, trovata.f, JSON.stringify(trovata.t),
+      esterna ? esterna.uid : null, esterna ? 'confermata' : null, ora]);
+    esito = { id: r.lastInsertRowId, nome: trovata.t.nome || '' };
+  });
+  return esito;
+}
+
+/** Disdice una prenotazione di Family Wall ancora da confermare (non viene più proposta). → { id, nome } */
+export async function disdiciPrenotazioneEsterna(uid) {
+  const d = await getDb();
+  let esito = null;
+  await d.withTransactionAsync(async () => {
+    const r = await rigaEsterna(uid);
+    if (r.stato !== 'nuova') throw new Error('Questa prenotazione non è più da confermare: aggiorna la schermata');
+    const [titolo, ...desc] = String(r.testo || '').split('\n');
+    const s = leggiTesto(titolo, desc.join('\n'), r.colore);
+    const t = { id: null, nome: s.nome || titolo, persone: s.persone ? String(s.persone) : '', ora: '', note: '' };
+    const ora = new Date().toISOString();
+    await exec("UPDATE prenotazioni_esterne SET stato = 'disdetta', aggiornato = ? WHERE uid = ?", [ora, uid]);
+    const ins = await exec(`INSERT INTO disdette (data, servizio, sala, fila, tavolata, uid, stato_prima, creato_il)
+      VALUES (?, ?, ?, NULL, ?, ?, 'nuova', ?)`, [r.data, s.servizio, s.sala || null, JSON.stringify(t), uid, ora]);
+    esito = { id: ins.lastInsertRowId, nome: t.nome };
+  });
+  return esito;
+}
+
+/**
+ * "Annulla" di una disdetta appena fatta: la tavolata torna nella sua fila (vicino a dove era, o nel posto migliore libero) e la
+ * prenotazione di Family Wall torna com'era. → { sala } (null se era una prenotazione da confermare)
+ */
+export async function annullaDisdetta(id) {
+  const d = await getDb();
+  let esito = null;
+  await d.withTransactionAsync(async () => {
+    const r = await queryOne('SELECT * FROM disdette WHERE id = ?', [id]);
+    if (!r) throw new Error('Disdetta non trovata');
+    ancoraAnnullabile(r);
+    const esterna = r.uid ? await queryOne('SELECT stato FROM prenotazioni_esterne WHERE uid = ?', [r.uid]) : null;
+    if (esterna && esterna.stato !== 'disdetta') throw new Error('Nel frattempo è cambiata in Family Wall: la trovi di nuovo da confermare');
+    if (r.fila !== null && r.fila !== undefined) {
+      const t = tavolataDi(r);
+      const piani = await pianiDelGiorno(r.data, r.servizio);
+      const tutti = Object.fromEntries(ID_SALE.map((s) => [s, (piani && piani[s]) || pianoVuoto(SALE[s])]));
+      const sala = SALE[r.sala] ? r.sala : ID_SALE[0];
+      const vicino = Number.isFinite(Number(t.p)) && t.p !== null ? t.p + lunghezza(t) / 2 : null;
+      const qui = metti(SALE[sala], tutti[sala], Number(r.fila), t, vicino);
+      const messa = qui ? { piani: { ...tutti, [sala]: qui }, sala } : mettiATavola(tutti, sala, t);
+      if (!messa) throw new Error('Non c\'è più posto per rimetterla: libera spazio e aggiungila di nuovo');
+      await scriviPianiDelGiorno(r.data, r.servizio, messa.piani);
+      if (esterna) {
+        await exec(`UPDATE prenotazioni_esterne SET stato = 'confermata', tavolata_id = ?, posto_data = ?, posto_servizio = ?, aggiornato = ?
+          WHERE uid = ?`, [t.id, r.data, r.servizio, new Date().toISOString(), r.uid]);
+      }
+      esito = { sala: messa.sala };
+    } else {
+      if (esterna) await exec("UPDATE prenotazioni_esterne SET stato = 'nuova', aggiornato = ? WHERE uid = ?", [new Date().toISOString(), r.uid]);
+      esito = { sala: null };
+    }
+    await exec('DELETE FROM disdette WHERE id = ?', [id]);
+  });
+  return esito;
 }
 
 /* ---------- incassi e costi ----------

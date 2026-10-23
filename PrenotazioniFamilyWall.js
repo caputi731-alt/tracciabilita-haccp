@@ -15,6 +15,7 @@ import { Icona, Bottone, Campo, Segmenti, VistaModale, conferma, useErrori } fro
 import {
   prenotazioniEsterne, confermaPrenotazioneEsterna, scartaPrenotazioneEsterna, rifaiPrenotazioneEsterna, togliPrenotazioneEsterna,
   lasciaPrenotazioneEsterna, salvaLinkFamilyWall, scollegaFamilyWall, leggiPreferenza, salvaPreferenza,
+  disdiciPrenotazioneEsterna, annullaDisdetta,
 } from './database';
 import { leggiTesto, noteTavolata } from './familywall';
 import { statoFamilyWall, aggiornaDaFamilyWall, aggiornaSeServe } from './familywallAggiorna';
@@ -46,7 +47,7 @@ function esitoAggiornamento(e) {
 
 /* ---------- scheda da confermare ---------- */
 
-export function SchedaConferma({ riga, salaVista, onConfermata, onChiudi }) {
+export function SchedaConferma({ riga, salaVista, onConfermata, onDisdici, onChiudi }) {
   const s = riga.scheda;
   const iniziale = useMemo(() => ({
     nome: s.nome,
@@ -150,6 +151,7 @@ export function SchedaConferma({ riga, salaVista, onConfermata, onChiudi }) {
         </View>
 
         <Bottone testo="Conferma e metti a tavola" icona="check" onPress={salva} />
+        {!!onDisdici && <Bottone testo="Disdetta dal cliente" icona="account-cancel-outline" ghost colore={COLORS.danger} onPress={onDisdici} />}
         <Bottone testo="Non è una prenotazione" ghost colore={COLORS.danger} onPress={scarta} />
         <Bottone testo="Chiudi" ghost onPress={onChiudi} />
       </VistaModale>
@@ -345,6 +347,21 @@ export default function RiquadroFamilyWall({ data, servizio, salaVista, versione
     suCambiato();
   };
 
+  /** Disdetta dal cliente: non si propone più, resta fra le disdette della Sala, con "Annulla" per 10 minuti. */
+  const disdici = async (r) => {
+    try {
+      const e = await disdiciPrenotazioneEsterna(r.uid);
+      setAperta(null);
+      await carica();
+      suCambiato();
+      mostra(`${e.nome || 'Prenotazione'} disdetta`, { testo: 'Annulla', onPress: async () => {
+        try { await annullaDisdetta(e.id); await carica(); suCambiato(); mostra('Di nuovo da confermare ✓'); } catch (x) { mostra(String((x && x.message) || x)); }
+      } });
+    } catch (x) {
+      mostra(String((x && x.message) || x));
+    }
+  };
+
   const daFare = prenotazioni.length + segnalate.length;
   return (
     <View style={[S.card, daFare > 0 && { borderWidth: 1.5, borderColor: COLORS.terra }]}>
@@ -400,22 +417,29 @@ export default function RiquadroFamilyWall({ data, servizio, salaVista, versione
         const s = r.scheda;
         const dubbi = s.incerti.length > 0 || !s.sala;
         return (
-          <TouchableOpacity key={r.uid} onPress={() => setAperta(r.uid)} activeOpacity={0.75} accessibilityRole="button"
-            accessibilityLabel={`Da confermare: ${s.nome || 'senza nome'}, ${s.persone || '?'} persone`}
-            style={{ flexDirection: 'row', alignItems: 'center', minHeight: 64, borderRadius: 16, borderWidth: 1.5,
-              borderColor: dubbi ? COLORS.warning : COLORS.bordoCampo, paddingHorizontal: 12, paddingVertical: 8, marginTop: 8 }}>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 16, fontWeight: '800', color: COLORS.text }}>
-                {s.nome || 'Senza nome'} · {s.min && s.max > s.min ? `${s.min}–${s.max}` : (s.persone || '?')} pers.
-              </Text>
-              <Text style={{ fontSize: 13, color: COLORS.muted }} numberOfLines={1}>
-                {[s.sala ? nomeSala(s.sala) : 'sala da scegliere', s.servizio !== servizio ? s.servizio.toLowerCase() : null,
-                  s.acconto ? 'acconto' : null, s.incerti.length ? 'da controllare' : null].filter(Boolean).join(' · ')}
-              </Text>
-            </View>
-            <Text style={{ fontSize: 14, fontWeight: '700', color: COLORS.azione }}>Conferma</Text>
-            <Icona nome="chevron-right" colore={COLORS.azione} />
-          </TouchableOpacity>
+          <View key={r.uid} style={{ flexDirection: 'row', alignItems: 'center', minHeight: 64, borderRadius: 16, borderWidth: 1.5,
+            borderColor: dubbi ? COLORS.warning : COLORS.bordoCampo, marginTop: 8 }}>
+            <TouchableOpacity onPress={() => setAperta(r.uid)} activeOpacity={0.75} accessibilityRole="button"
+              accessibilityLabel={`Da confermare: ${s.nome || 'senza nome'}, ${s.persone || '?'} persone. Apri per confermare`}
+              style={{ flex: 1, flexDirection: 'row', alignItems: 'center', minHeight: 64, paddingLeft: 12, paddingVertical: 8 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 16, fontWeight: '800', color: COLORS.text }} numberOfLines={1}>
+                  {s.nome || 'Senza nome'} · {s.min && s.max > s.min ? `${s.min}–${s.max}` : (s.persone || '?')} pers.
+                </Text>
+                <Text style={{ fontSize: 13, color: COLORS.muted }} numberOfLines={1}>
+                  {[s.sala ? nomeSala(s.sala) : 'sala da scegliere', s.servizio !== servizio ? s.servizio.toLowerCase() : null,
+                    s.acconto ? 'acconto' : null, s.incerti.length ? 'da controllare' : null].filter(Boolean).join(' · ')}
+                </Text>
+              </View>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: COLORS.azione }}>Conferma</Text>
+              <Icona nome="chevron-right" colore={COLORS.azione} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => disdici(r)} accessibilityRole="button" accessibilityLabel={`Disdici ${s.nome || 'questa prenotazione'}`}
+              style={{ minHeight: 48, minWidth: 48, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center', borderLeftWidth: 1, borderLeftColor: COLORS.border }}>
+              <Icona nome="account-cancel-outline" size={20} colore={COLORS.danger} />
+              <Text style={{ fontSize: 12, fontWeight: '700', color: COLORS.danger }}>Disdici</Text>
+            </TouchableOpacity>
+          </View>
         );
       })}
 
@@ -445,6 +469,7 @@ export default function RiquadroFamilyWall({ data, servizio, salaVista, versione
 
       {!!rigaAperta && (
         <SchedaConferma riga={rigaAperta} salaVista={salaVista} onChiudi={() => setAperta(null)}
+          onDisdici={rigaAperta.scheda.prenotazione ? () => disdici(rigaAperta) : null}
           onConfermata={async (esito) => {
             setAperta(null);
             await carica();
