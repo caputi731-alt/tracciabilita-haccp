@@ -5,7 +5,7 @@ import * as FileSystem from 'expo-file-system';
 import * as DocumentPicker from 'expo-document-picker';
 import { S, COLORS } from './theme';
 import { spiegaErroreBackup } from './utile';
-import { Bottone, conferma, useAvviso } from './UI';
+import { Bottone, conferma, useAvviso, Sezione } from './UI';
 import {
   statoBackup, scegliCartellaBackup, eseguiBackup, recuperaFotoMancanti, GIORNI_COPIE,
   salvaCopiaDiSicurezza, copiaDiSicurezza, leggiCopiaDiSicurezza,
@@ -286,12 +286,12 @@ export default function BackupScreen() {
 
       <RiquadroPin key={giro} onCambiato={dopoIlPin} />
 
-      <View style={S.card}>
-        <Text style={S.h2}>Export per ASL / commercialista</Text>
+      <Sezione titolo="Export per ASL / commercialista" icona="file-delimited-outline" memoria="backup_export"
+        riassunto="Fogli Excel/CSV apribili con qualsiasi programma">
         <Text style={S.muted}>Fogli Excel/CSV apribili con qualsiasi programma.</Text>
         <Bottone testo="Registro carichi (CSV)" ghost onPress={exportCarichi} />
         <Bottone testo="Registro temperature (CSV)" ghost onPress={exportTemperature} />
-      </View>
+      </Sezione>
 
       {occupato && <Text style={[S.muted, { textAlign: 'center' }]}>Attendi…</Text>}
 

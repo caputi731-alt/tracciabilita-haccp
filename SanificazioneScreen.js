@@ -12,8 +12,7 @@ import { rigaPulizia, riepilogoPulizie } from './pulizie';
 import RiquadroPromemoria from './RiquadroPromemoria';
 import { aggiornaPromemoria } from './notifiche';
 import {
-  Campo, Chips, Bottone, conferma, ModaleModifica, useAvviso, VistaModale, useErrori, Vuoto, Icona,
-} from './UI';
+  Campo, Chips, Bottone, conferma, ModaleModifica, useAvviso, VistaModale, useErrori, Vuoto, Icona, Sezione } from './UI';
 import {
   areeConStato, salvaArea, eliminaArea,
   registraSanificazione, annullaSanificazione, sanificazioniOggi, sanificazioniRecenti, correggiRecord,
@@ -149,6 +148,8 @@ export default function SanificazioneScreen() {
         )}
 
         {aree.length > 0 && (
+          <Sezione piatta titolo="Aree" icona="spray-bottle" memoria="pulizie_aree" apertaDiPartenza
+            riassunto={riepilogoPulizie(righe.map((x) => x.riga))}>
           <View style={[S.card, { padding: 0, overflow: 'hidden' }]}>
             {righe.map(({ a, fatta, riga }, n) => {
               const fatto = riga.stato === 'fatta';
@@ -185,6 +186,7 @@ export default function SanificazioneScreen() {
               );
             })}
           </View>
+          </Sezione>
         )}
 
         {daFare.length > 1 && (
@@ -198,9 +200,8 @@ export default function SanificazioneScreen() {
         )}
 
         {recenti.length > 0 && (
-          <>
-            <Text style={[S.h2, { marginTop: 20 }]}>Ultime registrazioni</Text>
-            <View style={S.card}>
+          <Sezione titolo="Ultime registrazioni" icona="history" memoria="pulizie_ultime"
+            riassunto={`${recenti.length} registrazioni · tocca per correggere`}>
               {recenti.map((r) => (
                 <TouchableOpacity key={r.id} onPress={() => setInModifica(r)}
                   style={[S.row, { paddingVertical: 8 }]}>
@@ -216,8 +217,7 @@ export default function SanificazioneScreen() {
                   </Text>
                 </TouchableOpacity>
               ))}
-            </View>
-          </>
+          </Sezione>
         )}
         {aree.length > 0 && <RiquadroPromemoria tipo="pulizie" />}
       </ScrollView>

@@ -218,6 +218,8 @@ export default function TemperatureScreen({ navigation, route }) {
         )}
 
         {punti.length > 0 && (
+          <Sezione piatta titolo="Frigoriferi" icona="fridge-outline" memoria="temp_frigoriferi" apertaDiPartenza
+            riassunto={daFare.length ? `${daFare.length} da fare · ${fatti} fatte` : `Tutte registrate (${fatti})`}>
           <View style={[S.card, { padding: 0, overflow: 'hidden' }]}>
             <View style={[colonne, { paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: COLORS.border }]}>
               <Text style={{ flex: 1, fontSize: 12, fontWeight: '600', color: COLORS.muted }}>Frigorifero</Text>
@@ -254,6 +256,7 @@ export default function TemperatureScreen({ navigation, route }) {
               );
             })}
           </View>
+          </Sezione>
         )}
 
         {punti.length > 0 && (
@@ -290,9 +293,8 @@ export default function TemperatureScreen({ navigation, route }) {
         {punti.length > 0 && <RiquadroPromemoria />}
 
         {storico.length > 0 && (
-          <>
-            <Text style={[S.h2, { marginTop: 20 }]}>Ultime rilevazioni</Text>
-            <View style={S.card}>
+          <Sezione titolo="Ultime rilevazioni" icona="history" memoria="temp_ultime"
+            riassunto={`${storico.length} rilevazioni · tocca per correggere`}>
               {storico.map((r) => (
                 <TouchableOpacity key={r.id} onPress={() => apriModifica(r)} accessibilityRole="button"
                   accessibilityLabel={`${r.nome}, ${gradi(r.temperatura)}. Tocca per correggere`}
@@ -309,8 +311,7 @@ export default function TemperatureScreen({ navigation, route }) {
                   </Text>
                 </TouchableOpacity>
               ))}
-            </View>
-          </>
+          </Sezione>
         )}
 
         <Modal visible={!!inModifica} transparent animationType="fade" onRequestClose={() => setInModifica(null)}>

@@ -7,7 +7,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Modal } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, aNumero, numeroPerCampo, oggiLocale, fmtData } from './theme';
-import { Icona, Bottone, Campo, CampoData, Chips, VistaModale, Vuoto, conferma, useAvviso, useErrori } from './UI';
+import { Icona, Bottone, Campo, CampoData, Chips, VistaModale, Vuoto, conferma, useAvviso, useErrori, Sezione } from './UI';
 import { incassiTra, salvaIncasso, speseTra, salvaSpesa, eliminaSpesa, merceTra } from './database';
 import { METODI, CATEGORIE_SPESA, limitiMese, altroMese, nomeMese, totaleIncasso, riepilogoConti, euro } from './conti';
 import { pinImpostato, costiSbloccati, sbloccaCosti, bloccaCosti } from './pin';
@@ -215,8 +215,8 @@ export default function IncassiScreen({ navigation }) {
         </View>
 
         {/* giorni */}
-        <View style={S.card}>
-          <Text style={S.h2}>Incassi giorno per giorno</Text>
+        <Sezione titolo="Incassi giorno per giorno" icona="calendar-text-outline" memoria="incassi_giorni" apertaDiPartenza
+          riassunto={dati.incassi.length ? `${dati.incassi.length} giorni registrati` : 'Ancora niente in questo mese'}>
           {dati.incassi.length === 0 && <Text style={S.muted}>Ancora niente in questo mese.</Text>}
           {dati.incassi.map((g, i) => (
             <TouchableOpacity key={g.giorno} onPress={() => setIncasso({ giorno: g.giorno, riga: g })} activeOpacity={0.7} accessibilityRole="button"
@@ -232,11 +232,11 @@ export default function IncassiScreen({ navigation }) {
               <Icona nome="chevron-right" colore={COLORS.muted} />
             </TouchableOpacity>
           ))}
-        </View>
+        </Sezione>
 
         {/* spese */}
-        <View style={S.card}>
-          <Text style={S.h2}>Personale e altre spese</Text>
+        <Sezione titolo="Personale e altre spese" icona="account-cash-outline" memoria="incassi_spese" apertaDiPartenza
+          riassunto={dati.spese.length ? `${dati.spese.length} spese scritte` : 'Nessuna spesa in questo mese'}>
           {dati.spese.length === 0 && <Text style={S.muted}>Nessuna spesa scritta per questo mese.</Text>}
           {dati.spese.map((s, i) => (
             <TouchableOpacity key={s.id} onPress={() => setSpesa({ spesa: s })} activeOpacity={0.7} accessibilityRole="button"
@@ -251,7 +251,7 @@ export default function IncassiScreen({ navigation }) {
             </TouchableOpacity>
           ))}
           <Bottone testo="Aggiungi una spesa" icona="plus" ghost onPress={() => setSpesa({ spesa: null })} />
-        </View>
+        </Sezione>
 
         <Bottone testo="Chiudi con il PIN" icona="lock-outline" ghost onPress={() => { bloccaCosti(); setSbloccato(false); }} />
       </ScrollView>

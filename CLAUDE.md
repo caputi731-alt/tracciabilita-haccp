@@ -156,7 +156,7 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
   Le voci con `sezione` (Cucina, Sala, Menù, Incassi) si aprono con `suSezione` = `vai` di PrincipaleScreen. Una schermata nuova
   va aggiunta anche in `SEZIONI_SUITE`, o non si troverà con la ricerca.
 - `HomeScreen.js` (fase 3, 20/10/2026): in alto data, "Cucina" e `PulsanteCerca`; sotto la mappa il riquadro `RiquadroOggi`: titolo
-  ("Oggi mancano N cose"), "N di M fatte" (apre il pannello dei dettagli), barra di avanzamento, promemoria toccabili e i pulsanti
+  ("Oggi mancano N cose"), "N di M fatte", barra di avanzamento, promemoria toccabili e i pulsanti
   "Fai il giro (N passi)" (passi = `passiGiro`) e "+" (pannello "Cosa registri?"). Titolo e promemoria li calcola `riquadroOggi`
   (giro.js, provato in test/giro.test.mjs): temperature → `Temperature { daNotifica }` (sequenza), pulizie → `Sanificazione`,
   scadenze → `Magazzino` (con `lottoId` se è uno solo); le cose da sistemare (avvisi con testo `breve`) sono promemoria anch'esse.
@@ -359,6 +359,13 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
   (istante vero della scrittura, diverso da `data_ora` per le registrazioni in ritardo). Dopo resta la correzione.
 - Registrazioni frequenti (scarico, temperatura, pulizia): nessuna conferma preventiva, avviso con "Annulla" (`mostra(testo, { testo: 'Annulla', onPress })`) e funzioni `annullaUscita` / `annullaTemperatura` / `annullaSanificazione`.
 - Cambi di vista: `Segmenti`, non `Chips`.
+- Sezioni richiudibili (scelta di Luca del 23/10/2026, "ovunque ci siano blocchi lunghi", anche le cose da fare): `Sezione` (UI.js)
+  con `memoria` ricorda aperto/chiuso sul telefono (preferenza locale `aperto_<memoria>`); `aperta` = aperta per forza,
+  `apertaDiPartenza` = aperta la prima volta; `piatta` = senza scheda intorno; chiusa mostra sempre il `riassunto` (quante cose
+  aspettano). Usata per: frigoriferi e ultime rilevazioni (Temperature), aree e ultime registrazioni (Pulizie), non conformità
+  aperte e chiuse, lotti bloccati (Magazzino), da ordinare e "la giacenza basta" (Eventi), incassi e spese, export del Backup.
+  Il riquadro "Oggi" della Cucina si riduce a una riga toccando il titolo (preferenza `oggi_ridotto`; i dettagli da "Tutto di oggi"),
+  il riquadro Family Wall della Sala toccando il suo titolo (`aperto_sala_familywall`).
 - Componenti UI comuni: `Icona` (MaterialCommunityIcons da @expo/vector-icons, niente emoji), `Bottone icona=`, `Sezione` (blocchi apribili),
   `Caricamento` (segnaposto), `Vuoto` (elenco vuoto con azione), `CampoData` (calendario, valori ISO). Le date si scelgono sempre con `CampoData`.
 - Registri PDF: i corpi HTML stanno in report.js (`corpoTemperature`, `corpoCarichi`, ...) e sono riusati da `htmlPacchettoASL`.

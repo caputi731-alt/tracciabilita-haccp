@@ -3,8 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, Modal, Alert } from 'react-na
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, fmtDataOra } from './theme';
 import {
-  Campo, Chips, Bottone, ModaleModifica, useAvviso, VistaModale, useErrori,
-} from './UI';
+  Campo, Chips, Bottone, ModaleModifica, useAvviso, VistaModale, useErrori, Sezione } from './UI';
 import {
   tutteNonConformita, chiudiNonConformita, aggiungiNonConformita, correggiRecord,
 } from './database';
@@ -107,16 +106,17 @@ export default function NonConformitaScreen() {
       <ScrollView style={{ flex: 1 }} contentContainerStyle={S.content}>
         <Text style={S.h1}>Non conformità</Text>
 
-        <Text style={[S.h2, { marginTop: 8 }]}>Aperte ({aperte.length})</Text>
-        {aperte.length === 0 ? (
-          <Text style={S.muted}>Nessuna non conformità aperta. Bene così.</Text>
-        ) : aperte.map((n) => <Card key={n.id} n={n} />)}
+        <Sezione piatta titolo={`Aperte (${aperte.length})`} icona="alert-circle-outline" colore={aperte.length ? COLORS.danger : undefined}
+          memoria="nc_aperte" apertaDiPartenza riassunto={aperte.length ? `${aperte.length} da chiudere con un'azione correttiva` : 'Nessuna aperta'}>
+          {aperte.length === 0 ? (
+            <Text style={S.muted}>Nessuna non conformità aperta. Bene così.</Text>
+          ) : aperte.map((n) => <Card key={n.id} n={n} />)}
+        </Sezione>
 
         {chiuse.length > 0 && (
-          <>
-            <Text style={[S.h2, { marginTop: 20 }]}>Chiuse ({chiuse.length})</Text>
+          <Sezione titolo={`Chiuse (${chiuse.length})`} icona="check-circle-outline" memoria="nc_chiuse" riassunto="Storico delle non conformità risolte">
             {chiuse.map((n) => <Card key={n.id} n={n} />)}
-          </>
+          </Sezione>
         )}
       </ScrollView>
 

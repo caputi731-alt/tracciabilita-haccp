@@ -14,7 +14,7 @@ import { S, COLORS, aNumero, oggiLocale, fmtData } from './theme';
 import { Icona, Bottone, Campo, Segmenti, VistaModale, conferma, useErrori } from './UI';
 import {
   prenotazioniEsterne, confermaPrenotazioneEsterna, scartaPrenotazioneEsterna, rifaiPrenotazioneEsterna, togliPrenotazioneEsterna,
-  lasciaPrenotazioneEsterna, salvaLinkFamilyWall, scollegaFamilyWall,
+  lasciaPrenotazioneEsterna, salvaLinkFamilyWall, scollegaFamilyWall, leggiPreferenza, salvaPreferenza,
 } from './database';
 import { leggiTesto, noteTavolata } from './familywall';
 import { statoFamilyWall, aggiornaDaFamilyWall, aggiornaSeServe } from './familywallAggiorna';
@@ -290,6 +290,9 @@ export default function RiquadroFamilyWall({ data, servizio, salaVista, versione
   const [stato, setStato] = useState(null);
   const [aperta, setAperta] = useState(null); // uid della scheda aperta
   const [impostazioni, setImpostazioni] = useState(false);
+  const [chiuso, setChiuso] = useState(false);
+  useEffect(() => { leggiPreferenza('aperto_sala_familywall').then((v) => setChiuso(v === '0')).catch(() => {}); }, []);
+  const cambiaChiuso = () => setChiuso((v) => { salvaPreferenza('aperto_sala_familywall', v ? '1' : '0').catch(() => {}); return !v; });
 
   const carica = useCallback(async () => {
     const [r, st] = [await prenotazioniEsterne(oggiLocale()), await statoFamilyWall()];
@@ -342,24 +345,32 @@ export default function RiquadroFamilyWall({ data, servizio, salaVista, versione
     suCambiato();
   };
 
+  const daFare = prenotazioni.length + segnalate.length;
   return (
-    <View style={[S.card, (prenotazioni.length > 0 || segnalate.length > 0) && { borderWidth: 1.5, borderColor: COLORS.terra }]}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+    <View style={[S.card, daFare > 0 && { borderWidth: 1.5, borderColor: COLORS.terra }]}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: chiuso ? 0 : 6 }}>
+        {/* toccando il titolo il riquadro si riduce a una riga (resta così su questo telefono) */}
+        <TouchableOpacity onPress={cambiaChiuso} activeOpacity={0.7} accessibilityRole="button" accessibilityState={{ expanded: !chiuso }}
+          accessibilityLabel={`Da Family Wall${daFare ? `, ${daFare} da guardare` : ''}. ${chiuso ? 'Apri' : 'Riduci'}`}
+          style={{ flex: 1, flexDirection: 'row', alignItems: 'center', minHeight: 48 }}>
         <Icona nome="calendar-import" colore={COLORS.azione} style={{ marginRight: 8 }} />
         <View style={{ flex: 1 }}>
-          <Text style={[S.h2, { marginBottom: 0 }]}>Da Family Wall</Text>
+          <Text style={[S.h2, { marginBottom: 0 }]}>Da Family Wall{chiuso && daFare ? ` · ${daFare} da confermare` : ''}</Text>
           <Text style={{ fontSize: 13, color: stato.errore ? COLORS.warning : COLORS.muted }} numberOfLines={2}>
             {stato.errore ? stato.errore
               : stato.ultimo ? `Aggiornato ${stato.ultimo.slice(0, 10) === oggiLocale() ? 'oggi' : fmtData(stato.ultimo)} alle ${oraDi(stato.ultimo)}`
                 : stato.collegato ? 'Non ancora aggiornato' : 'Calendario scollegato'}
           </Text>
         </View>
+        <Icona nome={chiuso ? 'chevron-down' : 'chevron-up'} colore={COLORS.muted} style={{ marginHorizontal: 6 }} />
+        </TouchableOpacity>
         <TouchableOpacity onPress={() => setImpostazioni(true)} accessibilityRole="button" accessibilityLabel="Collegamento con Family Wall"
           style={{ width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.contenitore }}>
           <Icona nome="cog-outline" colore={COLORS.text} />
         </TouchableOpacity>
       </View>
 
+      {!chiuso && (<>
       {segnalate.map((r) => (
         <View key={r.uid} style={{ backgroundColor: COLORS.warningSoft, borderRadius: 14, padding: 12, marginTop: 8 }}>
           <Text style={{ color: COLORS.warning, fontWeight: '700', fontSize: 15 }}>
@@ -429,6 +440,8 @@ export default function RiquadroFamilyWall({ data, servizio, salaVista, versione
           ))}
         </View>
       )}
+
+      </>)}
 
       {!!rigaAperta && (
         <SchedaConferma riga={rigaAperta} salaVista={salaVista} onChiudi={() => setAperta(null)}

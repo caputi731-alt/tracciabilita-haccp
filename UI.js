@@ -7,6 +7,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { rendiPermanente } from './foto';
 import { S, COLORS, dataPerCampo, isoDaCampo, aNumero } from './theme';
+import { leggiPreferenza, salvaPreferenza } from './database';
 
 /** L'errore resta visibile finché il valore è quello che l'ha causato: appena si corregge, sparisce. */
 const testoErrore = (e) => (e && typeof e === 'object' ? e.testo : e) || null;
@@ -296,20 +297,35 @@ export function Bottone({ testo, onPress, ghost, colore, icona, disabilitato = f
   );
 }
 
-/** Sezione con titolo che si apre e si chiude con un tocco. */
-export function Sezione({ titolo, icona, aperta = false, riassunto, children, colore }) {
-  const [open, setOpen] = useState(aperta);
+/**
+ * Blocco apribile. `memoria` (facoltativo) = nome con cui ricordare su questo telefono se l'ultima volta era aperto o chiuso
+ * (preferenza locale `aperto_<memoria>`, non va nel backup). `aperta` = aperta per forza (es. c'è un errore da vedere);
+ * `apertaDiPartenza` = aperta la prima volta, poi vale l'ultima scelta. `destra` = qualcosa accanto al titolo
+ * (un numero, un'etichetta). `piatta` = senza la scheda intorno (dentro un'altra scheda).
+ */
+export function Sezione({ titolo, icona, aperta = false, apertaDiPartenza = false, riassunto, children, colore, memoria, destra, piatta }) {
+  const [open, setOpen] = useState(aperta || apertaDiPartenza);
   React.useEffect(() => { if (aperta) setOpen(true); }, [aperta]);
+  React.useEffect(() => {
+    if (!memoria) return;
+    leggiPreferenza(`aperto_${memoria}`).then((v) => { if (v === '1' || v === '0') setOpen(v === '1' || aperta); }).catch(() => {});
+  }, [memoria]);
+  const cambia = () => setOpen((v) => {
+    if (memoria) salvaPreferenza(`aperto_${memoria}`, v ? '0' : '1').catch(() => {});
+    return !v;
+  });
   return (
-    <View style={[S.card, { paddingVertical: 0 }]}>
-      <TouchableOpacity onPress={() => setOpen((v) => !v)} activeOpacity={0.7}
+    <View style={piatta ? null : [S.card, { paddingVertical: 0 }]}>
+      <TouchableOpacity onPress={cambia} activeOpacity={0.7}
         accessibilityRole="button" accessibilityState={{ expanded: open }}
+        accessibilityLabel={`${titolo}${!open && riassunto ? `. ${riassunto}` : ''}. ${open ? 'Chiudi' : 'Apri'}`}
         style={{ flexDirection: 'row', alignItems: 'center', minHeight: 56 }}>
         {!!icona && <Icona nome={icona} colore={colore || COLORS.muted} style={{ marginRight: 10 }} />}
         <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 17, fontWeight: '800', color: colore || COLORS.text }}>{titolo}</Text>
+          <Text style={{ fontSize: 17, fontWeight: '700', color: colore || COLORS.text }}>{titolo}</Text>
           {!open && !!riassunto && <Text style={S.muted} numberOfLines={1}>{riassunto}</Text>}
         </View>
+        {destra}
         <Icona nome={open ? 'chevron-up' : 'chevron-down'} colore={COLORS.muted} />
       </TouchableOpacity>
       {open && <View style={{ paddingBottom: 14 }}>{children}</View>}

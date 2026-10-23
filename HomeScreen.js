@@ -12,7 +12,7 @@ import { daIsoLocale, spiegaErroreBackup } from './utile';
 import { Icona, PulsanteCerca } from './UI';
 import {
   lottiInScadenza, temperatureDiOggi, listaPuntiControllo, nonConformitaAperte,
-  areeConStato, prodottiDaCompletare, lottiBloccati, leggiPreferenza, menuLeggi, collegamentiCucina, ultimeTemperature,
+  areeConStato, prodottiDaCompletare, lottiBloccati, leggiPreferenza, salvaPreferenza, menuLeggi, collegamentiCucina, ultimeTemperature,
 } from './database';
 import { FREDDI, PULSANTI, statiCucine, datiScena } from './cucine';
 import SchedaPosto from './SchedaPosto';
@@ -108,7 +108,7 @@ function RigaAvviso({ grave, titolo, testo, onPress, prima }) {
  * Riquadro "Oggi" (proposta A, fase 3): quante cose mancano, barra di avanzamento, promemoria toccabili (calcolati da
  * riquadroOggi in giro.js, più le cose da sistemare), "Fai il giro" e "+" per registrare altro.
  */
-function RiquadroOggi({ dati, avvisi, passi, onPromemoria, onGiro, onRegistra, onImposta, onDettagli }) {
+function RiquadroOggi({ dati, avvisi, passi, onPromemoria, onGiro, onRegistra, onImposta, onDettagli, ridotto, onRiduci }) {
   const { titolo, fatti, totali, promemoria, mancanti } = dati;
   const quota = totali > 0 ? Math.min(1, fatti / totali) : 0;
   const tutti = [...promemoria, ...avvisi.map((a) => ({ tipo: 'avviso', testo: a.breve, tono: a.grave ? 'grave' : 'info', vai: a.vai }))];
@@ -122,21 +122,21 @@ function RiquadroOggi({ dati, avvisi, passi, onPromemoria, onGiro, onRegistra, o
     <View accessibilityLabel="Controlli di oggi" style={{
       backgroundColor: COLORS.card, borderRadius: 20, borderWidth: 1, borderColor: COLORS.border, padding: 16, gap: 12,
     }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+      {/* la riga del titolo riduce il riquadro a una riga (titolo e barra) e lo riapre: più spazio alla mappa */}
+      <TouchableOpacity onPress={onRiduci} activeOpacity={0.7} accessibilityRole="button" accessibilityState={{ expanded: !ridotto }}
+        accessibilityLabel={`${titolo}${totali > 0 ? `, ${fatti} di ${totali} fatte` : ''}. ${ridotto ? 'Apri' : 'Riduci'}`}
+        style={{ flexDirection: 'row', alignItems: 'center', minHeight: 44, marginVertical: -6 }}>
         <Text accessibilityRole="header" style={{ flex: 1, fontSize: 17, fontWeight: '700' }}>{titolo}</Text>
-        <TouchableOpacity onPress={onDettagli} accessibilityRole="button" accessibilityLabel="Tutto quello di oggi"
-          style={{ flexDirection: 'row', alignItems: 'center', minHeight: 44, paddingLeft: 8 }}>
-          <Text style={{ fontSize: 13, color: COLORS.muted }}>{totali > 0 ? `${fatti} di ${totali} fatte` : 'Dettagli'}</Text>
-          <Icona nome="chevron-up" size={18} colore={COLORS.muted} style={{ marginLeft: 2 }} />
-        </TouchableOpacity>
-      </View>
+        {totali > 0 && <Text style={{ fontSize: 13, color: COLORS.muted }}>{fatti} di {totali} fatte</Text>}
+        <Icona nome={ridotto ? 'chevron-up' : 'chevron-down'} size={22} colore={COLORS.muted} style={{ marginLeft: 4 }} />
+      </TouchableOpacity>
       {totali > 0 && (
         <View accessible accessibilityRole="progressbar" accessibilityLabel={`${fatti} controlli fatti su ${totali}`}
           style={{ height: 6, borderRadius: 3, backgroundColor: COLORS.contenitore, overflow: 'hidden' }}>
           <View style={{ width: `${Math.round(quota * 100)}%`, height: 6, backgroundColor: COLORS.azione }} />
         </View>
       )}
-      {tutti.length > 0 && (
+      {!ridotto && (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           {tutti.map((p) => {
             const [fondo, testo, bordo] = COLORI[p.tono] || COLORI.info;
@@ -154,9 +154,14 @@ function RiquadroOggi({ dati, avvisi, passi, onPromemoria, onGiro, onRegistra, o
               </TouchableOpacity>
             );
           })}
+          <TouchableOpacity onPress={onDettagli} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel="Tutto quello di oggi"
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 44, paddingHorizontal: 10 }}>
+            <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.azione }}>Tutto di oggi</Text>
+            <Icona nome="chevron-right" size={18} colore={COLORS.azione} />
+          </TouchableOpacity>
         </View>
       )}
-      <View style={{ flexDirection: 'row', gap: 8 }}>
+      {!ridotto && <View style={{ flexDirection: 'row', gap: 8 }}>
         {totali === 0 ? (
           <TouchableOpacity onPress={onImposta} activeOpacity={0.85} accessibilityRole="button"
             style={{ flex: 1, minHeight: 52, borderRadius: 14, backgroundColor: COLORS.azione, alignItems: 'center', justifyContent: 'center' }}>
@@ -184,7 +189,7 @@ function RiquadroOggi({ dati, avvisi, passi, onPromemoria, onGiro, onRegistra, o
           <Icona nome="plus" size={24} />
           {totali > 0 && passi === 0 && <Text style={{ fontSize: 16, fontWeight: '600' }}>Registra</Text>}
         </TouchableOpacity>
-      </View>
+      </View>}
     </View>
   );
 }
@@ -196,6 +201,9 @@ export default function HomeScreen({ navigation }) {
   const [ncAperte, setNcAperte] = useState(0);
   const [pulizie, setPulizie] = useState({ fatte: 0, totali: 0 });
   const [aree, setAree] = useState([]);
+  const [ridotto, setRidotto] = useState(false); // riquadro di oggi ridotto a una riga (resta così su questo telefono)
+  React.useEffect(() => { leggiPreferenza('oggi_ridotto').then((v) => setRidotto(v === '1')).catch(() => {}); }, []);
+  const riduci = () => setRidotto((v) => { salvaPreferenza('oggi_ridotto', v ? '0' : '1').catch(() => {}); return !v; });
   const [ultimePrima, setUltimePrima] = useState({}); // ultima temperatura di ogni frigorifero prima di oggi
   const [backup, setBackup] = useState(null);
   const [daCompletare, setDaCompletare] = useState(0);
@@ -302,7 +310,7 @@ export default function HomeScreen({ navigation }) {
   const riquadro = (
     <RiquadroOggi dati={datiOggi} avvisi={avvisi} passi={passi} onPromemoria={suPromemoria}
       onGiro={() => apri('Giro')} onRegistra={() => setRegistra(true)} onDettagli={() => (conCucine ? setPannello(true) : null)}
-      onImposta={() => apri('Anagrafiche', { scheda: 'Frigoriferi' })} />
+      onImposta={() => apri('Anagrafiche', { scheda: 'Frigoriferi' })} ridotto={ridotto && conCucine} onRiduci={riduci} />
   );
 
   // barra in alto (proposta A): la data, il titolo della sezione e il pulsante per cercare in tutta l'app

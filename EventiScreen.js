@@ -7,7 +7,7 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Share } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, fmtData, oggiLocale, piuGiorni, ALLERGENI } from './theme';
-import { Bottone, Segmenti, Vuoto, Icona, Caricamento, useAvviso } from './UI';
+import { Bottone, Segmenti, Vuoto, Icona, Caricamento, useAvviso, Sezione } from './UI';
 import {
   menuLeggi, datiPerEventi, ricettePerMenu, getImpostazioni, lottiUtilizzabili, produzioniEvento, registraProduzione, annullaProduzione,
   leggiAllergeni,
@@ -74,24 +74,24 @@ function Fabbisogno({ evento, dati }) {
       )}
       <Mancanti portate={fab.portate} />
       {fab.daOrdinare.map((g) => (
-        <View key={g.fornitore} style={[S.card, { borderWidth: 1.5, borderColor: COLORS.danger }]}>
-          <Text style={S.h2}>Da ordinare · {g.fornitore}</Text>
+        <Sezione key={g.fornitore} titolo={`Da ordinare · ${g.fornitore}`} icona="cart-outline" colore={COLORS.danger}
+          memoria="eventi_ordina" apertaDiPartenza riassunto={`${g.righe.length} ${g.righe.length === 1 ? 'prodotto' : 'prodotti'} da ordinare`}>
           {g.righe.map((r, i) => (
             <Riga key={r.prodottoId} prima={i === 0} titolo={r.nome}
               sotto={`Servono ${quantita(r.serve, r.unita)} · in giacenza ${quantita(r.giacenza, r.unita)}`}
               destra={`manca ${quantita(r.manca, r.unita)}`} coloreDestra={COLORS.danger} />
           ))}
-        </View>
+        </Sezione>
       ))}
       {basta.length > 0 && (
-        <View style={[S.card, { borderWidth: 1.5, borderColor: COLORS.ok }]}>
-          <Text style={S.h2}>La giacenza basta</Text>
+        <Sezione titolo={`La giacenza basta (${basta.length})`} icona="check-circle-outline" colore={COLORS.ok} memoria="eventi_basta"
+          riassunto="Prodotti che non serve ordinare">
           {basta.map((r, i) => (
             <Riga key={r.prodottoId} prima={i === 0} titolo={r.nome}
               sotto={`Servono ${quantita(r.serve, r.unita)} · in giacenza ${quantita(r.giacenza, r.unita)}`}
               destra="basta" coloreDestra={COLORS.ok} />
           ))}
-        </View>
+        </Sezione>
       )}
       {fab.righe.length === 0 && !fab.incompleto && (
         <Vuoto icona="silverware-fork-knife" titolo="Nessuna portata nel menù" testo="Aggiungi le portate dal Menù: qui comparirà cosa serve." />

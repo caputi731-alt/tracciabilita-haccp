@@ -425,10 +425,8 @@ export default function MagazzinoScreen({ route, navigation }) {
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={[S.content, { paddingBottom: 110 }]}>
         {bloccati.length > 0 && (
-          <View style={[S.card, { backgroundColor: COLORS.dangerSoft, borderColor: COLORS.danger }]}>
-            <Text style={{ color: COLORS.danger, fontWeight: '800', fontSize: 16 }}>
-              <Icona nome="cancel" size={17} colore={COLORS.danger} /> {bloccati.length} lott{bloccati.length > 1 ? 'i bloccati' : 'o bloccato'}: da tenere separat{bloccati.length > 1 ? 'i' : 'o'}
-            </Text>
+          <Sezione titolo={`${bloccati.length} lott${bloccati.length > 1 ? 'i bloccati' : 'o bloccato'}`} icona="cancel" colore={COLORS.danger}
+            memoria="magazzino_bloccati" apertaDiPartenza riassunto={`Da tenere separat${bloccati.length > 1 ? 'i' : 'o'} finché il richiamo non è risolto`}>
             {bloccati.map((l) => (
               <TouchableOpacity key={l.id} style={{ paddingVertical: 8 }} onPress={() => apriLotto(l)}>
                 <Text style={{ fontWeight: '700', color: COLORS.text }}>
@@ -437,7 +435,7 @@ export default function MagazzinoScreen({ route, navigation }) {
                 <Text style={S.muted}>{l.fornitore} · tocca per gestire il richiamo ›</Text>
               </TouchableOpacity>
             ))}
-          </View>
+          </Sezione>
         )}
         {modo === 'Tutti i lotti' && (
           <>
