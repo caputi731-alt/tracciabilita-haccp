@@ -32,7 +32,10 @@ const AZIONI_PRENOTAZIONI = { tavolata: disdiciTavolata, esterna: disdiciPrenota
 // le librerie di condivisione si caricano solo quando servono: un loro problema non blocca il resto dell'app
 const invio = () => require('./menuInvio');
 
-export default function MenuScreen({ attiva = true, aggiorna = 0, comandi, suEsci, suVista, suApri, suSala }) {
+/** Script che apre (o crea) nella pagina il menù chiesto dalla Sala. */
+const scriptApri = (r) => `window.__suiteApriMenu&&window.__suiteApriMenu(${JSON.stringify({ id: r.id || null, nuovo: r.nuovo || null }).replace(/</g, '\\u003c')});true;`;
+
+export default function MenuScreen({ attiva = true, aggiorna = 0, comandi, suEsci, suVista, suApri, suSala, apriMenu }) {
   const web = useRef(null);
   const caricata = useRef(false);
   const attese = useRef([]); // chi aspetta che la pagina abbia scritto le ultime modifiche
@@ -40,6 +43,12 @@ export default function MenuScreen({ attiva = true, aggiorna = 0, comandi, suEsc
   const [errore, setErrore] = useState(null);
 
   const esegui = useCallback((script) => { if (web.current) web.current.injectJavaScript(script); }, []);
+  // dalla Sala: apri il menù di una prenotazione o creane uno (Fase 5); se la pagina non è ancora caricata si aspetta onLoadEnd
+  const daAprire = useRef(null);
+  useEffect(() => {
+    if (!apriMenu) return;
+    if (caricata.current) esegui(scriptApri(apriMenu)); else daAprire.current = apriMenu;
+  }, [apriMenu, esegui]);
   const avvisa = useCallback((testo) => esegui(scriptAvviso(testo)), [esegui]);
 
   useEffect(() => { invio().pulisciCondivisi(); }, []);
@@ -153,7 +162,10 @@ export default function MenuScreen({ attiva = true, aggiorna = 0, comandi, suEsc
         injectedJavaScriptObject={{ build: BUILD, fontScale: PixelRatio.getFontScale(), scuro: TEMA_SCURO }}
         onMessage={messaggio}
         onShouldStartLoadWithRequest={richiesta}
-        onLoadEnd={() => { caricata.current = true; }}
+        onLoadEnd={() => {
+          caricata.current = true;
+          if (daAprire.current) { esegui(scriptApri(daAprire.current)); daAprire.current = null; }
+        }}
         onError={(e) => setErrore(e.nativeEvent.description || 'Errore di caricamento')}
         // Android può chiudere il motore della pagina se la memoria scarseggia (PDF grandi): si ricarica, i dati sono già salvati
         onRenderProcessGone={ricarica}

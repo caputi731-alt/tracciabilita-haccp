@@ -15,12 +15,15 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Modal, BackHandler, Linking, useWindowDimensions } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { S, COLORS, TEMA_SCURO, aNumero, oggiLocale, fmtData } from './theme';
+import { S, COLORS, TEMA_SCURO, aNumero, oggiLocale, piuGiorni, fmtData } from './theme';
 import { Icona, Bottone, Campo, CampoData, Segmenti, Sezione, VistaModale, conferma, useAvviso, useErrori } from './UI';
 import {
   disposizioneGiorno, salvaDisposizioneGiorno, modelliSale, salvaModelloSale, eliminaModelloSale, getImpostazioni,
   disdetteDelGiorno, disdiciTavolata, annullaDisdetta, MINUTI_ANNULLA, leggiPreferenza, salvaPreferenza,
+  menuLeggi, prenotazioniPerCalendario,
 } from './database';
+import { eventiMenu } from './menuPonte';
+import { agendaGiorni, menuPerPrenotazione, nuovoMenuDa, GIORNI_AGENDA } from './agenda';
 import {
   SALE, ID_SALE, SERVIZI, LUNGA_MIN, LUNGA_MAX, posti, lunghezza, lunghezzaPer, restoFila, entra, pianoVuoto, sistemaPiano, senzaPrenotazioni,
   nuovaTavolata, disponi, sigle, totali, datiScenaSala, datiScenaSale, metri, metti, togli, trova, filaVicina, postoMigliore,
@@ -34,7 +37,7 @@ const NOMI_SALE = ID_SALE.map((id) => SALE[id].nome.replace('Sala ', '').replace
 const plurale = (n, uno, molti) => `${n} ${n === 1 ? uno : molti}`;
 const VUOTI = () => Object.fromEntries(ID_SALE.map((id) => [id, pianoVuoto(SALE[id])]));
 const COPPIE = (dati) => ID_SALE.map((id) => [SALE[id], dati[id]]);
-const VISTE = ['Piantina', 'Elenco'];
+const VISTE = ['Piantina', 'Elenco', 'Agenda']; // Agenda: Fase 5 del controllo UX (24/10/2026)
 
 /** Le prenotazioni a tavola di una sala, nell'ordine delle file e del posto lungo la fila. */
 function prenotateDi(idSala, piano) {
@@ -74,7 +77,7 @@ function moduloSala() {
 }
 
 /** Una prenotazione e la sua tavolata: dalle persone la lunghezza, che si può correggere a mano. */
-function SchedaTavolata({ sala, piano, fila, tavolata, sigla, nuova, massimaNuova = 0, destinazioni = [], onSalva, onSposta, onElimina, onDisdici, onChiudi }) {
+function SchedaTavolata({ sala, piano, fila, tavolata, sigla, nuova, massimaNuova = 0, destinazioni = [], menu, onMenu, onSalva, onSposta, onElimina, onDisdici, onChiudi }) {
   // le prenotazioni salvate prima avevano bambini, neonati e telefono nelle note: qui diventano campi
   const [t, setT] = useState(() => conCampi(tavolata));
   const { errori, segnala, azzera, riepilogo } = useErrori();
@@ -157,6 +160,11 @@ function SchedaTavolata({ sala, piano, fila, tavolata, sigla, nuova, massimaNuov
             </View>
           )}
           <Campo label="Note" value={t.note} onChange={(v) => setT((x) => ({ ...x, note: v }))} placeholder="Seggiolone, intolleranze, torta…" />
+          {/* il menù dello stesso giorno per questo cliente (Fase 5): si apre in Gestione → Menù, o si crea già compilato */}
+          {prenotataPrima && !!onMenu && (
+            <Bottone ghost icona={menu ? 'book-open-variant' : 'book-plus-outline'} onPress={() => onMenu(t)}
+              testo={menu ? `Apri il menù «${menu.titolo}»` : 'Crea il menù per questa prenotazione'} />
+          )}
         </View>
 
         <View style={[S.card, (nonEntra || troppi) && { borderWidth: 1.5, borderColor: COLORS.danger }]}>
@@ -220,12 +228,14 @@ function giraSchermo(orizzontale) {
   }
 }
 
-export default function SaleScreen({ suTuttoSchermo, apri, suAperta }) {
+export default function SaleScreen({ suTuttoSchermo, apri, suAperta, suMenu }) {
   const [data, setData] = useState(oggiLocale());
   const [servizio, setServizio] = useState(SERVIZI[0]); // sempre Pranzo (scelta di Luca del 23/10/2026)
   const [vista, setVista] = useState(VISTE[0]);
   const [daConfermare, setDaConfermare] = useState({ prenotazioni: 0, persone: 0 }); // dal riquadro di Family Wall
   const [apriUid, setApriUid] = useState(null); // prenotazione di Family Wall da aprire per la conferma (dal calendario del Menù)
+  const [menuEventi, setMenuEventi] = useState([]); // menù dell'archivio (eventiMenu), per collegarli alle prenotazioni
+  const [agenda, setAgenda] = useState(null); // prossimi giorni (vista Agenda)
   const [quale, setQuale] = useState(0); // sala mostrata: posizione in ID_SALE
   const [dati, setDati] = useState(VUOTI);
   const [modelli, setModelli] = useState([]);
@@ -278,6 +288,15 @@ export default function SaleScreen({ suTuttoSchermo, apri, suAperta }) {
     if (chiave.current !== k) return; // nel frattempo è stato scelto un altro giorno
     setDati(d || VUOTI()); setModelli(mod); setDisdette(dis);
   }, [data, servizio]);
+  // menù e agenda dei prossimi giorni: si rileggono a ogni ritorno sulla Sala
+  const caricaAgenda = useCallback(async () => {
+    const oggi = oggiLocale();
+    const [stato, pren] = [await menuLeggi('state'), await prenotazioniPerCalendario(oggi, piuGiorni(oggi, GIORNI_AGENDA - 1))];
+    const ev = eventiMenu(stato);
+    setMenuEventi(ev);
+    setAgenda(agendaGiorni(pren, ev, oggi));
+  }, []);
+  useFocusEffect(useCallback(() => { caricaAgenda().catch(() => setAgenda([])); }, [caricaAgenda]));
   useFocusEffect(useCallback(() => { carica().catch(() => {}); }, [carica]));
   useFocusEffect(useCallback(() => { setVersione((n) => n + 1); }, []));
 
@@ -344,6 +363,8 @@ export default function SaleScreen({ suTuttoSchermo, apri, suAperta }) {
     for (const id of ID_SALE) { const q = trova(SALE[id], piani[id], scelta); if (q) return { sala: id, ...q }; }
     return null;
   }, [piani, scelta]);
+  const menuAperta = aperta ? menuPerPrenotazione(menuEventi, { data, nome: aperta.t.nome }) : null;
+  useEffect(() => { if (vista === 'Agenda') caricaAgenda().catch(() => setAgenda([])); }, [vista, caricaAgenda]);
 
   /** Sposta una prenotazione in una fila (di questa o dell'altra sala), vicino a `centro` se indicato. */
   const sposta = useCallback((id, aSala, f, centro = null) => {
@@ -433,7 +454,9 @@ export default function SaleScreen({ suTuttoSchermo, apri, suAperta }) {
           }}
           onSposta={(aSala, f) => { if (sposta(scelta, aSala, f)) { setScelta(null); mostra('Spostata ✓'); } }}
           onElimina={() => { cambiaPiano(aperta.sala, togli(SALE[aperta.sala], piani[aperta.sala], scelta)); setScelta(null); }}
-          onDisdici={() => disdici(scelta)} />
+          onDisdici={() => disdici(scelta)}
+          menu={menuAperta}
+          onMenu={suMenu ? (t) => { setScelta(null); suMenu(menuAperta ? { id: menuAperta.id } : { nuovo: nuovoMenuDa({ ...t, data }) }); } : null} />
       )}
       {!!nuova && (
         <SchedaTavolata nuova sala={sala} piano={piano} fila={0} tavolata={nuova.tavolata} massimaNuova={massimaNuova}
@@ -459,7 +482,8 @@ export default function SaleScreen({ suTuttoSchermo, apri, suAperta }) {
             {t.nome || 'Senza nome'} · {persone || '?'} pers.
           </Text>
           <Text numberOfLines={1} style={{ fontSize: 13, color: colore }}>
-            {[sig, t.ora, bambiniScritti(t), SALE[idS].file[f] ? SALE[idS].file[f].nome : null, troppi ? `${nPosti} posti: tavolata corta` : metri(len)].filter(Boolean).join(' · ')}
+            {[sig, t.ora, bambiniScritti(t), menuPerPrenotazione(menuEventi, { data, nome: t.nome }) ? 'con menù' : null,
+              SALE[idS].file[f] ? SALE[idS].file[f].nome : null, troppi ? `${nPosti} posti: tavolata corta` : metri(len)].filter(Boolean).join(' · ')}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={() => disdici(t.id)} accessibilityRole="button" accessibilityLabel={`Disdici ${t.nome || `il tavolo ${sig}`}`}
@@ -498,6 +522,66 @@ export default function SaleScreen({ suTuttoSchermo, apri, suAperta }) {
           </View>
         </View>
       {schede}
+        {avviso}
+      </View>
+    );
+  }
+
+  // Agenda (Fase 5): i prossimi 14 giorni con prenotazioni e menù; il tocco su un servizio apre l'Elenco di quel giorno,
+  // quello su un menù lo apre in Gestione → Menù
+  if (vista === 'Agenda') {
+    const apriGiorno = (d, sv) => { setScelta(null); setData(d); setServizio(sv); cambiaVista('Elenco'); };
+    const quando = (d) => (d === oggiLocale() ? 'Oggi' : d === piuGiorni(oggiLocale(), 1) ? 'Domani' : null);
+    return (
+      <View style={S.screen}>
+        <View style={{ paddingHorizontal: 16, paddingTop: 4 }}>
+          <Segmenti opzioni={VISTE} valore={vista} onChange={cambiaVista} />
+        </View>
+        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+          <Text style={[S.muted, { marginLeft: 4, marginBottom: 10 }]}>
+            Prossimi {GIORNI_AGENDA} giorni: prenotazioni a tavola, da confermare e menù. Tocca un servizio per aprirlo.
+          </Text>
+          {agenda && agenda.length === 0 && (
+            <Text style={[S.muted, { marginLeft: 4 }]}>Nessuna prenotazione e nessun menù nei prossimi {GIORNI_AGENDA} giorni.</Text>
+          )}
+          {(agenda || []).map((g) => (
+            <View key={g.data} style={S.card}>
+              <View style={[S.row, { marginBottom: 4 }]}>
+                <Text style={[S.h2, { marginBottom: 0 }]}>
+                  {new Date(`${g.data}T12:00:00`).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' }).replace(/^./, (c) => c.toUpperCase())}
+                </Text>
+                {!!quando(g.data) && <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.azione }}>{quando(g.data)}</Text>}
+              </View>
+              {g.servizi.map((s) => (
+                <TouchableOpacity key={s.servizio} onPress={() => apriGiorno(g.data, s.servizio)} activeOpacity={0.75} accessibilityRole="button"
+                  accessibilityLabel={`${s.servizio}, ${s.coperti} coperti${s.daConfermare ? `, ${s.daConfermare} da confermare` : ''}. Apri l'elenco`}
+                  style={{ flexDirection: 'row', alignItems: 'center', minHeight: 56, paddingVertical: 6, borderTopWidth: 1, borderTopColor: COLORS.border }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.text }}>
+                      {s.servizio} · {plurale(s.coperti, 'coperto', 'coperti')}
+                      {s.daConfermare ? <Text style={{ color: COLORS.warning }}> · {s.daConfermare} da confermare</Text> : null}
+                    </Text>
+                    <Text numberOfLines={2} style={{ fontSize: 14, color: COLORS.muted }}>
+                      {s.prenotazioni.map((p) => `${p.nome || 'Senza nome'} ${p.min && p.max > p.min ? `${p.min}–${p.max}` : (p.persone || '?')}${p.daConfermare ? ' (da conf.)' : ''}${p.menu ? ' · menù' : ''}`).join(', ')}
+                    </Text>
+                  </View>
+                  <Icona nome="chevron-right" colore={COLORS.muted} />
+                </TouchableOpacity>
+              ))}
+              {g.menu.map((m) => (
+                <TouchableOpacity key={m.id} onPress={() => suMenu && suMenu({ id: m.id })} disabled={!suMenu} activeOpacity={0.75} accessibilityRole="button"
+                  accessibilityLabel={`Menù ${m.titolo}${m.cliente ? `, ${m.cliente}` : ''}. Apri`}
+                  style={{ flexDirection: 'row', alignItems: 'center', minHeight: 48, borderTopWidth: 1, borderTopColor: COLORS.border }}>
+                  <Icona nome="book-open-variant" size={20} colore={COLORS.azione} style={{ marginRight: 8 }} />
+                  <Text numberOfLines={1} style={{ flex: 1, fontSize: 15, color: COLORS.text }}>
+                    {m.titolo}{m.cliente ? ` · ${m.cliente}` : ''}{m.ora ? ` · ${m.ora}` : ''}
+                  </Text>
+                  <Icona nome="chevron-right" colore={COLORS.muted} />
+                </TouchableOpacity>
+              ))}
+            </View>
+          ))}
+        </ScrollView>
         {avviso}
       </View>
     );

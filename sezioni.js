@@ -55,7 +55,7 @@ export const SEZIONI_SUITE = [
   { id: 'cucina', titolo: 'Cucina', desc: 'Mappa delle cucine e controlli di oggi', icona: 'silverware-fork-knife', gruppo: null,
     sezione: 'oggi', parole: ['home', 'mappa', 'oggi', 'cucine', '3d'] },
   { id: 'sala', titolo: 'Sala', desc: 'Tavolate e prenotazioni delle due sale', icona: 'table-furniture', gruppo: null,
-    sezione: 'sale', parole: ['tavoli', 'tavolate', 'prenotazioni', 'family wall', 'camerieri', 'panoramica', 'antica stalla', 'coperti'] },
+    sezione: 'sale', parole: ['tavoli', 'tavolate', 'prenotazioni', 'family wall', 'camerieri', 'panoramica', 'antica stalla', 'coperti', 'agenda', 'prossimi giorni'] },
   { id: 'menu', titolo: 'Menù', desc: 'Calendario, proposte, stampe e invio', icona: 'book-open-page-variant-outline', gruppo: null,
     sezione: 'gestione', parte: 'Menù', parole: ['menu', 'proposta', 'proposte', 'portate', 'calendario', 'whatsapp', 'piatti'] },
   { id: 'elenco', titolo: 'Elenco portate', desc: 'Menù → Proposte: prezzi e descrizioni da inviare', icona: 'format-list-bulleted',

@@ -124,6 +124,12 @@ export default function PrincipaleScreen({ navigation, route }) {
     vai('sale');
   }, [vai]);
   const azzeraApertura = useCallback(() => setAperturaSala(null), []);
+  // dalla Sala: apre in Gestione → Menù il menù di una prenotazione, o ne crea uno nuovo ({ id } | { nuovo })
+  const [aperturaMenu, setAperturaMenu] = useState(null);
+  const apriMenu = useCallback((r) => {
+    setAperturaMenu({ ...r, t: Date.now() });
+    vai('gestione', GESTIONE[0]);
+  }, [vai]);
   const Menu = menuAperto ? moduloMenu() : null;
   const nelMenu = sezione === 'gestione' && parte === GESTIONE[0];
   // con il telefono in orizzontale la Sala usa tutto lo schermo
@@ -144,7 +150,7 @@ export default function PrincipaleScreen({ navigation, route }) {
                 <PulsanteCerca onPress={() => navigation.navigate('Cerca')} />
               </View>
             )}
-            <SaleScreen navigation={naviga} route={route} suTuttoSchermo={setSalaIntera} apri={aperturaSala} suAperta={azzeraApertura} />
+            <SaleScreen navigation={naviga} route={route} suTuttoSchermo={setSalaIntera} apri={aperturaSala} suAperta={azzeraApertura} suMenu={apriMenu} />
           </>
         )}
         {/* Gestione: le due linguette spariscono nelle schermate interne del Menù, che usa tutto lo schermo */}
@@ -157,7 +163,7 @@ export default function PrincipaleScreen({ navigation, route }) {
           <Riparo visibile={nelMenu}>
             {Menu
               ? <Menu attiva={nelMenu} aggiorna={ritorni} comandi={comandiMenu} suEsci={esciDalMenu}
-                suVista={setMenuProfondo} suApri={navigation.navigate} suSala={apriSala} />
+                suVista={setMenuProfondo} suApri={navigation.navigate} suSala={apriSala} apriMenu={aperturaMenu} />
               : nelMenu && (
                 <View style={[S.screen, { justifyContent: 'center' }]}>
                   <Vuoto icona="alert-circle-outline" titolo="Il menù non si è aperto" testo="Le altre sezioni funzionano normalmente." />

@@ -332,6 +332,18 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
 - `prenotazioniCalendario` passa `bambini`/`neonati` delle tavolate: la stima (`composizione`) usa i campi, le note solo come ripiego.
   PDF per i camerieri ed elenco della Sala mostrano "2 bambini, 1 neonato". Test in `test/sale.test.mjs` e `test/disdette.test.mjs`.
 
+## Agenda e collegamento prenotazione ↔ menù (Fase 5 del controllo UX, 24/10/2026)
+- `agenda.js` (puro, `test/agenda.test.mjs`): `menuPerPrenotazione(menu, { data, nome })` = il menù dello stesso giorno il cui cliente
+  contiene il nome della prenotazione (o viceversa, parole intere, senza accenti); se ce n'è più di uno, nessuno. `agendaGiorni` =
+  i prossimi `GIORNI_AGENDA` (14) giorni con prenotazioni (a tavola e da confermare, per servizio) e menù. `nuovoMenuDa` = dati del menù nuovo.
+- Sala, terza vista "Agenda" (`VISTE`): una scheda per giorno; il tocco su un servizio apre l'Elenco di quel giorno, quello su un menù
+  lo apre in Gestione → Menù. Menù letti con `eventiMenu(menuLeggi('state'))` a ogni ritorno sulla Sala.
+- Scheda del tavolo: "Apri il menù «titolo»" se c'è, altrimenti "Crea il menù per questa prenotazione" (data, cliente, adulti, bambini,
+  telefono, ora). Nell'Elenco le prenotazioni con un menù hanno "con menù".
+- Percorso: SaleScreen `suMenu({ id } | { nuovo })` → PrincipaleScreen `apriMenu` (va a Gestione → Menù) → MenuScreen `apriMenu`
+  (script appena la pagina è caricata) → `window.__suiteApriMenu` in menu/js/00-suite.js (aspetta l'archivio, poi `openEditor` o
+  `newMenu` compilato). Provato in `test/menu-suite.py`.
+
 ## Incassi e costi (Gestione → Incassi, scelte di Luca del 9/10/2026)
 - `conti.js` (puro, `test/conti.test.mjs`) + `IncassiScreen.js`. Incassi: una riga per giorno (tabella `incassi`), divisa per metodo
   (contanti, POS, altro), senza distinguere pranzo e cena, IVA INCLUSA; il netto si ricava togliendo l'IVA al 10% (`IVA_RISTORAZIONE`).

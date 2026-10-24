@@ -81,6 +81,27 @@
   };
   window.__suitePrenotazioni = impostaPrenotazioni;
 
+  // Dalla Sala (Fase 5 del controllo UX, 24/10/2026): apre il menù di una prenotazione ({ id }) oppure ne crea uno nuovo già compilato
+  // ({ nuovo: { data, cliente, adulti, bambini, telefono, ora } }). Se l'archivio non è ancora caricato aspetta che lo sia.
+  window.__suiteApriMenu = (r) => {
+    let tentativi = 0;
+    const prova = () => {
+      const pronto = typeof canSave !== 'undefined' && canSave && typeof state !== 'undefined' && state && typeof openEditor === 'function';
+      if (!pronto) { if (++tentativi < 100) setTimeout(prova, 100); return; }
+      try {
+        if (typeof leaveEdit === 'function') leaveEdit();
+        if (r && r.id && getMenu(r.id)) { openEditor(r.id); return; }
+        const d = r && r.nuovo;
+        if (!d) return;
+        const nm = newMenu(d.data);
+        nm.client = d.cliente || ''; nm.phone = d.telefono || ''; nm.time = d.ora || '';
+        nm.guests = d.adulti ? String(d.adulti) : ''; nm.guestsKids = d.bambini ? String(d.bambini) : '';
+        state.menus.push(nm); save(); openEditor(nm.id);
+      } catch (e) { invia('errore', { testo: String((e && e.message) || e) }); }
+    };
+    prova();
+  };
+
   // niente autoBackup: i dati stanno nel database della suite e finiscono nel suo backup
   window.Android = {
     version: () => String(dati.build || ''),

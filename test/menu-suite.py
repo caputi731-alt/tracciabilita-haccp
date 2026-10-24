@@ -274,6 +274,16 @@ with sync_playwright() as p:
     pg.click('.prow.da .pr-dis')
     pg.wait_for_timeout(300)
     ok(any(m.get('tipo') == 'disdiciPrenotazione' and m.get('uid') == 'fw-sardo' for m in ricevuti), '"Disdici" su una da confermare: la suite riceve la riga di Family Wall')
+    # ---------- dalla Sala: apri il menù di una prenotazione o creane uno già compilato (Fase 5) ----------
+    pg.evaluate("ui.view='cal';render();window.__suiteApriMenu({nuovo:{data:'2026-12-06',cliente:'Gialli',adulti:9,bambini:2,telefono:'3330000000',ora:'13:00'}})")
+    pg.wait_for_timeout(400)
+    nm = pg.evaluate("(()=>{const m=getMenu(ui.editId);return m&&{v:ui.view,d:m.date,c:m.client,g:m.guests,k:m.guestsKids,p:m.phone,t:m.time}})()")
+    ok(nm == {'v': 'edit', 'd': '2026-12-06', 'c': 'Gialli', 'g': '9', 'k': '2', 'p': '3330000000', 't': '13:00'},
+       f'"Crea il menù per questa prenotazione": menù nuovo già compilato e aperto ({nm})')
+    pg.evaluate("window.appBack();ui.view='cal';render();window.__suiteApriMenu({id:'m1'})")
+    pg.wait_for_timeout(400)
+    ok(pg.evaluate("[ui.view,ui.editId]") == ['edit', 'm1'], '"Apri il menù" dalla Sala: si apre quello della prenotazione')
+    pg.evaluate("window.appBack()")
     pg.evaluate("window.__suitePrenotazioni([])")
     pg.wait_for_timeout(300)
     ok(pg.evaluate("document.querySelectorAll('.prow').length") == 0 and pg.evaluate("document.querySelector('.day.today .cop').textContent") == '',
