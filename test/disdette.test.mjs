@@ -187,3 +187,21 @@ test('Fase 4: la conferma da Family Wall mette bambini, neonati e telefono nei c
   const { composizione } = await import('../stima.js');
   assert.deepEqual(composizione(p), { adulti: 9, bambini: 2, neonati: 1, persone: 12 });
 });
+
+test('prenotazione di un giorno passato: si legge dal giorno scelto, si conferma e resta confermata (serve alla stima)', async () => {
+  await db.initDatabase();
+  await db.salvaLinkFamilyWall('https://api.familywall.com/ical/prova');
+  const ieri3 = giorno(-3);
+  await aggiornaDaFamilyWall({ fetchFn: calcolatoIeri() });
+  function calcolatoIeri() { return calendario([['UID:p1', dtstart(-3), 'SUMMARY:Rosa 10 S.P.']]); }
+  // da oggi non si vede; dal giorno passato sì (è quello che fa ora il riquadro della Sala)
+  assert.ok(!(await db.prenotazioniEsterne(oggi)).some((r) => r.uid === 'p1'));
+  assert.ok((await db.prenotazioniEsterne(ieri3)).some((r) => r.uid === 'p1' && r.stato === 'nuova'));
+  const t = nuovaTavolata({ nome: 'Rosa', persone: '10' });
+  await db.confermaPrenotazioneEsterna('p1', { data: ieri3, servizio: 'Pranzo', sala: 'panoramica', tavolata: t });
+  const [p] = await db.prenotazioniPerCalendario(ieri3, ieri3);
+  assert.deepEqual([p.nome, p.daConfermare, p.persone], ['Rosa', false, 10]);
+  // un nuovo aggiornamento di Family Wall non la tocca
+  await aggiornaDaFamilyWall({ fetchFn: calcolatoIeri() });
+  assert.equal((await stato('p1')).stato, 'confermata');
+});

@@ -276,6 +276,8 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
   migliore della sala scelta o dell'altra; composizione, acconto e telefono finiscono nelle note della tavolata) e
   `ModaleFamilyWall` (collegamento e "Aggiorna adesso").
   Le prenotazioni da confermare degli altri giorni non si annunciano nel riquadro (tolto il 21/10/2026, occupava spazio).
+  Il riquadro legge le righe da oggi in poi oppure dal giorno scelto se è passato (24/10/2026: prima le prenotazioni passate non si
+  potevano confermare, e servono alla stima degli incassi).
 - Da verificare sul telefono: se Family Wall mette il colore dell'evento nel link (altrimenti l'acconto si sceglie a mano).
 - Prenotazioni nel calendario del Menù (scelta di Luca del 18/10/2026: "tutte", confermate e da confermare): `prenotazioniCalendario`
   (familywall.js) + `prenotazioniPerCalendario(da, a)` (database.js) prendono le tavolate con nome o persone dalle disposizioni della Sala
@@ -350,7 +352,9 @@ a ogni push su `main` e pubblicato nelle Releases; Luca lo installa sul suo Pixe
 - Costi: la merce è automatica (`merceTra`: quantità × `prezzo_unitario` dei carichi del periodo, IVA esclusa; i carichi senza prezzo
   si contano a parte e non si stimano; è la merce caricata, non quella consumata); personale e altre spese si scrivono a mano
   (tabella `spese`, `CATEGORIE_SPESA`). Risultato del mese = incassi netti − costi. Tutte e due le tabelle sono nel backup (`TABELLE_NUOVE`).
-- Si vede solo dopo il PIN del titolare (`costiSbloccati` / `sbloccaCosti`, 10 minuti); senza PIN impostato la schermata chiede di impostarlo.
+- Si vede solo dopo il PIN del titolare, chiesto a OGNI ingresso nella sezione (scelta di Luca del 24/10/2026): IncassiScreen parte
+  sempre chiusa (stato locale `sbloccato`, non `costiSbloccati`) e si richiude perdendo il focus o con l'app in sottofondo (`AppState`).
+  `sbloccaCosti` resta per i costi degli eventi (10 minuti). Senza PIN impostato la schermata chiede di impostarlo.
 - Stima del mese (scelte di Luca del 23/10/2026): `stima.js` (puro, `test/stima.test.mjs`) + riquadro "Stima del mese" e sezione
   "Stima giorno per giorno" in IncassiScreen. Coperti da `prenotazioniPerCalendario` (tavolate della Sala + Family Wall da confermare,
   contate a parte; `prenotazioniCalendario` dà anche `note` delle tavolate e `bambini`/`neonati` di Family Wall). Bambini e neonati

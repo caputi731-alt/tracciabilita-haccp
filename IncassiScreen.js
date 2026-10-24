@@ -1,10 +1,11 @@
 /**
  * Incassi e costi (sezione Gestione): gli incassi scritti giorno per giorno divisi per metodo di pagamento, i costi del mese
  * (merce dalle fatture caricate, personale e altre spese scritti a mano) e il risultato. Calcoli in conti.js.
- * Si vede solo dopo il PIN del titolare (stesso blocco dei costi degli eventi: `costiSbloccati` in pin.js).
+ * Si vede solo dopo il PIN del titolare, chiesto a ogni ingresso nella sezione (scelta di Luca del 24/10/2026): cambiando sezione,
+ * aprendo un'altra schermata o mettendo l'app in sottofondo si richiude. Il PIN giusto sblocca anche i costi degli eventi (pin.js).
  */
-import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Modal } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, Modal, AppState } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { S, COLORS, aNumero, numeroPerCampo, oggiLocale, fmtData, piuGiorni } from './theme';
 import { Icona, Bottone, Campo, CampoData, Chips, VistaModale, Vuoto, conferma, useAvviso, useErrori, Sezione } from './UI';
@@ -12,7 +13,7 @@ import {
   incassiTra, salvaIncasso, speseTra, salvaSpesa, eliminaSpesa, merceTra, prenotazioniPerCalendario, prezziStima, salvaPrezziStima, togliPrezziGiorno,
 } from './database';
 import { METODI, CATEGORIE_SPESA, limitiMese, altroMese, nomeMese, totaleIncasso, riepilogoConti, euro } from './conti';
-import { pinImpostato, costiSbloccati, sbloccaCosti, bloccaCosti } from './pin';
+import { pinImpostato, sbloccaCosti, bloccaCosti } from './pin';
 import { ModalePin } from './RiquadroPin';
 import { PREZZI_BASE, MERCE_BASE, prezziPuliti, mercePulita, stimaMese, merceCalcolata, copertiScritti } from './stima';
 
@@ -216,7 +217,7 @@ export default function IncassiScreen({ navigation }) {
   const [mese, setMese] = useState(oggiLocale().slice(0, 7));
   const [dati, setDati] = useState(null);
   const [pin, setPin] = useState(null);           // su questo telefono c'è un PIN?
-  const [sbloccato, setSbloccato] = useState(costiSbloccati());
+  const [sbloccato, setSbloccato] = useState(false); // a ogni ingresso nella sezione il PIN va rimesso
   const [chiedi, setChiedi] = useState(false);
   const [incasso, setIncasso] = useState(null);   // { giorno, riga } aperto
   const [spesa, setSpesa] = useState(null);       // { spesa } aperta
@@ -236,9 +237,15 @@ export default function IncassiScreen({ navigation }) {
       const [inc, mer] = [await incassiTra(d1, d2), await merceTra(d1, d2)];
       mesiPrima.push({ incassato: inc.reduce((s2, r) => s2 + totaleIncasso(r), 0), merce: mer.valore });
     }
-    setDati({ incassi, spese, merce, prenotazioni, prezzi, calcolata: merceCalcolata(mesiPrima) }); setPin(conPin); setSbloccato(costiSbloccati());
+    setDati({ incassi, spese, merce, prenotazioni, prezzi, calcolata: merceCalcolata(mesiPrima) }); setPin(conPin);
   }, [mese]);
   useFocusEffect(useCallback(() => { carica().catch(() => {}); }, [carica]));
+  // uscendo (altra schermata sopra) si richiude; cambiando sezione la schermata si smonta e riparte chiusa
+  useFocusEffect(useCallback(() => () => setSbloccato(false), []));
+  useEffect(() => {
+    const ascolto = AppState.addEventListener('change', (s) => { if (s !== 'active') setSbloccato(false); });
+    return () => ascolto.remove();
+  }, []);
 
   const r = useMemo(() => (dati ? riepilogoConti(dati) : null), [dati]);
   const st = useMemo(() => {
@@ -272,9 +279,9 @@ export default function IncassiScreen({ navigation }) {
   if (!sbloccato) {
     return (
       <View style={[S.screen, { justifyContent: 'center', padding: 16 }]}>
-        <Vuoto icona="lock-outline" titolo="Incassi e costi" testo="Si aprono con il PIN del titolare e restano visibili per 10 minuti."
+        <Vuoto icona="lock-outline" titolo="Incassi e costi" testo="Si aprono con il PIN del titolare. Uscendo dalla sezione si richiudono."
           azione="Scrivi il PIN" onAzione={() => setChiedi(true)} />
-        <ModalePin visibile={chiedi} titolo="PIN del titolare" testo="Incassi e costi restano visibili per 10 minuti, poi il PIN va rimesso."
+        <ModalePin visibile={chiedi} titolo="PIN del titolare" testo="Incassi e costi restano aperti finché resti in questa sezione."
           pulsante="Apri" onConferma={async (codice) => { await sbloccaCosti(codice); setChiedi(false); setSbloccato(true); }} onChiudi={() => setChiedi(false)} />
       </View>
     );

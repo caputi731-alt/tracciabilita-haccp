@@ -301,10 +301,13 @@ export default function RiquadroFamilyWall({ data, servizio, salaVista, versione
   useEffect(() => { leggiPreferenza('aperto_sala_familywall').then((v) => setChiuso(v === '0')).catch(() => {}); }, []);
   const cambiaChiuso = () => setChiuso((v) => { salvaPreferenza('aperto_sala_familywall', v ? '1' : '0').catch(() => {}); return !v; });
 
+  // da oggi in poi, oppure dal giorno scelto se è passato: anche le prenotazioni dei giorni passati si confermano (servono alla stima
+  // degli incassi; prima si leggevano solo da oggi e quelle passate non comparivano)
   const carica = useCallback(async () => {
-    const [r, st] = [await prenotazioniEsterne(oggiLocale()), await statoFamilyWall()];
+    const oggi = oggiLocale();
+    const [r, st] = [await prenotazioniEsterne(data < oggi ? data : oggi), await statoFamilyWall()];
     setRighe(r.map(conScheda)); setStato(st);
-  }, []);
+  }, [data]);
   useEffect(() => {
     let vivo = true;
     carica().catch(() => {});
